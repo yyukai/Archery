@@ -10,6 +10,7 @@ from sql.utils.aes_decryptor import Prpcrypt
 class Users(AbstractUser):
     display = models.CharField('显示的中文名', max_length=50, blank=True)
     role = models.CharField('角色', max_length=20, choices=(('工程师', '工程师'), ('DBA', 'DBA')), default='工程师')
+    user_id = models.CharField('UserID', max_length=50, blank=True)
 
     def __str__(self):
         return self.username
@@ -495,3 +496,21 @@ class SlowQueryHistory(models.Model):
         unique_together = ('hostname_max', 'ts_min')
         verbose_name = u'慢日志明细'
         verbose_name_plural = u'慢日志明细'
+
+
+# # 钉钉配置
+# class DingConfig(models.Model):
+#     agent_id = models.CharField('appId，	微应用id', max_length=20, unique=True)
+#     corp_id = models.CharField('CorpId', max_length=30, unique=True)
+#     corp_secret = models.CharField('CorpSecret', max_length=100, unique=True)
+#     access_token = models.CharField('ACCESS_TOKEN', max_length=50, unique=True)
+#     expires_in = models.DateTimeField(blank=True, null=True)
+#
+#     def __int__(self):
+#         return self.agent_id
+#
+#     class Meta:
+#         managed = False
+#         db_table = 'ding_config'
+#         verbose_name = u'钉钉配置'
+#         verbose_name_plural = u'钉钉配置'

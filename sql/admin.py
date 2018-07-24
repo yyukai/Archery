@@ -12,8 +12,8 @@ from .models import Users, MasterConfig, SlaveConfig, SqlWorkflow, \
 class UsersAdmin(UserAdmin):
     def __init__(self, *args, **kwargs):
         super(UserAdmin, self).__init__(*args, **kwargs)
-        self.list_display = ('id', 'username', 'display', 'role', 'email', 'is_superuser', 'is_staff', 'is_active')
-        self.search_fields = ('id', 'username', 'display', 'role', 'email')
+        self.list_display = ('id', 'user_id', 'username', 'display', 'role', 'email', 'is_superuser', 'is_staff', 'is_active')
+        self.search_fields = ('id', 'user_id', 'username', 'display', 'role', 'email')
 
     def changelist_view(self, request, extra_context=None):
         # 这个方法在源码的admin/options.py文件的ModelAdmin这个类中定义，我们要重新定义它，以达到不同权限的用户，返回的表单内容不同
