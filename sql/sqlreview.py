@@ -209,6 +209,12 @@ def send_msg(workflowDetail, url):
         listCcAddr = [email['email'] for email in group_dbas(workflowDetail.group_id).values('email')]
         mailSender.sendEmail(msg_title, msg_content, listToAddr, listCcAddr=listCcAddr)
     if sys_config.get('ding') == 'true':
+        # 发送钉钉消息给申请人
+        from sql.utils.ding_api import DingSender
+        ding_sender = DingSender()
+        user_id = Users.objects.get(username=workflowDetail.engineer).user_id
+        ding_sender.send_msg(user_id, msg_title + '\n' + msg_content)
+
         # 钉钉通知申请人，审核人，抄送DBA
         webhook_url = Group.objects.get(group_id=workflowDetail.group_id).ding_webhook
         mailSender.sendDing(webhook_url, msg_title + '\n' + msg_content)

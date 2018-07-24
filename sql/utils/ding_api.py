@@ -5,24 +5,28 @@ import os
 import json
 import time
 import traceback
-from sql.models import Config, Users
+from django.db import transaction
+from sql.models import Users, Config
 from sql.utils.api import HttpRequests
+from sql.utils.config import SysConfig
+
 
 FORCE_UPDATE = False
 http_request = HttpRequests()
 
 
 def get_access_token():
-    token = Config.objects.get(item='ding_access_token').ding_access_token
-    expire_time = Config.objects.get(item='ding_expires_time').ding_expires_time
+    sys_conf = SysConfig().sys_config
+    token = sys_conf.get('ding_access_token')
+    expire_time = sys_conf.get('ding_expires_time')
     now_time = int(time.time())
-    if expire_time and (expire_time - now_time) > 60:
+    if expire_time and (int(expire_time) - now_time) > 60:
         # 还没到超时时间
         return token
     else:
         # token 已过期
-        corp_id = Config.objects.get(item='ding_corp_id').ding_corp_id
-        corp_secret = Config.objects.get(item='ding_corp_secret').ding_corp_secret
+        corp_id = sys_conf.get('ding_corp_id')
+        corp_secret = sys_conf.get('ding_corp_secret')
         url = "https://oapi.dingtalk.com/gettoken?corpid={0}&corpsecret={1}".format(corp_id, corp_secret)
         status, ret = http_request.get(url)
         if status is True:
@@ -37,14 +41,15 @@ def get_access_token():
 
 
 def get_dept_list_id_fetch_child(token, parent_dept_id):
-    ids = list()
+    ids = [int(parent_dept_id)]
     url = 'https://oapi.dingtalk.com/department/list_ids?id={0}&access_token={1}'.format(parent_dept_id, token)
+    print(url)
     status, ret = http_request.get(url)
     if status is True:
         s = json.loads(ret)
         if s["errcode"] == 0:
             for dept_id in s["sub_dept_id_list"]:
-                ids.append(get_dept_list_id_fetch_child(dept_id))
+                ids.extend(get_dept_list_id_fetch_child(token, dept_id))
     return ids
 
 
@@ -75,3 +80,27 @@ def set_ding_userid(work_no):
                 print(ret)
     except Exception as e:
         traceback.print_exc()
+
+
+class DingSender(object):
+    def __init__(self):
+        self.app_id = SysConfig().sys_config.get('ding_agent_id', None)
+
+    def send_msg(self, user_id, content):
+        if self.app_id is None:
+            return "No app id."
+        data = {
+            "touser": user_id,
+            "agentid": self.app_id,
+            "msgtype": "text",
+            "text": {
+                "content": "{}".format(content)
+            },
+        }
+        url = 'https://oapi.dingtalk.com/message/send?access_token=' + get_access_token()
+        json_request = HttpRequests()
+        status, ret = json_request.post(url, data)
+        if status is not True:
+            print(u'请求失败：%s' % ret)
+        else:
+            print('success. ', ret)
