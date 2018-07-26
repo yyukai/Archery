@@ -48,10 +48,10 @@ ALTER TABLE sql_users
 -- );
 
 INSERT INTO sql_config(item,value) VALUES
-('ding_agent_id', '184600001'),
-('ding_corp_id', 'ding19d30468566deffd'),
-('ding_corp_secret', 'l02Eg6CcSPbSGO6Il8obQJ_HD2NCGLnoBNc4jmnvXj1aiF4THJV0MW8T-2ihjYe7'),
-('ding_root_dept_id', 2925013),
+('ding_agent_id', ''),
+('ding_corp_id', ''),
+('ding_corp_secret', ''),
+('ding_root_dept_id', 100000),
 ('ding_access_token', ''),
 ('ding_expires_time', 0)
 ;

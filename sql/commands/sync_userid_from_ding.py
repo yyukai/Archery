@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+# 该脚本用于批量更新 sql_users 表中的 ding_user_id。
+# archer(username) == dingding(jobnumber)
 
 import json
 import os
@@ -18,7 +20,7 @@ from sql.utils.api import HttpRequests
 
 if __name__ == '__main__':
     http_request = HttpRequests()
-    ding_root_dept_id = 2925013
+    ding_root_dept_id = 100000
     token = get_access_token()
     dept_id_list = get_dept_list_id_fetch_child(token, ding_root_dept_id)
     print('ids:', dept_id_list)
