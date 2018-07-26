@@ -116,7 +116,11 @@ DATABASES = {
         'USER': 'uatarcher',
         'PASSWORD': 'UATarcher123!',
         'HOST': '127.0.0.1',
-        'PORT': '3306'
+        'PORT': '3306',
+        'TEST': {
+            'NAME': 'test_archer',
+            'CHARSET': 'utf8',
+        },
     }
 }
 

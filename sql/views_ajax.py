@@ -6,6 +6,8 @@ import datetime
 import subprocess
 
 from django.contrib.auth import authenticate, login
+from django.contrib.auth.decorators import permission_required
+from django.contrib.auth.models import Group
 from django.db import transaction
 from django.db.models import Q
 from django.conf import settings
@@ -14,7 +16,7 @@ from django.shortcuts import render, get_object_or_404
 from django.http import HttpResponse
 from django.contrib.auth.hashers import make_password
 
-from sql.utils.group import user_masters
+from sql.utils.group import user_masters, user_groups
 from sql.models import Config
 from sql.utils.permission import superuser_required
 from sql.utils.dao import Dao
@@ -37,15 +39,6 @@ sqlSHA1_cache = {}  # 存储SQL文本与SHA1值的对应关系，尽量减少与
 workflowOb = Workflow()
 
 
-# 登录失败邮件推送给DBA
-def log_mail_record(login_failed_message):
-    mail_title = 'login archer'
-    logger.warning(login_failed_message)
-    dbaAddr = [email['email'] for email in Users.objects.filter(role='DBA').values('email')]
-    if SysConfig().sys_config.get('mail') == 'true':
-        MailSender().sendEmail(mail_title, login_failed_message, dbaAddr)
-
-
 # ajax接口，登录页面调用，用来验证用户名密码
 @csrf_exempt
 def loginAuthenticate(username, password):
@@ -64,9 +57,8 @@ def loginAuthenticate(username, password):
     if username == "" or password == "" or username is None or password is None:
         result = {'status': 2, 'msg': '登录用户名或密码为空，请重新输入!', 'data': ''}
     elif username in login_failure_counter and login_failure_counter[username]["cnt"] >= lockCntThreshold and (
-            datetime.datetime.now() - login_failure_counter[username][
-            "last_failure_time"]).seconds <= lockTimeThreshold:
-        log_mail_record('user:{},login failed, account locking...'.format(username))
+            datetime.datetime.now() - login_failure_counter[username]["last_failure_time"]).seconds \
+            <= lockTimeThreshold:
         result = {'status': 3, 'msg': '登录失败超过5次，该账号已被锁定5分钟!', 'data': ''}
     else:
         # 登录
@@ -104,7 +96,6 @@ def authenticateEntry(request):
 
     result = loginAuthenticate(username, password)
     if result['status'] == 0:
-        user = result.get('data')
         # 开启LDAP的认证通过后更新用户密码
         if settings.ENABLE_LDAP:
             try:
@@ -117,6 +108,10 @@ def authenticateEntry(request):
                 replace_info = Users.objects.get(username=username)
                 replace_info.password = make_password(password)
                 replace_info.save()
+            # 添加到默认组
+            user = Users.objects.get(username=username)
+            group = Group.objects.get(id=1)
+            user.groups.add(group)
 
         # 调用了django内置登录方法，防止管理后台二次登录
         user = authenticate(username=username, password=password)
@@ -130,6 +125,7 @@ def authenticateEntry(request):
 
 # 获取审核列表
 @csrf_exempt
+@permission_required('sql.menu_sqlworkflow', raise_exception=True)
 def sqlworkflowlist(request):
     # 获取用户信息
     user = request.user
@@ -152,53 +148,78 @@ def sqlworkflowlist(request):
     # 全部工单里面包含搜索条件
     if navStatus == 'all':
         if user.is_superuser == 1:
-            listWorkflow = SqlWorkflow.objects.filter(
+            workflowlist = SqlWorkflow.objects.filter(
                 Q(engineer_display__contains=search) | Q(workflow_name__contains=search)
             ).order_by('-create_time')[offset:limit].values("id", "workflow_name", "engineer_display", "status",
                                                             "is_backup", "create_time", "cluster_name", "db_name",
                                                             "group_name", "sql_syntax")
-            listWorkflowCount = SqlWorkflow.objects.filter(
+            count = SqlWorkflow.objects.filter(
                 Q(engineer_display__contains=search) | Q(workflow_name__contains=search)).count()
-        else:
-            listWorkflow = SqlWorkflow.objects.filter(
-                Q(engineer=user.username) | Q(review_man__contains=user.username)
-            ).filter(
+        elif user.has_perm('sql.sql_review') or user.has_perm('sql.sql_execute'):
+            # 先获取用户管理组列表
+            group_list = user_groups(user)
+            group_ids = [group.group_id for group in group_list]
+            workflowlist = SqlWorkflow.objects.filter(group_id__in=group_ids).filter(
                 Q(engineer_display__contains=search) | Q(workflow_name__contains=search)
             ).order_by('-create_time')[offset:limit].values("id", "workflow_name", "engineer_display", "status",
                                                             "is_backup", "create_time", "cluster_name", "db_name",
                                                             "group_name", "sql_syntax")
-            listWorkflowCount = SqlWorkflow.objects.filter(
-                Q(engineer=user.username) | Q(review_man__contains=user.username)).filter(
+            count = SqlWorkflow.objects.filter(group_id__in=group_ids).filter(
                 Q(engineer_display__contains=search) | Q(workflow_name__contains=search)
             ).count()
+        else:
+            workflowlist = SqlWorkflow.objects.filter(engineer=user.username).filter(
+                workflow_name__contains=search
+            ).order_by('-create_time')[offset:limit].values("id", "workflow_name", "engineer_display", "status",
+                                                            "is_backup", "create_time", "cluster_name", "db_name",
+                                                            "group_name", "sql_syntax")
+            count = SqlWorkflow.objects.filter(engineer=user.username).filter(
+                workflow_name__contains=search).count()
     elif navStatus in Const.workflowStatus.keys():
         if user.is_superuser == 1:
-            listWorkflow = SqlWorkflow.objects.filter(
+            workflowlist = SqlWorkflow.objects.filter(
                 status=Const.workflowStatus[navStatus]
             ).order_by('-create_time')[offset:limit].values("id", "workflow_name", "engineer_display", "status",
                                                             "is_backup", "create_time", "cluster_name", "db_name",
                                                             "group_name", "sql_syntax")
-            listWorkflowCount = SqlWorkflow.objects.filter(status=Const.workflowStatus[navStatus]).count()
+            count = SqlWorkflow.objects.filter(status=Const.workflowStatus[navStatus]).count()
+        elif user.has_perm('sql.sql_review') or user.has_perm('sql.sql_execute'):
+            # 先获取用户管理组列表
+            group_list = user_groups(user)
+            group_ids = [group.group_id for group in group_list]
+            workflowlist = SqlWorkflow.objects.filter(status=Const.workflowStatus[navStatus], group_id__in=group_ids
+                                                      ).order_by('-create_time')[offset:limit].values("id",
+                                                                                                      "workflow_name",
+                                                                                                      "engineer_display",
+                                                                                                      "status",
+                                                                                                      "is_backup",
+                                                                                                      "create_time",
+                                                                                                      "cluster_name",
+                                                                                                      "db_name",
+                                                                                                      "group_name",
+                                                                                                      "sql_syntax")
+            count = SqlWorkflow.objects.filter(status=Const.workflowStatus[navStatus], group_id__in=group_ids).count()
         else:
-            listWorkflow = SqlWorkflow.objects.filter(
-                status=Const.workflowStatus[navStatus]
-            ).filter(
-                Q(engineer=user.username) | Q(review_man__contains=user.username)
-            ).order_by('-create_time')[offset:limit].values("id", "workflow_name", "engineer_display", "status",
-                                                            "is_backup", "create_time", "cluster_name", "db_name",
-                                                            "group_name", "sql_syntax")
-            listWorkflowCount = SqlWorkflow.objects.filter(
-                status=Const.workflowStatus[navStatus]
-            ).filter(
-                Q(engineer=user.username) | Q(review_man__contains=user.username)).count()
+            workflowlist = SqlWorkflow.objects.filter(status=Const.workflowStatus[navStatus], engineer=user.username
+                                                      ).order_by('-create_time')[offset:limit].values("id",
+                                                                                                      "workflow_name",
+                                                                                                      "engineer_display",
+                                                                                                      "status",
+                                                                                                      "is_backup",
+                                                                                                      "create_time",
+                                                                                                      "cluster_name",
+                                                                                                      "db_name",
+                                                                                                      "group_name",
+                                                                                                      "sql_syntax")
+            count = SqlWorkflow.objects.filter(status=Const.workflowStatus[navStatus], engineer=user.username).count()
     else:
         context = {'errMsg': '传入的navStatus参数有误！'}
         return render(request, 'error.html', context)
 
     # QuerySet 序列化
-    rows = [row for row in listWorkflow]
+    rows = [row for row in workflowlist]
 
-    result = {"total": listWorkflowCount, "rows": rows}
+    result = {"total": count, "rows": rows}
     # 返回查询结果
     return HttpResponse(json.dumps(result, cls=ExtendJSONEncoder, bigint_as_string=True),
                         content_type='application/json')
@@ -206,6 +227,7 @@ def sqlworkflowlist(request):
 
 # 提交SQL给inception进行自动审核
 @csrf_exempt
+@permission_required('sql.sql_submit', raise_exception=True)
 def simplecheck(request):
     sqlContent = request.POST.get('sql_content')
     clusterName = request.POST.get('cluster_name')
@@ -404,6 +426,7 @@ def stopOscProgress(request):
 
 # 获取SQLAdvisor的优化结果
 @csrf_exempt
+@permission_required('sql.optimize_sqladvisor', raise_exception=True)
 def sqladvisorcheck(request):
     sqlContent = request.POST.get('sql_content')
     clusterName = request.POST.get('cluster_name')

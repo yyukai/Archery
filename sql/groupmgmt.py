@@ -1,12 +1,13 @@
 # -*- coding: UTF-8 -*-
 
 import simplejson as json
+from django.contrib.auth.models import Group
 
 from django.db.models import F
 from django.views.decorators.csrf import csrf_exempt
 from django.http import HttpResponse
 
-from sql.models import Group, GroupRelations, Users, MasterConfig, SlaveConfig
+from sql.models import SqlGroup, GroupRelations, Users, MasterConfig, SlaveConfig
 from sql.utils.permission import superuser_required
 
 import logging
@@ -30,10 +31,10 @@ def group(request):
         search = ''
 
     # 全部工单里面包含搜索条件
-    group_list = Group.objects.filter(group_name__contains=search)[offset:limit].values("group_id",
-                                                                                        "group_name",
-                                                                                        "ding_webhook")
-    group_count = Group.objects.filter(group_name__contains=search).count()
+    group_list = SqlGroup.objects.filter(group_name__contains=search)[offset:limit].values("group_id",
+                                                                                           "group_name",
+                                                                                           "ding_webhook")
+    group_count = SqlGroup.objects.filter(group_name__contains=search).count()
 
     # QuerySet 序列化
     rows = [row for row in group_list]
@@ -87,13 +88,13 @@ def unassociated_objects(request):
     elif object_type == 2:
         unassociated_objects = MasterConfig.objects.exclude(pk__in=associated_object_ids
                                                             ).annotate(object_id=F('pk'),
-                                                                        object_name=F('cluster_name')
-                                                                        ).values('object_id', 'object_name')
+                                                                       object_name=F('cluster_name')
+                                                                       ).values('object_id', 'object_name')
     elif object_type == 3:
         unassociated_objects = SlaveConfig.objects.exclude(pk__in=associated_object_ids
                                                            ).annotate(object_id=F('pk'),
-                                                                       object_name=F('cluster_name')
-                                                                       ).values('object_id', 'object_name')
+                                                                      object_name=F('cluster_name')
+                                                                      ).values('object_id', 'object_name')
     else:
         unassociated_objects = []
 
@@ -113,7 +114,7 @@ def addrelation(request):
     group_name = request.POST.get('group_name')
     object_type = request.POST.get('object_type')
     object_list = json.loads(request.POST.get('object_info'))
-    group_id = Group.objects.get(group_name=group_name).group_id
+    group_id = SqlGroup.objects.get(group_name=group_name).group_id
     try:
         GroupRelations.objects.bulk_create(
             [GroupRelations(object_id=int(object.split(',')[0]),
@@ -134,19 +135,27 @@ def auditors(request):
     workflow_type = request.POST['workflow_type']
     result = {'status': 0, 'msg': 'ok', 'data': {'auditors': '', 'auditors_display': ''}}
     if group_name:
-        group_id = Group.objects.get(group_name=group_name).group_id
-        auditors = Workflow().auditsettings(group_id=group_id, workflow_type=workflow_type)
+        group_id = SqlGroup.objects.get(group_name=group_name).group_id
+        audit_auth_groups = Workflow.auditsettings(group_id=group_id, workflow_type=workflow_type)
     else:
         result['status'] = 1
         result['msg'] = '参数错误'
         return HttpResponse(json.dumps(result), content_type='application/json')
 
-    # 获取所有用户
-    if auditors:
-        auditors = auditors.audit_users
-        auditors_display = ','.join([Users.objects.get(username=auditor).display for auditor in auditors.split(',')])
-        result['data']['auditors'] = auditors
-        result['data']['auditors_display'] = auditors_display
+    # 获取权限组名称
+    if audit_auth_groups:
+        # 校验配置
+        for auth_group_id in audit_auth_groups.split(','):
+            try:
+                Group.objects.get(id=auth_group_id)
+            except Exception:
+                result['status'] = 1
+                result['msg'] = '审批流程权限组不存在，请重新配置！'
+                return HttpResponse(json.dumps(result), content_type='application/json')
+        audit_auth_groups_name = '->'.join(
+            [Group.objects.get(id=auth_group_id).name for auth_group_id in audit_auth_groups.split(',')])
+        result['data']['auditors'] = audit_auth_groups
+        result['data']['auditors_display'] = audit_auth_groups_name
 
     return HttpResponse(json.dumps(result), content_type='application/json')
 
@@ -155,15 +164,16 @@ def auditors(request):
 @csrf_exempt
 @superuser_required
 def changeauditors(request):
-    audit_users = request.POST.get('audit_users')
+    auth_groups = request.POST.get('audit_users')
     group_name = request.POST.get('group_name')
     workflow_type = request.POST.get('workflow_type')
     result = {'status': 0, 'msg': 'ok', 'data': []}
 
     # 调用工作流修改审核配置
-    group_id = Group.objects.get(group_name=group_name).group_id
+    group_id = SqlGroup.objects.get(group_name=group_name).group_id
+    audit_auth_groups = [str(Group.objects.get(name=auth_group).id) for auth_group in auth_groups.split(',')]
     try:
-        Workflow().changesettings(group_id, workflow_type, audit_users)
+        Workflow.changesettings(group_id, workflow_type, ','.join(audit_auth_groups))
     except Exception as msg:
         result['msg'] = str(msg)
         result['status'] = 1

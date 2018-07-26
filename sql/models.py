@@ -4,26 +4,23 @@ from django.contrib.auth.models import AbstractUser
 from sql.utils.aes_decryptor import Prpcrypt
 
 
-# 角色分两种：
-# 1.工程师：可以提交SQL上线单的工程师们，username字段为登录用户名，display字段为展示的中文名。
-# 2.DBA：可以接受到工单变更通知以及管理主库会话信息。
+# display字段为展示的中文名。
 class Users(AbstractUser):
     display = models.CharField('显示的中文名', max_length=50, blank=True)
-    role = models.CharField('角色', max_length=20, choices=(('工程师', '工程师'), ('DBA', 'DBA')), default='工程师')
     user_id = models.CharField('UserID', max_length=50, blank=True)
 
     def __str__(self):
         return self.username
 
     class Meta:
-        managed = False
+        managed = True
         db_table = 'sql_users'
         verbose_name = u'用户管理'
         verbose_name_plural = u'用户管理'
 
 
 # 组
-class Group(models.Model):
+class SqlGroup(models.Model):
     group_id = models.AutoField('组ID', primary_key=True)
     group_name = models.CharField('组名称', max_length=100, unique=True)
     group_parent_id = models.BigIntegerField('父级id', default=0)
@@ -38,10 +35,10 @@ class Group(models.Model):
         return self.group_name
 
     class Meta:
-        managed = False
+        managed = True
         db_table = 'sql_group'
-        verbose_name = u'组配置'
-        verbose_name_plural = u'组配置'
+        verbose_name = u'资源组管理'
+        verbose_name_plural = u'资源组管理'
 
 
 # 组关系表（用户与组、主库与组等）
@@ -55,11 +52,11 @@ class GroupRelations(models.Model):
     sys_time = models.DateTimeField(auto_now=True)
 
     class Meta:
-        managed = False
+        managed = True
         db_table = 'sql_group_relations'
         unique_together = ('object_id', 'group_id', 'object_type')
-        verbose_name = u'组关系配置'
-        verbose_name_plural = u'组关系配置'
+        verbose_name = u'资源组对象管理'
+        verbose_name_plural = u'资源组对象管理'
 
 
 # 各个线上主库实例配置）
@@ -76,7 +73,7 @@ class MasterConfig(models.Model):
         return self.cluster_name
 
     class Meta:
-        managed = False
+        managed = True
         db_table = 'sql_master_config'
         verbose_name = u'主库连接配置'
         verbose_name_plural = u'主库连接配置'
@@ -98,7 +95,7 @@ class SlaveConfig(models.Model):
     update_time = models.DateTimeField('更新时间', auto_now=True)
 
     class Meta:
-        managed = False
+        managed = True
         db_table = 'sql_slave_config'
         verbose_name = u'查询从库配置'
         verbose_name_plural = u'查询从库配置'
@@ -116,7 +113,7 @@ class SqlWorkflow(models.Model):
     group_name = models.CharField('组名称', max_length=100)
     engineer = models.CharField('发起人', max_length=50)
     engineer_display = models.CharField('发起人中文名', max_length=50, default='')
-    review_man = models.CharField('审核人', max_length=50)
+    review_man = models.CharField('审批权限组列表', max_length=50)
     create_time = models.DateTimeField('创建时间', auto_now_add=True)
     finish_time = models.DateTimeField('结束时间', null=True, blank=True)
     status = models.CharField(max_length=50, choices=(
@@ -137,7 +134,7 @@ class SqlWorkflow(models.Model):
         return self.workflow_name
 
     class Meta:
-        managed = False
+        managed = True
         db_table = 'sql_workflow'
         verbose_name = u'SQL工单管理'
         verbose_name_plural = u'SQL工单管理'
@@ -153,8 +150,8 @@ class WorkflowAudit(models.Model):
                                         choices=((1, '查询权限申请'), (2, 'SQL上线申请')))
     workflow_title = models.CharField('申请标题', max_length=50)
     workflow_remark = models.CharField('申请备注', default='', max_length=140)
-    audit_users = models.CharField('审核人列表', max_length=255)
-    current_audit_user = models.CharField('当前审核人', max_length=20)
+    audit_users = models.CharField('审批权限组列表', max_length=255)
+    current_audit_user = models.CharField('当前审批权限组', max_length=20)
     next_audit_user = models.CharField('下级审核人', max_length=20)
     current_status = models.IntegerField('审核状态', choices=((0, '待审核'), (1, '审核通过'), (2, '审核不通过'), (3, '审核取消')))
     create_user = models.CharField('申请人', max_length=20)
@@ -166,7 +163,7 @@ class WorkflowAudit(models.Model):
         return self.audit_id
 
     class Meta:
-        managed = False
+        managed = True
         db_table = 'workflow_audit'
         unique_together = ('workflow_id', 'workflow_type')
         verbose_name = u'工作流列表'
@@ -187,7 +184,7 @@ class WorkflowAuditDetail(models.Model):
         return self.audit_detail_id
 
     class Meta:
-        managed = False
+        managed = True
         db_table = 'workflow_audit_detail'
         verbose_name = u'工作流审批明细表'
         verbose_name_plural = u'工作流审批明细表'
@@ -199,7 +196,7 @@ class WorkflowAuditSetting(models.Model):
     group_id = models.IntegerField('组ID')
     group_name = models.CharField('组名称', max_length=100)
     workflow_type = models.IntegerField('审批类型', choices=((1, '查询权限申请'), (2, 'SQL上线申请')))
-    audit_users = models.CharField('审核人，单人审核格式为：user1，多级审核格式为：user1,user2', max_length=255)
+    audit_users = models.CharField('审批权限组列表', max_length=255)
     create_time = models.DateTimeField(auto_now_add=True)
     sys_time = models.DateTimeField(auto_now=True)
 
@@ -207,7 +204,7 @@ class WorkflowAuditSetting(models.Model):
         return self.audit_setting_id
 
     class Meta:
-        managed = False
+        managed = True
         db_table = 'workflow_audit_setting'
         unique_together = ('group_id', 'workflow_type')
         verbose_name = u'审批流程配置'
@@ -229,7 +226,7 @@ class QueryPrivilegesApply(models.Model):
     limit_num = models.IntegerField('行数限制', default=100)
     priv_type = models.IntegerField('权限类型', choices=((1, 'DATABASE'), (2, 'TABLE'),), default=0)
     status = models.IntegerField('审核状态', choices=((0, '待审核'), (1, '审核通过'), (2, '审核不通过'), (3, '审核取消')), )
-    audit_users = models.CharField('审核人列表', max_length=255)
+    audit_users = models.CharField('审批权限组列表', max_length=255)
     create_time = models.DateTimeField(auto_now_add=True)
     sys_time = models.DateTimeField(auto_now=True)
 
@@ -237,7 +234,7 @@ class QueryPrivilegesApply(models.Model):
         return self.apply_id
 
     class Meta:
-        managed = False
+        managed = True
         db_table = 'query_privileges_apply'
         verbose_name = u'查询权限申请记录表'
         verbose_name_plural = u'查询权限申请记录表'
@@ -262,7 +259,7 @@ class QueryPrivileges(models.Model):
         return self.privilege_id
 
     class Meta:
-        managed = False
+        managed = True
         db_table = 'query_privileges'
         verbose_name = u'查询权限记录表'
         verbose_name_plural = u'查询权限记录表'
@@ -281,7 +278,7 @@ class QueryLog(models.Model):
     sys_time = models.DateTimeField(auto_now=True)
 
     class Meta:
-        managed = False
+        managed = True
         db_table = 'query_log'
         verbose_name = u'sql查询日志'
         verbose_name_plural = u'sql查询日志'
@@ -302,7 +299,7 @@ class DataMaskingColumns(models.Model):
     sys_time = models.DateTimeField(auto_now=True)
 
     class Meta:
-        managed = False
+        managed = True
         db_table = 'data_masking_columns'
         verbose_name = u'脱敏字段配置'
         verbose_name_plural = u'脱敏字段配置'
@@ -311,14 +308,15 @@ class DataMaskingColumns(models.Model):
 # 脱敏规则配置
 class DataMaskingRules(models.Model):
     rule_type = models.IntegerField('规则类型',
-                                    choices=((1, '手机号'), (2, '证件号码'), (3, '银行卡'), (4, '邮箱'), (5, '金额'), (6, '其他')), unique=True)
+                                    choices=((1, '手机号'), (2, '证件号码'), (3, '银行卡'), (4, '邮箱'), (5, '金额'), (6, '其他')),
+                                    unique=True)
     rule_regex = models.CharField('规则脱敏所用的正则表达式，表达式必须分组，隐藏的组会使用****代替', max_length=255)
     hide_group = models.IntegerField('需要隐藏的组')
     rule_desc = models.CharField('规则描述', max_length=100, default='', blank=True)
     sys_time = models.DateTimeField(auto_now=True)
 
     class Meta:
-        managed = False
+        managed = True
         db_table = 'data_masking_rules'
         verbose_name = u'脱敏规则配置'
         verbose_name_plural = u'脱敏规则配置'
@@ -331,7 +329,7 @@ class Config(models.Model):
     description = models.CharField('描述', max_length=200, default='', blank=True)
 
     class Meta:
-        managed = False
+        managed = True
         db_table = 'sql_config'
         verbose_name = u'系统配置'
         verbose_name_plural = u'系统配置'
@@ -345,7 +343,7 @@ class AliyunAccessKey(models.Model):
     remark = models.CharField(max_length=50, default='', blank=True)
 
     class Meta:
-        managed = False
+        managed = True
         db_table = 'aliyun_access_key'
         verbose_name = u'阿里云认证信息'
         verbose_name_plural = u'阿里云认证信息'
@@ -357,6 +355,38 @@ class AliyunAccessKey(models.Model):
         super(AliyunAccessKey, self).save(*args, **kwargs)
 
 
+# 自定义权限定义
+class Permission(models.Model):
+    class Meta:
+        managed = True
+        permissions = (
+            ('menu_dashboard', '菜单 Dashboard'),
+            ('menu_sqlworkflow', '菜单 SQL上线'),
+            ('menu_query', '菜单 SQL查询'),
+            ('menu_sqlquery', '菜单 MySQL查询'),
+            ('menu_queryapplylist', '菜单 查询权限申请'),
+            ('menu_sqloptimize', '菜单 SQL优化'),
+            ('menu_sqladvisor', '菜单 优化工具'),
+            ('menu_slowquery', '菜单 慢查日志'),
+            ('menu_dbdiagnostic', '菜单 会话管理'),
+            ('menu_system', '菜单 系统管理'),
+            ('menu_document', '菜单 相关文档'),
+            ('sql_submit', '提交SQL上线工单'),
+            ('sql_review', '审核SQL上线工单'),
+            ('sql_execute', '执行SQL上线工单'),
+            ('optimize_sqladvisor', '执行SQLAdvisor'),
+            ('optimize_sqltuning', '执行SQLTuning'),
+            ('query_applypriv', '申请查询权限'),
+            ('query_mgtpriv', '管理查询权限'),
+            ('query_review', '审核查询权限'),
+            ('query_submit', '提交SQL查询'),
+            ('process_view', '查看会话'),
+            ('process_kill', '终止会话'),
+            ('tablespace_view', '查看表空间'),
+            ('trxandlocks_view', '查看锁信息'),
+        )
+
+
 # 阿里云rds配置信息
 class AliyunRdsConfig(models.Model):
     rds_dbinstanceid = models.CharField('阿里云RDS实例ID', max_length=100, unique=True)
@@ -366,7 +396,7 @@ class AliyunRdsConfig(models.Model):
         return self.rds_dbinstanceid
 
     class Meta:
-        managed = False
+        managed = True
         db_table = 'aliyun_rds_config'
         verbose_name = u'阿里云rds配置'
         verbose_name_plural = u'阿里云rds配置'

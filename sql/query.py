@@ -2,6 +2,7 @@
 import re
 
 import simplejson as json
+from django.contrib.auth.decorators import permission_required
 from django.urls import reverse
 
 from django.db.models import Q, Min
@@ -18,10 +19,9 @@ from sql.utils.extend_json_encoder import ExtendJSONEncoder
 from sql.utils.aes_decryptor import Prpcrypt
 from sql.utils.dao import Dao
 from .const import WorkflowDict
-from .models import MasterConfig, SlaveConfig, QueryPrivilegesApply, QueryPrivileges, QueryLog, Group
+from .models import MasterConfig, SlaveConfig, QueryPrivilegesApply, QueryPrivileges, QueryLog, SqlGroup
 from sql.utils.data_masking import Masking
 from sql.utils.workflow import Workflow
-from sql.utils.permission import role_required
 from sql.utils.config import SysConfig
 from sql.utils.group import user_slaves
 
@@ -45,7 +45,7 @@ def query_audit_call_back(workflow_id, workflow_status):
         if apply_queryset.priv_type == 1:
             insertlist = [QueryPrivileges(
                 user_name=apply_queryset.user_name,
-                user_display = apply_queryset.user_display,
+                user_display=apply_queryset.user_display,
                 cluster_name=apply_queryset.cluster_name, db_name=db_name,
                 table_name=apply_queryset.table_list, valid_date=apply_queryset.valid_date,
                 limit_num=apply_queryset.limit_num, priv_type=apply_queryset.priv_type) for db_name in
@@ -168,6 +168,7 @@ def query_priv_check(user, cluster_name, dbName, sqlContent, limit_num):
 
 # 获取查询权限申请列表
 @csrf_exempt
+@permission_required('sql.menu_queryapplylist', raise_exception=True)
 def getqueryapplylist(request):
     # 获取用户信息
     user = request.user
@@ -212,12 +213,12 @@ def getqueryapplylist(request):
 
 # 申请查询权限
 @csrf_exempt
+@permission_required('sql.query_applypriv', raise_exception=True)
 def applyforprivileges(request):
     title = request.POST['title']
     cluster_name = request.POST['cluster_name']
     group_name = request.POST['group_name']
-    group_id = Group.objects.get(group_name=group_name).group_id
-    workflow_auditors = request.POST['workflow_auditors']
+    group_id = SqlGroup.objects.get(group_name=group_name).group_id
     priv_type = request.POST['priv_type']
     db_name = request.POST['db_name']
     valid_date = request.POST['valid_date']
@@ -293,7 +294,7 @@ def applyforprivileges(request):
             applyinfo.title = title
             applyinfo.group_id = group_id
             applyinfo.group_name = group_name
-            applyinfo.audit_users = workflow_auditors
+            applyinfo.audit_users = Workflow.auditsettings(group_id, WorkflowDict.workflow_type['query'])
             applyinfo.user_name = user.username
             applyinfo.user_display = user.display
             applyinfo.cluster_name = cluster_name
@@ -389,7 +390,7 @@ def getuserprivileges(request):
 
 # 变更权限信息
 @csrf_exempt
-@role_required(('DBA',))
+@permission_required('sql.query_mgtpriv', raise_exception=True)
 def modifyqueryprivileges(request):
     privilege_id = request.POST.get('privilege_id')
     type = request.POST.get('type')
@@ -416,6 +417,7 @@ def modifyqueryprivileges(request):
 
 # 查询权限审核
 @csrf_exempt
+@permission_required('sql.query_review', raise_exception=True)
 def queryprivaudit(request):
     # 获取用户信息
     user = request.user
@@ -432,14 +434,14 @@ def queryprivaudit(request):
     try:
         with transaction.atomic():
             # 获取audit_id
-            audit_id = workflowOb.auditinfobyworkflow_id(workflow_id=apply_id,
+            audit_id = Workflow.auditinfobyworkflow_id(workflow_id=apply_id,
                                                          workflow_type=WorkflowDict.workflow_type['query']).audit_id
 
             # 调用工作流接口审核
             auditresult = workflowOb.auditworkflow(request, audit_id, audit_status, user.username, audit_remark)
 
             # 按照审核结果更新业务表审核状态
-            auditInfo = workflowOb.auditinfo(audit_id)
+            auditInfo = Workflow.auditinfo(audit_id)
             if auditInfo.workflow_type == WorkflowDict.workflow_type['query']:
                 # 更新业务表审核状态,插入权限信息
                 query_audit_call_back(auditInfo.workflow_id, auditresult['data']['workflow_status'])
@@ -453,6 +455,7 @@ def queryprivaudit(request):
 
 # 获取SQL查询结果
 @csrf_exempt
+@permission_required('sql.query_submit', raise_exception=True)
 def query(request):
     cluster_name = request.POST.get('cluster_name')
     sqlContent = request.POST.get('sql_content')
@@ -578,6 +581,7 @@ def query(request):
 
 # 获取sql查询记录
 @csrf_exempt
+@permission_required('sql.menu_sqlquery', raise_exception=True)
 def querylog(request):
     # 获取用户信息
     user = request.user
@@ -615,6 +619,7 @@ def querylog(request):
 
 # 获取SQL执行计划
 @csrf_exempt
+@permission_required('sql.optimize_sqladvisor', raise_exception=True)
 def explain(request):
     sqlContent = request.POST.get('sql_content')
     clusterName = request.POST.get('cluster_name')

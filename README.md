@@ -1,6 +1,8 @@
+[![Build Status](https://travis-ci.org/hhyo/archer.svg?branch=master)](https://travis-ci.org/hhyo/archer)
+*** 
 # 说明
 项目基于archer，调整部分自需功能，不定期更新，[查看开发计划](https://github.com/hhyo/archer/projects/1)  
-master分支是最新代码，但是不保证功能稳定，建议使用最新release包
+master分支是最新代码，但是不保证功能稳定，建议使用最新[release包](https://github.com/hhyo/archer/releases/)
 
 ## 目录
 * [系统体验](#系统体验)
@@ -9,7 +11,9 @@ master分支是最新代码，但是不保证功能稳定，建议使用最新re
     * [docker部署](#采取docker部署)
     * [手动安装](#部署)
 * [使用说明](#使用说明)
-    * [组管理](#组管理)
+    * [资源组](#资源组管理)
+    * [权限组](#权限组管理)
+    * [工作流](#工作流管理)
     * [SQL审核](#sql审核)
     * [在线查询](#在线查询)
     * [慢日志管理](#慢日志管理)
@@ -27,7 +31,7 @@ master分支是最新代码，但是不保证功能稳定，建议使用最新re
 ## 系统体验
 [在线体验](http://52.221.195.102) 
   
-|  角色 | 账号 | 密码 |
+|  权限组 | 账号 | 密码 |
 | --- | --- | --- |
 |  管理员| archer | archer |
 |  工程师| engineer | archer |
@@ -35,8 +39,8 @@ master分支是最新代码，但是不保证功能稳定，建议使用最新re
 
 
 ## 功能说明
-1. 组管理  
-   支持自定义组，组成员之间审批流程隔离、主库配置隔离、钉钉通知隔离  
+1. 资源组管理  
+   支持自定义资源组，资源组成员之间审批流程、主库配置、钉钉通知等资源隔离  
 2. 审批流程改造  
    SQL上线审核、查询权限审核接入工作流，审批流程支持多级，自主配置  
 3. 跳过inception执行工单  
@@ -63,7 +67,7 @@ master分支是最新代码，但是不保证功能稳定，建议使用最新re
 ## 部署
 ### 基础环境依赖
 Python>=3.4    
-Django>=2.0.0    
+Django>=2.0.7
 [Inception审核工具](https://github.com/mysql-inception/inception)    
 
 ### 安装
@@ -73,6 +77,7 @@ virtualenv venv4archer --python=python3
 source /opt/venv4archer/bin/activate
 
 #下载release包，安装依赖
+https://github.com/hhyo/archer/releases/
 pip3 install -r requirements.txt -i https://mirrors.ustc.edu.cn/pypi/web/simple/ 
 
 #修改archer/settings.py文件DATABASES配置项，数据库字符集utf8，如果使用mysql5.7，sql_mode需要删除ONLY_FULL_GROUP_BY
@@ -110,17 +115,61 @@ http://127.0.0.1:9123/
 #使用初始化脚本初始化数据库
 https://github.com/hhyo/archer/tree/master/src/script/init_sql
 #准备settings.py文件，修改相关配置项
-#启动，tag对应release版本，如1.1.6
+#启动，tag对应release版本，如1.1.7
 docker run --name archer -v /local_path/settings.py:/opt/archer/archer/settings.py  -e NGINX_PORT=9123 -p 9123:9123 -dti registry.cn-hangzhou.aliyuncs.com/lihuanhuan/archer:tag
+#启动日志查看和问题排查
+docker exec -ti archer /bin/bash
+cat /tmp/archer.log
+cat /tmp/archer.err
 ```
 inception镜像: https://dev.aliyun.com/detail.html?spm=5176.1972343.2.12.7b475aaaLiCfMf&repoId=142093
 
 ## 使用说明
-### 组管理
-- 功能说明：目前组设定类似于一个对象集合，组可关联的对象有用户、主库、从库，不同组的对象隔离，组成员仅可以查看组关联对象的数据
+### 资源组管理
+- 功能说明：资源组是一堆资源对象的集合，与用户关联后用来隔离资源访问权限，可以根据项目组进行划分，目前资源组可关联的对象有用户、主库、从库，不同资源组的对象隔离，组成员仅可以查看组关联对象的数据
 - 相关配置：
-    1. 在系统管理-组关系维护页面，进行组管理以及组关联对象管理
+    1. 在系统管理-组关系维护页面，进行组管理以及组关联对象管理，用户必须关联资源组才能访问对应主库、从库等资源信息
     2. 在系统管理-配置项管理页面，进行组工单审批流程的配置
+### 权限组管理
+- 功能说明：权限组是使用django自带的权限管理模块，是一堆权限集合，用户可以关联到多个权限组，可以根据职能进行划分，如开发组、项目经理组、DBA组等
+- 权限定义：目前定义了如下权限，可按照需求自主配置
+    ```python
+    ('menu_dashboard', '菜单 Dashboard'),
+    ('menu_sqlworkflow', '菜单 SQL上线'),
+    ('menu_query', '菜单 SQL查询'),
+    ('menu_sqlquery', '菜单 MySQL查询'),
+    ('menu_queryapplylist', '菜单 查询权限申请'),
+    ('menu_sqloptimize', '菜单 SQL优化'),
+    ('menu_sqladvisor', '菜单 优化工具'),
+    ('menu_slowquery', '菜单 慢查日志'),
+    ('menu_dbdiagnostic', '菜单 会话管理'),
+    ('menu_system', '菜单 系统管理'),
+    ('menu_document', '菜单 相关文档'),
+    ('sql_submit', '提交SQL上线工单'),
+    ('sql_review', '审核SQL上线工单'),
+    ('sql_execute', '执行SQL上线工单'),
+    ('optimize_sqladvisor', '执行SQLAdvisor'),
+    ('optimize_sqltuning', '执行SQLTuning'),
+    ('query_applypriv', '申请查询权限'),
+    ('query_mgtpriv', '管理查询权限'),
+    ('query_review', '审核查询权限'),
+    ('query_submit', '提交SQL查询'),
+    ('process_view', '查看会话'),
+    ('process_kill', '终止会话'),
+    ('tablespace_view', '查看表空间'),
+    ('trxandlocks_view', '查看锁信息')
+    ```
+- 相关配置：
+    1. 注册的用户和LDAP登录的用户默认会被分配到默认权限组，默认权限组权限可配置
+    2. 在系统管理-用户管理中编辑用户可以给用户分配不同的权限组
+    3. 在系统管理-其他配置管理-权限组管理页面，进行组的维护
+### 工作流管理
+- 功能说明：项目提供简单的多级审批流配置，审批流程和资源组以及审批类型相关，不同资源组和审批类型可以配置不同的审批流程，审批流程配置的是权限组，可避免审批人单点的问题
+- 相关配置：
+    1. 在系统管理-配置项管理页面，可进行组工单审批流程的配置
+    2. 对于SQL上线和SQL查询权限工单，如果用户拥有('sql_review', '审核SQL上线工单')、('query_review', '审核查询权限')权限，就可以查看当前用户所在资源组的所有工单
+    2. 工单待审核时，关联当前审批权限组的所有用户，均可审核所在资源组的工单（资源组隔离）
+    4. 待办列表包含所有当前用户可审核的所有工单
 ### SQL审核
 - 功能说明：SQL上线和审核功能依靠Inception审核平台，建议使用前先阅读Inception的[项目文档](http://mysql-inception.github.io/inception-document/)
 - 相关配置：
@@ -154,7 +203,7 @@ inception镜像: https://dev.aliyun.com/detail.html?spm=5176.1972343.2.12.7b475a
 - 功能说明：利用美团SQLAdvisor对收集的慢日志进行优化，一键获取优化建议
 - 相关配置：
     1. 安装SQLAdvisor，安装方法见[项目地址](https://github.com/Meituan-Dianping/SQLAdvisor)
-    2. 修改配置文件SQLADVISOR为程序路径，路径需要完整，如'/opt/SQLAdvisor/sqladvisor/sqladvisor'
+    2. 修改配置文件SQLADVISOR为程序路径，路径需要完整，如'/opt/SQLAdvisor/sqladvisor/sqladvisor'，docker部署的请修改为'/opt/sqladvisor'
 ### 阿里云RDS管理
 - 功能说明：调用阿里云SDK对RDS进行管理，支持管理慢日志、进程、表空间，其中进程和表空间需要管理权限的key
 - 相关配置：
@@ -225,7 +274,7 @@ inception镜像: https://dev.aliyun.com/detail.html?spm=5176.1972343.2.12.7b475a
 - 检查脱敏规则的正则表达式是否可以匹配到数据，无法匹配的会返回原结果
 - 检查是否关闭了CHECK_QUERY参数，导致inception无法解析的语句未脱敏直接返回结果
 ### 慢日志不显示
-- 检查pt工具的版本，建议大于3.0，3.0以下的表信息不一致
+- 检查pt工具的版本是否为3.0.6
 - 检查脚本内的配置，hostname和主库配置表中的内容是否保持一致
 - 检查慢日志收集表mysql_slow_query_review_history是否存在记录，并且hostname_max是否和主库配置的host:port一致
 ## 联系方式
