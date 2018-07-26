@@ -1,17 +1,16 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-import os
 import json
 import time
 import traceback
-from django.db import transaction
 from sql.models import Users, Config
 from sql.utils.api import HttpRequests
 from sql.utils.config import SysConfig
 
-
+# 是否每次登陆都要去钉钉获取一下 user_id。因为钉钉里的 user_id 是固定的，所以没必要配置成 True。
 FORCE_UPDATE = False
+
 http_request = HttpRequests()
 
 
@@ -30,8 +29,9 @@ def get_access_token():
         url = "https://oapi.dingtalk.com/gettoken?corpid={0}&corpsecret={1}".format(corp_id, corp_secret)
         status, ret = http_request.get(url)
         if status is True:
+            # 钉钉推荐加锁更新token，这里暂时未实现
+            # from django.db import transaction
             s = json.loads(ret)
-            print(s["access_token"], s["expires_in"])
             Config.objects.filter(item="ding_access_token").update(value=s["access_token"])
             Config.objects.filter(item="ding_expires_time").update(value=str(int(now_time + s["expires_in"])))
             return s["access_token"]
@@ -43,7 +43,6 @@ def get_access_token():
 def get_dept_list_id_fetch_child(token, parent_dept_id):
     ids = [int(parent_dept_id)]
     url = 'https://oapi.dingtalk.com/department/list_ids?id={0}&access_token={1}'.format(parent_dept_id, token)
-    print(url)
     status, ret = http_request.get(url)
     if status is True:
         s = json.loads(ret)
@@ -53,16 +52,22 @@ def get_dept_list_id_fetch_child(token, parent_dept_id):
     return ids
 
 
-def set_ding_userid(work_no):
+def set_ding_user_id(username):
+    """
+    本公司使用工号（username）登陆archer，并且工号对应钉钉系统中字段 "jobnumber"。
+    所以可根据钉钉中 jobnumber 查到该用户的 ding_user_id。
+    """
     try:
-        # 工号work_no对应钉钉jobnumber，查询user_id
-        user = Users.objects.get(username=work_no)
-        # 非强制查询user_id，且user_id已存在，则直接退出
-        if FORCE_UPDATE is False and user.user_id != "":
+        # archer 的用户名，对应钉钉系统中 jobnumber值。
+        key = "jobnumber"
+
+        user = Users.objects.get(username=username)
+        # 非强制每次登陆查询 user_id，且archer中 ding_user_id 已存在
+        if FORCE_UPDATE is False and user.ding_user_id != "":
             return
-        root_id = 2925013
+        ding_root_dept_id = SysConfig().sys_config.get('ding_root_dept_id', 0)
         token = get_access_token()
-        dept_id_list = get_dept_list_id_fetch_child(token, root_id)
+        dept_id_list = get_dept_list_id_fetch_child(token, ding_root_dept_id)
         for dept_id in dept_id_list:
             url = 'https://oapi.dingtalk.com/user/list?access_token={0}&department_id={1}'.format(token, dept_id)
             status, ret = http_request.get(url)
@@ -70,8 +75,8 @@ def set_ding_userid(work_no):
                 s = json.loads(ret)
                 if s["errcode"] == 0:
                     for u in s["userlist"]:
-                        if u["jobnumber"] == work_no:
-                            user.user_id = u["userid"]
+                        if u[key] == username:
+                            user.ding_user_id = u["userid"]
                             user.save()
                             return
                 else:
@@ -86,11 +91,11 @@ class DingSender(object):
     def __init__(self):
         self.app_id = SysConfig().sys_config.get('ding_agent_id', None)
 
-    def send_msg(self, user_id, content):
+    def send_msg(self, ding_user_id, content):
         if self.app_id is None:
             return "No app id."
         data = {
-            "touser": user_id,
+            "touser": ding_user_id,
             "agentid": self.app_id,
             "msgtype": "text",
             "text": {

@@ -51,19 +51,3 @@ class DateEncoder(json.JSONEncoder):
         else:
             return json.JSONEncoder.default(self, obj)
 
-
-def send_mail(contents, mail_to, sub=u'运维告警邮件'):
-    try:
-        contents = contents.replace('\n', '<br>')
-        my_dict = {'to': ','.join(mail_to), 'subject': sub, 'contents': contents}
-        http_request = HttpRequests()
-        status, ret = http_request.post("http://172.20.1.47/mailsender.php", my_dict)
-        if status is not True:
-            print("邮件发送失败：%s" % ret)
-    except Exception as e:
-        print("邮件发送失败：%s" % str(e))
-
-
-def bash(cmd):
-    """执行bash命令"""
-    return subprocess.call(cmd, shell=True)

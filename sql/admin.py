@@ -12,7 +12,7 @@ from .models import Users, MasterConfig, SlaveConfig, SqlWorkflow, \
 class UsersAdmin(UserAdmin):
     def __init__(self, *args, **kwargs):
         super(UserAdmin, self).__init__(*args, **kwargs)
-        self.list_display = ('id', 'user_id', 'username', 'display', 'email', 'is_superuser', 'is_staff', 'is_active')
+        self.list_display = ('id', 'ding_user_id', 'username', 'display', 'email', 'is_superuser', 'is_staff', 'is_active')
         self.search_fields = ('id', 'username', 'display', 'email')
 
     def changelist_view(self, request, extra_context=None):

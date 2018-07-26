@@ -29,7 +29,7 @@ import logging
 from sql.utils.workflow import Workflow
 from sql.utils.config import SysConfig
 from sql.utils.extend_json_encoder import ExtendJSONEncoder
-from sql.utils.ding_api import set_ding_userid
+from sql.utils.ding_api import set_ding_user_id
 
 logger = logging.getLogger('default')
 dao = Dao()
@@ -65,8 +65,8 @@ def loginAuthenticate(username, password):
         user = authenticate(username=username, password=password)
         # 登录成功
         if user:
-            # 获取该用户钉钉的userid，用于给他发消息
-            set_ding_userid(username)
+            # 从钉钉获取该用户的userid，用于给他发消息
+            set_ding_user_id(username)
             # 如果登录失败计数器中存在该用户名，则清除之
             if username in login_failure_counter:
                 login_failure_counter.pop(username)

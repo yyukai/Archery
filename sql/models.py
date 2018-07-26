@@ -7,7 +7,7 @@ from sql.utils.aes_decryptor import Prpcrypt
 # display字段为展示的中文名。
 class Users(AbstractUser):
     display = models.CharField('显示的中文名', max_length=50, blank=True)
-    user_id = models.CharField('UserID', max_length=50, blank=True)
+    ding_user_id = models.CharField('UserID', max_length=50, blank=True)
 
     def __str__(self):
         return self.username
@@ -530,7 +530,7 @@ class SlowQueryHistory(models.Model):
 
 # # 钉钉配置
 # class DingConfig(models.Model):
-#     agent_id = models.CharField('appId，	微应用id', max_length=20, unique=True)
+#     agent_id = models.CharField('appId 微应用id', max_length=20, unique=True)
 #     corp_id = models.CharField('CorpId', max_length=30, unique=True)
 #     corp_secret = models.CharField('CorpSecret', max_length=100, unique=True)
 #     access_token = models.CharField('ACCESS_TOKEN', max_length=50, unique=True)

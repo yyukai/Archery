@@ -18,9 +18,9 @@ from sql.utils.api import HttpRequests
 
 if __name__ == '__main__':
     http_request = HttpRequests()
-    root_id = 2925013
+    ding_root_dept_id = 2925013
     token = get_access_token()
-    dept_id_list = get_dept_list_id_fetch_child(token, root_id)
+    dept_id_list = get_dept_list_id_fetch_child(token, ding_root_dept_id)
     print('ids:', dept_id_list)
     for dept_id in dept_id_list:
         url = 'https://oapi.dingtalk.com/user/list?access_token={0}&department_id={1}'.format(token, dept_id)
@@ -30,4 +30,4 @@ if __name__ == '__main__':
             if s["errcode"] == 0:
                 for u in s["userlist"]:
                     print(u)
-                    Users.objects.filter(username=u["jobnumber"]).update(user_id=u["userid"])
+                    Users.objects.filter(username=u["jobnumber"]).update(ding_user_id=u["userid"])
