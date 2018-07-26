@@ -113,8 +113,8 @@ DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql',
         'NAME': 'archer_master',
-        'USER': 'root',
-        'PASSWORD': '',
+        'USER': 'uatarcher',
+        'PASSWORD': 'UATarcher123!',
         'HOST': '127.0.0.1',
         'PORT': '3306',
         'TEST': {
@@ -125,7 +125,7 @@ DATABASES = {
 }
 
 # LDAP
-ENABLE_LDAP = False
+ENABLE_LDAP = True
 if ENABLE_LDAP:
     import ldap
     from django_auth_ldap.config import LDAPSearch
@@ -135,8 +135,8 @@ if ENABLE_LDAP:
         'django.contrib.auth.backends.ModelBackend',  # django系统中手动创建的用户也可使用，优先级靠后。注意这2行的顺序
     )
 
-    AUTH_LDAP_SERVER_URI = "ldap://xxx"
-    AUTH_LDAP_USER_DN_TEMPLATE = "cn=%(user)s,ou=xxx,dc=xxx,dc=xxx"
+    AUTH_LDAP_SERVER_URI = "ldap://192.168.21.62:389"
+    AUTH_LDAP_USER_DN_TEMPLATE = "cn=%(user)s,ou=people,ou=WeidaiDBMSStaff,dc=weidai,dc=com,dc=cn"
     AUTH_LDAP_ALWAYS_UPDATE_USER = True  # 每次登录从ldap同步用户信息
     AUTH_LDAP_USER_ATTR_MAP = {  # key为archer.sql_users字段名，value为ldap中字段名，用户同步信息
         "username": "cn",

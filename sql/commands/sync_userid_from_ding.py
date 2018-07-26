@@ -14,13 +14,13 @@ sys.path.append(BASE_DIR)
 os.environ['DJANGO_SETTINGS_MODULE'] = 'archer.settings'
 django.setup()
 
-from sql.models import Users
+from sql.models import Users, Config
 from sql.utils.ding_api import get_access_token, get_dept_list_id_fetch_child
 from sql.utils.api import HttpRequests
 
 if __name__ == '__main__':
     http_request = HttpRequests()
-    ding_root_dept_id = 100000
+    ding_root_dept_id = Config.objects.get(item="ding_root_dept_id").value
     token = get_access_token()
     dept_id_list = get_dept_list_id_fetch_child(token, ding_root_dept_id)
     print('ids:', dept_id_list)
