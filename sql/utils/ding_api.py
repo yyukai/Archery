@@ -103,6 +103,7 @@ class DingSender(object):
             },
         }
         url = 'https://oapi.dingtalk.com/message/send?access_token=' + get_access_token()
+        # print(url, data)
         json_request = HttpRequests()
         status, ret = json_request.post(url, data)
         if status is not True:

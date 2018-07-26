@@ -21,7 +21,7 @@ class UsersAdmin(UserAdmin):
             # 此字段定义UserChangeForm表单中的具体显示内容，并可以分类显示
             self.fieldsets = (
                 (('认证信息'), {'fields': ('username', 'password')}),
-                (('个人信息'), {'fields': ('display', 'email')}),
+                (('个人信息'), {'fields': ('ding_user_id', 'display', 'email')}),
                 (('权限信息'), {'fields': ('is_superuser', 'is_active', 'is_staff', 'groups', 'user_permissions')}),
                 (('其他信息'), {'fields': ('last_login', 'date_joined')}),
             )

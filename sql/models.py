@@ -7,7 +7,7 @@ from sql.utils.aes_decryptor import Prpcrypt
 # display字段为展示的中文名。
 class Users(AbstractUser):
     display = models.CharField('显示的中文名', max_length=50, blank=True)
-    ding_user_id = models.CharField('UserID', max_length=50, blank=True)
+    ding_user_id = models.CharField('钉钉UserID', max_length=50, blank=True)
 
     def __str__(self):
         return self.username
