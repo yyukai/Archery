@@ -118,7 +118,7 @@ DATABASES = {
         'HOST': '127.0.0.1',
         'PORT': '3306',
         'TEST': {
-            'NAME': 'test_archer',
+            'NAME': 'archer_master',
             'CHARSET': 'utf8',
         },
     }

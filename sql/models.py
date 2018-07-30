@@ -62,6 +62,8 @@ class GroupRelations(models.Model):
 # 各个线上主库实例配置）
 class MasterConfig(models.Model):
     cluster_name = models.CharField('实例名称', max_length=50, unique=True)
+    cluster_type = models.CharField('实例类型', max_length=10, choices=(('mysql', 'MySQL'),
+                                    ('mssql', 'MSSQL'), ('pgsql', 'PgSQL')))
     master_host = models.CharField('主库地址', max_length=200)
     master_port = models.IntegerField('主库端口', default=3306)
     master_user = models.CharField('登录主库的用户名', max_length=100)
@@ -87,6 +89,8 @@ class MasterConfig(models.Model):
 # 各个线上从库地址
 class SlaveConfig(models.Model):
     cluster_name = models.CharField('实例名称', max_length=50, unique=True)
+    cluster_type = models.CharField('实例类型', max_length=10, choices=(('mysql', 'MySQL'),
+                                    ('mssql', 'MSSQL'), ('pgsql', 'PgSQL')))
     slave_host = models.CharField('从库地址', max_length=200)
     slave_port = models.IntegerField('从库端口', default=3306)
     slave_user = models.CharField('登录从库的用户名', max_length=100)

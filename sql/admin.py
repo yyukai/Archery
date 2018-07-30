@@ -20,10 +20,10 @@ class UsersAdmin(UserAdmin):
         if request.user.is_superuser:
             # 此字段定义UserChangeForm表单中的具体显示内容，并可以分类显示
             self.fieldsets = (
-                (('认证信息'), {'fields': ('username', 'password')}),
-                (('个人信息'), {'fields': ('ding_user_id', 'display', 'email')}),
-                (('权限信息'), {'fields': ('is_superuser', 'is_active', 'is_staff', 'groups', 'user_permissions')}),
-                (('其他信息'), {'fields': ('last_login', 'date_joined')}),
+                ('认证信息', {'fields': ('username', 'password')}),
+                ('个人信息', {'fields': ('ding_user_id', 'display', 'email')}),
+                ('权限信息', {'fields': ('is_superuser', 'is_active', 'is_staff', 'groups', 'user_permissions')}),
+                ('其他信息', {'fields': ('last_login', 'date_joined')}),
             )
             # 此字段定义UserCreationForm表单中的具体显示内容
             self.add_fieldsets = (
@@ -48,9 +48,9 @@ class GroupRelationsAdmin(admin.ModelAdmin):
 # 主库配置管理
 @admin.register(MasterConfig)
 class MasterConfigAdmin(admin.ModelAdmin):
-    list_display = ('id', 'cluster_name', 'master_host', 'master_port', 'master_user', 'create_time')
-    search_fields = ['id', 'cluster_name', 'master_host', 'master_port', 'master_user', 'master_password',
-                     'create_time', 'update_time']
+    list_display = ('id', 'cluster_name', 'cluster_type', 'master_host', 'master_port', 'master_user', 'create_time')
+    search_fields = ['id', 'cluster_name', 'cluster_type', 'master_host', 'master_port', 'master_user',
+                     'master_password', 'create_time', 'update_time']
 
 
 # 工单管理
@@ -64,8 +64,8 @@ class SqlWorkflowAdmin(admin.ModelAdmin):
 @admin.register(SlaveConfig)
 class SlaveConfigAdmin(admin.ModelAdmin):
     list_display = (
-        'id', 'cluster_name', 'slave_host', 'slave_port', 'slave_user', 'create_time', 'update_time')
-    search_fields = ['id', 'cluster_name', 'slave_host', 'slave_port', 'slave_user', 'slave_password', ]
+        'id', 'cluster_name', 'cluster_type', 'slave_host', 'slave_port', 'slave_user', 'create_time', 'update_time')
+    search_fields = ['id', 'cluster_name', 'cluster_type', 'slave_host', 'slave_port', 'slave_user', 'slave_password', ]
 
 
 # 脱敏字段页面定义
