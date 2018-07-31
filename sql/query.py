@@ -527,7 +527,7 @@ def query(request):
                                      prpCryptor.decrypt(slave_info.slave_password), str(dbName), sqlContent, limit_num)
     elif slave_info.cluster_type == "pgsql":
         sql_result = pgsql_dao.query(slave_info.slave_host, slave_info.slave_port, slave_info.slave_user,
-                                           prpCryptor.decrypt(slave_info.slave_password), str(dbName), sqlContent, limit_num)
+                                     prpCryptor.decrypt(slave_info.slave_password), str(dbName), sqlContent, limit_num)
 
     t_end = time.time()
     cost_time = "%5s" % "{:.4f}".format(t_end - t_start)

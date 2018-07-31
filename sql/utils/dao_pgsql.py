@@ -2,6 +2,7 @@
 
 import psycopg2
 import logging
+import re
 logger = logging.getLogger('default')
 
 
@@ -87,12 +88,24 @@ class PgSQLDao(object):
         result = {'column_list': [], 'rows': [], 'effect_row': 0}
         conn = None
         cursor = None
-
+        is_show_create_table, tb_name = False, None
         try:
             conn = psycopg2.connect(host=masterHost, port=masterPort, user=masterUser, password=masterPassword, dbname=dbName)
-            print(sql)
             cursor = conn.cursor()
-            effect_row = cursor.execute(sql)
+            if re.match(r"^show\s+create\s+table", sql.lower()):
+                is_show_create_table = True
+                tb_name = re.sub('^show\s+create\s+table', '', sql[:-1], count=1, flags=0).strip()
+                sql = """SELECT column_name,
+                                       data_type,
+                                       ''||COALESCE(character_maximum_length, -1) as length,
+                                       is_nullable
+                                FROM   information_schema.columns
+                                WHERE  table_catalog = '{0}'
+                                       AND table_name = '{1}'
+                                ORDER  BY ordinal_position;
+                """.format(dbName, tb_name)
+            print(sql)
+            cursor.execute(sql)
             if int(limit_num) > 0:
                 rows = cursor.fetchmany(size=int(limit_num))
             else:
@@ -103,10 +116,16 @@ class PgSQLDao(object):
             if fields:
                 for i in fields:
                     column_list.append(i[0])
-            result = {}
             result['column_list'] = column_list
-            result['rows'] = rows
-            result['effect_row'] = effect_row
+            if is_show_create_table is True:
+                result['column_list'] = ["Table", "Create Table"]
+                show_create_table_text = "column_name | data_type | character_maximum_length | is_nullable\n"
+                for r in rows:
+                    show_create_table_text += ' | '.join(r) + '\n'
+                result['rows'] = ((tb_name, show_create_table_text),)
+            else:
+                result['rows'] = rows
+            result['effect_row'] = -1 if cursor.rowcount is None else cursor.rowcount
 
         except psycopg2.Warning as w:
             logger.warning(str(w))
@@ -134,9 +153,8 @@ class PgSQLDao(object):
         try:
             conn = psycopg2.connect(host=masterHost, port=masterPort, user=masterUser, password=masterPassword, dbname=dbName)
             cursor = conn.cursor()
-            effect_row = cursor.execute(sql)
-            # result = {}
-            # result['effect_row'] = effect_row
+            cursor.execute(sql)
+            result['effect_row'] = -1 if cursor.rowcount is None else cursor.rowcount
             conn.commit()
         except psycopg2.Warning as w:
             logger.warning(str(w))

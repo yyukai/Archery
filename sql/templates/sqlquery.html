@@ -450,9 +450,10 @@
                                             title: 'Create Table',
                                             field: 1,
                                             formatter: function (value, row, index) {
-                                                var sql = window.sqlFormatter.format(value);
+                                                var sql = value.replace(/\r\n/g, "<br>");
+                                                // var sql = window.sqlFormatter.format(value);
                                                 //替换所有的换行符
-                                                sql = sql.replace(/\r\n/g, "<br>");
+                                                // sql = sql.replace(/\r\n/g, "<br>");
                                                 sql = sql.replace(/\n/g, "<br>");
                                                 //替换所有的空格
                                                 sql = sql.replace(/\s/g, "&nbsp;");
