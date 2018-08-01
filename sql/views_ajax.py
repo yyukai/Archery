@@ -65,7 +65,9 @@ def loginAuthenticate(username, password):
         # 登录成功
         if user:
             # 从钉钉获取该用户的userid，用于给他发消息
-            set_ding_user_id(username)
+            if sys_config.get("ding_to_person") == 'true':
+                set_ding_user_id(username)
+
             # 如果登录失败计数器中存在该用户名，则清除之
             if username in login_failure_counter:
                 login_failure_counter.pop(username)
