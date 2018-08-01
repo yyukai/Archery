@@ -7,6 +7,7 @@ from sql.utils.aes_decryptor import Prpcrypt
 # display字段为展示的中文名。
 class Users(AbstractUser):
     display = models.CharField('显示的中文名', max_length=50, blank=True)
+    ding_user_id = models.CharField('钉钉UserID', max_length=50, blank=True)
 
     def __str__(self):
         return self.username
@@ -61,8 +62,8 @@ class GroupRelations(models.Model):
 # 各个线上实例配置
 class Instance(models.Model):
     instance_name = models.CharField('实例名称', max_length=50, unique=True)
-    type = models.CharField('实例类型', max_length=5, choices=(('master', '主库'), ('slave', '从库')))
-    db_type = models.CharField('数据库类型', max_length=10, choices=(('mysql', 'mysql'),))
+    type = models.CharField('实例类型', max_length=6, choices=(('master', '主库'), ('slave', '从库')))
+    db_type = models.CharField('数据库类型', max_length=10, choices=(('mysql', 'MySQL'), ('pgsql', 'PgSQL')))
     host = models.CharField('实例连接', max_length=200)
     port = models.IntegerField('端口', default=3306)
     user = models.CharField('用户名', max_length=100)
@@ -506,3 +507,21 @@ class SlowQueryHistory(models.Model):
         index_together = ('hostname_max', 'ts_min')
         verbose_name = u'慢日志明细'
         verbose_name_plural = u'慢日志明细'
+
+
+# # 钉钉配置
+# class DingConfig(models.Model):
+#     agent_id = models.CharField('appId 微应用id', max_length=20, unique=True)
+#     corp_id = models.CharField('CorpId', max_length=30, unique=True)
+#     corp_secret = models.CharField('CorpSecret', max_length=100, unique=True)
+#     access_token = models.CharField('ACCESS_TOKEN', max_length=50, unique=True)
+#     expires_in = models.DateTimeField(blank=True, null=True)
+#
+#     def __int__(self):
+#         return self.agent_id
+#
+#     class Meta:
+#         managed = False
+#         db_table = 'ding_config'
+#         verbose_name = u'钉钉配置'
+#         verbose_name_plural = u'钉钉配置'

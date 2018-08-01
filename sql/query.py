@@ -18,6 +18,7 @@ import time
 from sql.utils.extend_json_encoder import ExtendJSONEncoder
 from sql.utils.aes_decryptor import Prpcrypt
 from sql.utils.dao import Dao
+from sql.utils.dao_pgsql import PgSQLDao
 from .const import WorkflowDict
 from .models import Instance, QueryPrivilegesApply, QueryPrivileges, QueryLog, SqlGroup
 from sql.utils.data_masking import Masking
@@ -527,7 +528,10 @@ def query(request):
 
     # 执行查询语句,统计执行时间
     t_start = time.time()
-    sql_result = Dao(instance_name=instance_name).mysql_query(str(dbName), sqlContent, limit_num)
+    if slave_info.db_type == "mysql":
+        sql_result = Dao(instance_name=instance_name).mysql_query(str(dbName), sqlContent, limit_num)
+    elif slave_info.db_type == "pgsql":
+        sql_result = Dao(instance_name=instance_name).pgsql_query(str(dbName), sqlContent, limit_num)
     t_end = time.time()
     cost_time = "%5s" % "{:.4f}".format(t_end - t_start)
 
@@ -536,19 +540,20 @@ def query(request):
     # 数据脱敏，同样需要检查配置，是否开启脱敏，语法树解析是否允许出错继续执行
     t_start = time.time()
     if SysConfig().sys_config.get('data_masking') == 'true':
-        # 仅对查询语句进行脱敏
-        if re.match(r"^select", sqlContent.lower()):
-            try:
-                masking_result = datamasking.data_masking(instance_name, dbName, sqlContent, sql_result)
-            except Exception:
-                if SysConfig().sys_config.get('query_check') == 'true':
-                    finalResult['status'] = 1
-                    finalResult['msg'] = '脱敏数据报错,请联系管理员'
-                    return HttpResponse(json.dumps(finalResult), content_type='application/json')
-            else:
-                if masking_result['status'] != 0:
+        if slave_info.db_type == "mysql":
+            # 仅对查询语句进行脱敏
+            if re.match(r"^select", sqlContent.lower()):
+                try:
+                    masking_result = datamasking.data_masking(instance_name, dbName, sqlContent, sql_result)
+                except Exception:
                     if SysConfig().sys_config.get('query_check') == 'true':
-                        return HttpResponse(json.dumps(masking_result), content_type='application/json')
+                        finalResult['status'] = 1
+                        finalResult['msg'] = '脱敏数据报错,请联系管理员'
+                        return HttpResponse(json.dumps(finalResult), content_type='application/json')
+                else:
+                    if masking_result['status'] != 0:
+                        if SysConfig().sys_config.get('query_check') == 'true':
+                            return HttpResponse(json.dumps(masking_result), content_type='application/json')
 
     t_end = time.time()
     masking_cost_time = "%5s" % "{:.4f}".format(t_end - t_start)

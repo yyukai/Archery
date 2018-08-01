@@ -12,7 +12,7 @@ from .models import Users, Instance, SqlWorkflow, \
 class UsersAdmin(UserAdmin):
     def __init__(self, *args, **kwargs):
         super(UserAdmin, self).__init__(*args, **kwargs)
-        self.list_display = ('id', 'username', 'display', 'email', 'is_superuser', 'is_staff', 'is_active')
+        self.list_display = ('id', 'ding_user_id', 'username', 'display', 'email', 'is_superuser', 'is_staff', 'is_active')
         self.search_fields = ('id', 'username', 'display', 'email')
 
     def changelist_view(self, request, extra_context=None):
@@ -20,10 +20,10 @@ class UsersAdmin(UserAdmin):
         if request.user.is_superuser:
             # 此字段定义UserChangeForm表单中的具体显示内容，并可以分类显示
             self.fieldsets = (
-                (('认证信息'), {'fields': ('username', 'password')}),
-                (('个人信息'), {'fields': ('display', 'email')}),
-                (('权限信息'), {'fields': ('is_superuser', 'is_active', 'is_staff', 'groups', 'user_permissions')}),
-                (('其他信息'), {'fields': ('last_login', 'date_joined')}),
+                ('认证信息', {'fields': ('username', 'password')}),
+                ('个人信息', {'fields': ('ding_user_id', 'display', 'email')}),
+                ('权限信息', {'fields': ('is_superuser', 'is_active', 'is_staff', 'groups', 'user_permissions')}),
+                ('其他信息', {'fields': ('last_login', 'date_joined')}),
             )
             # 此字段定义UserCreationForm表单中的具体显示内容
             self.add_fieldsets = (

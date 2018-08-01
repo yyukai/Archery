@@ -140,6 +140,12 @@ def send_msg(workflowDetail, url):
                       auth_group_users(auth_group_names=['DBA'], group_id=workflowDetail.group_id).values('email')]
         mailSender.send_email(msg_title, msg_content, listToAddr, listCcAddr=listCcAddr)
     if sys_config.get('ding') == 'true':
+        # 单独发送钉钉消息给申请人
+        from sql.utils.ding_api import DingSender
+        ding_sender = DingSender()
+        ding_user_id = Users.objects.get(username=workflowDetail.engineer).ding_user_id
+        ding_sender.send_msg(ding_user_id, msg_title + '\n' + msg_content)
+
         # 钉钉通知申请人，审核人，抄送DBA
         webhook_url = SqlGroup.objects.get(group_id=workflowDetail.group_id).ding_webhook
-    MailSender.send_ding(webhook_url, msg_title + '\n' + msg_content)
+        MailSender.send_ding(webhook_url, msg_title + '\n' + msg_content)
