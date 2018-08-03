@@ -4,7 +4,7 @@
 import os
 import requests
 import json
-import traceback
+import threading
 import datetime
 import subprocess
 
@@ -21,11 +21,7 @@ class HttpRequests(object):
             resp = requests.post(url, headers=headers, json=params, timeout=self.timeout)
             status = True if resp.status_code == 200 else False
 
-            print(resp.content)
-            if resp.apparent_encoding != 'utf-8':
-                return status, str(resp.content, encoding="utf8")
-            else:
-                return status, resp.content
+            return status, str(resp.content, encoding="utf8")
         except Exception as e:
             return False, str(e)
 
@@ -34,10 +30,7 @@ class HttpRequests(object):
             resp = requests.get(url, timeout=self.timeout)
             status = True if resp.status_code == 200 else False
 
-            if resp.apparent_encoding != 'utf-8':
-                return status, str(resp.content, encoding="utf8")
-            else:
-                return status, resp.content
+            return status, str(resp.content, encoding="utf8")
         except Exception as e:
             return False, str(e)
 
@@ -51,3 +44,9 @@ class DateEncoder(json.JSONEncoder):
         else:
             return json.JSONEncoder.default(self, obj)
 
+
+def async(func):
+    def wrapper(*args, **kwargs):
+        thr = threading.Thread(target=func, args=args, kwargs=kwargs)
+        thr.start()
+    return wrapper

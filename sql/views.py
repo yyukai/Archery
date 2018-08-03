@@ -522,6 +522,16 @@ def sqlquery(request):
     return render(request, 'sqlquery.html', context)
 
 
+# SQL导出查询（大数据异步查询）
+@permission_required('sql.menu_query_export', raise_exception=True)
+def query_export(request):
+    # 获取用户关联从库列表
+    listAllClusterName = [slave.instance_name for slave in user_instances(request.user, 'slave')]
+
+    context = {'listAllClusterName': listAllClusterName}
+    return render(request, 'query_export.html', context)
+
+
 # SQL慢日志
 @permission_required('sql.menu_slowquery', raise_exception=True)
 def slowquery(request):

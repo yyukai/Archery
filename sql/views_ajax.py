@@ -65,7 +65,7 @@ def loginAuthenticate(username, password):
         # 登录成功
         if user:
             # 从钉钉获取该用户的userid，用于给他发消息
-            if sys_config.get("ding_to_person") == 'true':
+            if sys_config.get("ding_to_person") == 'true' and username != 'admin':
                 set_ding_user_id(username)
 
             # 如果登录失败计数器中存在该用户名，则清除之
@@ -99,16 +99,11 @@ def authenticateEntry(request):
     if result['status'] == 0:
         # 开启LDAP的认证通过后更新用户密码
         if settings.ENABLE_LDAP:
-            try:
-                Users.objects.get(username=username)
-            except Exception:
+            if not Users.objects.filter(username=username).exists():
                 insert_info = Users()
                 insert_info.password = make_password(password)
+                insert_info.date_joined = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 insert_info.save()
-            else:
-                replace_info = Users.objects.get(username=username)
-                replace_info.password = make_password(password)
-                replace_info.save()
             # 添加到默认组
             user = Users.objects.get(username=username)
             group = Group.objects.get(id=1)

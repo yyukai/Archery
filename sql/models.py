@@ -264,6 +264,15 @@ class QueryLog(models.Model):
         verbose_name_plural = u'sql查询日志'
 
 
+class QueryExport(models.Model):
+    query_log = models.ForeignKey(QueryLog)
+    auditor = models.ForeignKey(Users)
+    result_file = models.CharField('结果文件的存放路径', max_length=100)
+    error_msg = models.CharField('错误信息', max_length=100)
+    status = models.IntegerField('执行状态', choices=((0, '执行中'), (1, '执行失败'), (2, '待审核'),
+                                                  (3, '审核通过'), (4, '审核不通过')))
+
+
 # 脱敏字段配置
 class DataMaskingColumns(models.Model):
     column_id = models.AutoField('字段id', primary_key=True)
