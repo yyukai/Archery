@@ -63,7 +63,8 @@ class GroupRelations(models.Model):
 class Instance(models.Model):
     instance_name = models.CharField('实例名称', max_length=50, unique=True)
     type = models.CharField('实例类型', max_length=6, choices=(('master', '主库'), ('slave', '从库')))
-    db_type = models.CharField('数据库类型', max_length=10, choices=(('mysql', 'MySQL'), ('pgsql', 'PgSQL')))
+    db_type = models.CharField('数据库类型', max_length=10, choices=(('mysql', 'MySQL'), ('pgsql', 'PgSQL'),
+                                                                ('mssql', 'MSSQL')))
     host = models.CharField('实例连接', max_length=200)
     port = models.IntegerField('端口', default=3306)
     user = models.CharField('用户名', max_length=100)
@@ -91,9 +92,9 @@ class SqlWorkflow(models.Model):
     workflow_name = models.CharField('工单内容', max_length=50)
     group_id = models.IntegerField('组ID')
     group_name = models.CharField('组名称', max_length=100)
-    engineer = models.CharField('发起人', max_length=50)
+    engineer = models.CharField('发起人', max_length=30)
     engineer_display = models.CharField('发起人中文名', max_length=50, default='')
-    audit_auth_groups = models.CharField('审批权限组列表', max_length=50)
+    audit_auth_groups = models.CharField('审批权限组列表', max_length=255)
     create_time = models.DateTimeField('创建时间', auto_now_add=True)
     finish_time = models.DateTimeField('结束时间', null=True, blank=True)
     status = models.CharField(max_length=50, choices=(
@@ -132,9 +133,9 @@ class WorkflowAudit(models.Model):
     workflow_remark = models.CharField('申请备注', default='', max_length=140)
     audit_auth_groups = models.CharField('审批权限组列表', max_length=255)
     current_audit = models.CharField('当前审批权限组', max_length=20)
-    next_audit = models.CharField('下级审核人', max_length=20)
+    next_audit = models.CharField('下级审批权限组', max_length=20)
     current_status = models.IntegerField('审核状态', choices=((0, '待审核'), (1, '审核通过'), (2, '审核不通过'), (3, '审核取消')))
-    create_user = models.CharField('申请人', max_length=20)
+    create_user = models.CharField('申请人', max_length=30)
     create_user_display = models.CharField('申请人中文名', max_length=50, default='')
     create_time = models.DateTimeField('申请时间', auto_now_add=True)
     sys_time = models.DateTimeField('系统时间', auto_now=True)
@@ -154,7 +155,7 @@ class WorkflowAudit(models.Model):
 class WorkflowAuditDetail(models.Model):
     audit_detail_id = models.AutoField(primary_key=True)
     audit_id = models.IntegerField('审核主表id')
-    audit_user = models.CharField('审核人', max_length=20)
+    audit_user = models.CharField('审核人', max_length=30)
     audit_time = models.DateTimeField('审核时间')
     audit_status = models.IntegerField('审核状态', choices=((0, '待审核'), (1, '审核通过'), (2, '审核不通过'), (3, '审核取消')), )
     remark = models.CharField('审核备注', default='', max_length=140)
@@ -507,21 +508,3 @@ class SlowQueryHistory(models.Model):
         index_together = ('hostname_max', 'ts_min')
         verbose_name = u'慢日志明细'
         verbose_name_plural = u'慢日志明细'
-
-
-# # 钉钉配置
-# class DingConfig(models.Model):
-#     agent_id = models.CharField('appId 微应用id', max_length=20, unique=True)
-#     corp_id = models.CharField('CorpId', max_length=30, unique=True)
-#     corp_secret = models.CharField('CorpSecret', max_length=100, unique=True)
-#     access_token = models.CharField('ACCESS_TOKEN', max_length=50, unique=True)
-#     expires_in = models.DateTimeField(blank=True, null=True)
-#
-#     def __int__(self):
-#         return self.agent_id
-#
-#     class Meta:
-#         managed = False
-#         db_table = 'ding_config'
-#         verbose_name = u'钉钉配置'
-#         verbose_name_plural = u'钉钉配置'

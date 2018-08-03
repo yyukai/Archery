@@ -2,6 +2,7 @@
 
 import MySQLdb
 import psycopg2
+import traceback
 from sql.utils.aes_decryptor import Prpcrypt
 from sql.models import Instance
 import logging
@@ -150,9 +151,9 @@ class Dao(object):
     # 连进指定的mysql实例里，执行sql并返回
     def mysql_query(self, db_name, sql, limit_num=0):
         result = {'column_list': [], 'rows': [], 'effect_row': 0}
-        conn = MySQLdb.connect(host=self.host, port=self.port, user=self.user, passwd=self.password, db=db_name,
-                               charset='utf8')
         try:
+            conn = MySQLdb.connect(host=self.host, port=self.port, user=self.user, passwd=self.password, db=db_name,
+                                   charset='utf8')
             cursor = conn.cursor()
             effect_row = cursor.execute(sql)
             if int(limit_num) > 0:
@@ -170,38 +171,35 @@ class Dao(object):
             result['effect_row'] = effect_row
 
         except MySQLdb.Warning as w:
-            logger.warning(str(w))
+            logger.error(traceback.format_exc())
             result['Warning'] = str(w)
         except MySQLdb.Error as e:
-            logger.error(str(e))
+            logger.error(traceback.format_exc())
             result['Error'] = str(e)
-        finally:
-            try:
-                conn.rollback()
-                conn.close()
-            except Exception:
-                conn.close()
+        else:
+            conn.rollback()
+            conn.close()
         return result
 
     # 连进指定的mysql实例里，执行sql并返回
     def mysql_execute(self, db_name, sql):
         result = {}
-        conn = MySQLdb.connect(host=self.host, port=self.port, user=self.user, passwd=self.password, db=db_name,
-                               charset='utf8')
         try:
-
+            conn = MySQLdb.connect(host=self.host, port=self.port, user=self.user, passwd=self.password, db=db_name,
+                                   charset='utf8')
             cursor = conn.cursor()
             effect_row = cursor.execute(sql)
             # result = {}
             # result['effect_row'] = effect_row
             conn.commit()
         except MySQLdb.Warning as w:
-            logger.warning(str(w))
+            logger.error(traceback.format_exc())
             result['Warning'] = str(w)
         except MySQLdb.Error as e:
-            logger.error(str(e))
+            logger.error(traceback.format_exc())
             result['Error'] = str(e)
-        finally:
+        else:
+            cursor.close()
             conn.close()
         return result
 
