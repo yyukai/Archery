@@ -17,6 +17,7 @@ alter table sql_instance
 update sql_instance set db_type='mysql',type='master';
 
 -- 从库数据添加到实例信息表（如果原主从实例存在相同实例名的请先修改，并且修改相关关联表的数据）
+update sql_slave_config set cluster_name=concat(cluster_name,'-slave');
 insert into sql_instance (instance_name, db_type, type, host, port, user, password, create_time, update_time)
   select
     cluster_name,
