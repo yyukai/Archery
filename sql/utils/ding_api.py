@@ -77,6 +77,7 @@ def set_ding_user_id(username):
             url = 'https://oapi.dingtalk.com/user/list?access_token={0}&department_id={1}'.format(token, dept_id)
             status, ret = http_request.get(url)
             if status is True:
+                # print('user_list_by_dept_id:', ret)
                 s = json.loads(ret)
                 if s["errcode"] == 0:
                     for u in s["userlist"]:

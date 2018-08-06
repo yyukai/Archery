@@ -89,7 +89,12 @@
                             <ul class="nav nav-second-level">
                                 {% if perms.sql.menu_sqlquery %}
                                     <li>
-                                        <a href="/sqlquery/">SQL查询</a>
+                                        <a href="/sqlquery/">在线查询</a>
+                                    </li>
+                                {% endif %}
+                                {% if perms.sql.menu_query_export %}
+                                    <li>
+                                        <a href="/query_export/">导出查询</a>
                                     </li>
                                 {% endif %}
                                 {% if perms.sql.menu_queryapplylist %}
@@ -97,7 +102,6 @@
                                         <a href="/queryapplylist/">查询权限申请</a>
                                     </li>
                                 {% endif %}
-
                             </ul>
                             <!-- /.nav-second-level -->
                         </li>

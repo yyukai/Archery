@@ -4,6 +4,7 @@
 import os
 import requests
 import json
+import threading
 import datetime
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -42,3 +43,9 @@ class DateEncoder(json.JSONEncoder):
         else:
             return json.JSONEncoder.default(self, obj)
 
+
+def async(func):
+    def wrapper(*args, **kwargs):
+        thr = threading.Thread(target=func, args=args, kwargs=kwargs)
+        thr.start()
+    return wrapper

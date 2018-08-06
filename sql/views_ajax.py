@@ -65,7 +65,7 @@ def loginAuthenticate(username, password):
         # 登录成功
         if user:
             # 从钉钉获取该用户的userid，用于给他发消息
-            if sys_config.get("ding_to_person") == 'true':
+            if sys_config.get("ding_to_person") == 'true' and username != 'admin':
                 set_ding_user_id(username)
 
             # 如果登录失败计数器中存在该用户名，则清除之
@@ -109,7 +109,7 @@ def authenticateEntry(request):
                 replace_info = Users.objects.get(username=username)
                 replace_info.password = make_password(password)
                 replace_info.save()
-        # 添加到默认组
+                # 添加到默认组
         try:
             user = Users.objects.get(username=username)
             group = Group.objects.get(id=1)
@@ -117,7 +117,7 @@ def authenticateEntry(request):
         except Exception:
             logger.error('无id=1的权限组，无法默认添加')
 
-        # 调用了django内置登录方法，防止管理后台二次登录
+            # 调用了django内置登录方法，防止管理后台二次登录
         user = authenticate(username=username, password=password)
         if user:
             login(request, user)

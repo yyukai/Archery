@@ -1,5 +1,6 @@
 # -*- coding: UTF-8 -*-
 import re
+import os
 
 import simplejson as json
 from django.contrib.auth.decorators import permission_required
@@ -9,18 +10,20 @@ from django.db.models import Q, Min
 from django.db import connection
 from django.views.decorators.csrf import csrf_exempt
 from django.shortcuts import render
-from django.http import HttpResponse, HttpResponseRedirect
+from django.http import HttpResponse, HttpResponseRedirect, StreamingHttpResponse
 from django.core import serializers
 from django.db import transaction
 import datetime
 import time
+import xlwt
 
 from sql.utils.extend_json_encoder import ExtendJSONEncoder
 from sql.utils.aes_decryptor import Prpcrypt
 from sql.utils.dao import Dao
-from sql.utils.dao_pgsql import PgSQLDao
+from sql.utils.api import async
 from .const import WorkflowDict
-from .models import Instance, QueryPrivilegesApply, QueryPrivileges, QueryLog, SqlGroup
+from .models import Users, Instance, QueryPrivilegesApply, QueryPrivileges, QueryLog, SqlGroup, QueryExport
+from sql.utils.api import BASE_DIR
 from sql.utils.data_masking import Masking
 from sql.utils.workflow import Workflow
 from sql.utils.config import SysConfig
@@ -588,6 +591,175 @@ def query(request):
     # 返回查询结果
     return HttpResponse(json.dumps(finalResult, cls=ExtendJSONEncoder, bigint_as_string=True),
                         content_type='application/json')
+
+
+# 获取SQL查询结果
+@csrf_exempt
+@permission_required('sql.query_submit', raise_exception=True)
+def add_async_query(request):
+    instance_name = request.POST.get('instance_name')
+    sqlContent = request.POST.get('sql_content')
+    dbName = request.POST.get('db_name')
+    limit_num = request.POST.get('limit_num')
+    auditor = request.POST.get('auditor')
+
+    finalResult = {'status': 0, 'msg': 'ok', 'data': {}}
+
+    # 服务器端参数验证
+    if sqlContent is None or dbName is None or instance_name is None or limit_num is None:
+        finalResult['status'] = 1
+        finalResult['msg'] = '页面提交参数可能为空'
+        return HttpResponse(json.dumps(finalResult), content_type='application/json')
+
+    sqlContent = sqlContent.strip()
+    if sqlContent[-1] != ";":
+        finalResult['status'] = 1
+        finalResult['msg'] = 'SQL语句结尾没有以;结尾，请重新修改并提交！'
+        return HttpResponse(json.dumps(finalResult), content_type='application/json')
+
+    # 获取用户信息
+    user = request.user
+
+    # 过滤注释语句和非查询的语句
+    sqlContent = ''.join(
+        map(lambda x: re.compile(r'(^--\s+.*|^/\*.*\*/;\s*$)').sub('', x, count=1),
+            sqlContent.splitlines(1))).strip()
+    # 去除空行
+    sqlContent = re.sub('[\r\n\f]{2,}', '\n', sqlContent)
+
+    sql_list = sqlContent.strip().split('\n')
+    for sql in sql_list:
+        if re.match(r"^select|^show|^explain", sql.lower()):
+            break
+        else:
+            finalResult['status'] = 1
+            finalResult['msg'] = '仅支持^select|^show|^explain语法，请联系管理员！'
+            return HttpResponse(json.dumps(finalResult), content_type='application/json')
+
+    # 取出该实例的连接方式,查询只读账号,按照分号截取第一条有效sql执行
+    slave_info = Instance.objects.get(instance_name=instance_name)
+    sqlContent = sqlContent.strip().split(';')[0]
+
+    # 查询权限校验
+    priv_check_info = query_priv_check(user, instance_name, dbName, sqlContent, limit_num)
+
+    if priv_check_info['status'] == 0:
+        pass
+    else:
+        return HttpResponse(json.dumps(priv_check_info), content_type='application/json')
+
+    if re.match(r"^explain", sqlContent.lower()):
+        limit_num = 0
+
+    # 对查询sql增加limit限制
+    if re.match(r"^select", sqlContent.lower()) and int(limit_num) > 0:
+        if re.search(r"limit\s+(\d+)$", sqlContent.lower()) is None:
+            if re.search(r"limit\s+\d+\s*,\s*(\d+)$", sqlContent.lower()) is None:
+                sqlContent = sqlContent + ' limit ' + str(limit_num)
+
+    sqlContent = sqlContent + ';'
+
+    # 查询语句记录存入数据库
+    query_log = QueryLog.objects.create(username=user.username, user_display=user.display, db_name=dbName,
+                                        instance_name=instance_name, sqllog=sqlContent)
+
+    qe = QueryExport.objects.create(query_log=query_log, auditor=Users.objects.get(username=auditor), status=0)
+
+    add_async_query(qe, instance_name, dbName, slave_info.db_type, sqlContent, limit_num)
+    finalResult['msg'] = '任务提交成功！后台拼命跑数据中... 请耐心等待钉钉或邮件通知！'
+
+    return HttpResponse(json.dumps(finalResult, cls=ExtendJSONEncoder, bigint_as_string=True),
+                        content_type='application/json')
+
+
+@async
+def do_async_query(query_export, instance_name, db_name, db_type, sql, limit_num):
+    query_log = query_export.query_log
+    t_start = int(time.time())
+    if db_type == "mysql":
+        sql_result = Dao(instance_name=instance_name).mysql_query(db_name, sql, limit_num)
+    elif db_type == "pgsql":
+        sql_result = Dao(instance_name=instance_name).pgsql_query(db_name, sql, limit_num)
+    t_end = int(time.time())
+    query_log.cost_time = t_end - t_start
+    query_log.effect_row = sql_result["effect_row"]
+    query_log.save()
+
+    def write_result_to_excel(sql_result):
+        file_dir = SysConfig().sys_config.get('query_result_dir', BASE_DIR)
+        time_suffix = datetime.datetime.now().strftime("%m%d%H%M")
+        file_name = '{}-{}-{}'.format(query_export.query_log.username, db_name, time_suffix)
+        template_file = os.path.join(file_dir, file_name)
+
+        workbook = xlwt.Workbook(encoding='utf-8')
+        sheet = workbook.add_sheet(cell_overwrite_ok=True)
+        # 写入字段信息
+        for field in range(0, len(sql_result["column_list"])):
+            sheet.write(0, field, sql_result["column_list"][field])
+        # 写入数据段信息
+        for row in range(1, int(sql_result["effect_row"]) + 1):
+            for col in range(0, int(sql_result["effect_row"])):
+                sheet.write(row, col, str(sql_result["rows"][row - 1][col]).encode("utf-8"))
+        workbook.save(template_file)
+        return template_file
+
+    try:
+        if SysConfig().sys_config.get('data_masking') == 'true':
+            if db_type == "mysql":
+                # 仅对查询语句进行脱敏
+                if re.match(r"^select", sql.lower()):
+                    try:
+                        masking_result = datamasking.data_masking(instance_name, db_name, sql, sql_result)
+                    except Exception:
+                        if SysConfig().sys_config.get('query_check') == 'true':
+                            query_export.status = 1
+                            query_export.error_msg = '脱敏数据报错,请联系管理员'
+                    else:
+                        if masking_result['status'] != 0:
+                            if SysConfig().sys_config.get('query_check') == 'true':
+                                file_path = write_result_to_excel(masking_result)
+            else:
+                file_path = write_result_to_excel(sql_result)
+        else:
+            file_path = write_result_to_excel(sql_result)
+        query_export.result_file = file_path
+        query_export.status = 2
+    except Exception as e:
+        query_export.error_msg = str(e)
+        query_export.status = 1
+    query_export.save()
+
+    # 通知审核人审核，并抄送主管
+    msg_content = '''发起人：{}\n实例名称：{}\n数据库：{}\n执行的sql查询：{}\n提取条数：{}\n操作时间：{}\n工单详情预览：{}\n'''.\
+        format(query_log.user_display, query_log.instance_name, query_log.db_name, query_log.sqllog,
+               query_log.effect_row, query_log.create_time, '')
+    from sql.utils.ding_api import DingSender
+    DingSender().send_msg(query_export.auditor.ding_user_id, msg_content)
+
+
+# 获取sql查询记录
+@csrf_exempt
+@permission_required('sql.query_submit', raise_exception=True)
+def query_result_export(request):
+    query_export_id = request.GET.get("id")
+    qe = QueryExport.objects.get(id=query_export_id)
+
+    def file_iterator(template_file, chunk_size=512):
+        with open(template_file) as f:
+            while True:
+                c = f.read(chunk_size)
+                if c:
+                    yield c
+                else:
+                    break
+
+    if qe.result_file:
+        response = StreamingHttpResponse(file_iterator(qe.result_file))
+        response['Content-Type'] = 'application/octet-stream'
+        response['Content-Disposition'] = 'attachment; filename=result.xlsx'
+        return response
+    else:
+        return HttpResponse(qe.error_msg, content_type='application/text')
 
 
 # 获取sql查询记录
