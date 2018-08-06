@@ -273,6 +273,19 @@
                                     </div>
                                     <div id="div-mail-config" style="display: none">
                                         <div class="form-group">
+                                            <label for="mail_ssl"
+                                                   class="col-sm-4 control-label">MAIL_SSL</label>
+                                            <div class="col-sm-8">
+                                                <div class="switch switch-small">
+                                                    <label>
+                                                        <input id="mail_ssl" key="mail_ssl"
+                                                               value="{{ config.mail_ssl }}"
+                                                               type="checkbox"> 是否使用SSL
+                                                    </label>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="form-group">
                                             <label for="mail_smtp_server"
                                                    class="col-sm-4 control-label">MAIL_SMTP_SERVER</label>
                                             <div class="col-sm-5">
@@ -314,6 +327,17 @@
                                                        key="mail_smtp_password"
                                                        value="{{ config.mail_smtp_password }}"
                                                        placeholder="邮箱账号密码">
+                                            </div>
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="ddl_notify_auth_group"
+                                                   class="col-sm-4 control-label">DDL_NOTIFY_AUTH_GROUP</label>
+                                            <div class="col-sm-5">
+                                                <input type="text" class="form-control"
+                                                       id="ddl_notify_auth_group"
+                                                       key="ddl_notify_auth_group"
+                                                       value="{{ config.ddl_notify_auth_group }}"
+                                                       placeholder="DDL工单通知权限组名，为空则不通知">
                                             </div>
                                         </div>
                                     </div>
@@ -549,6 +573,7 @@
                     $("#div-query-config").hide();
                 }
                 else if ($(this).attr("id") === 'mail') {
+                    $("#mail_ssl").val(false);
                     $("#div-mail-config").hide();
                 }
                 else if ($(this).attr("id") === 'ding_to_person') {

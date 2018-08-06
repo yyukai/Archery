@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: UTF-8 -*-
 
-from multiprocessing import Process
 import email
 from email import encoders
 from email.header import Header
@@ -27,6 +26,7 @@ class MailSender(object):
             self.MAIL_REVIEW_SMTP_PORT = 25
         self.MAIL_REVIEW_FROM_ADDR = sys_config.get('mail_smtp_user')
         self.MAIL_REVIEW_FROM_PASSWORD = sys_config.get('mail_smtp_password')
+        self.MAIL_SSL = sys_config.get('mail_ssl')
 
     def _format_addr(self, s):
         name, addr = parseaddr(s)
@@ -45,9 +45,13 @@ class MailSender(object):
         return file_msg
 
     def send_email(self, strTitle, strContent, listToAddr, **kwargs):
-        '''''
+        '''
             发送邮件
         '''
+        if listToAddr is None or listToAddr == ['']:
+            logger.error('收件人为空，无法发送邮件')
+            return
+
         # 构造MIMEMultipart对象做为根容器
         main_msg = email.mime.multipart.MIMEMultipart()
 
@@ -74,7 +78,10 @@ class MailSender(object):
         main_msg['Subject'] = Header(strTitle, "utf-8").encode()
         main_msg['Date'] = email.utils.formatdate()
 
-        server = smtplib.SMTP(self.MAIL_REVIEW_SMTP_SERVER, self.MAIL_REVIEW_SMTP_PORT)  # SMTP协议默认端口是25
+        if self.MAIL_SSL:
+            server = smtplib.SMTP_SSL(self.MAIL_REVIEW_SMTP_SERVER, self.MAIL_REVIEW_SMTP_PORT)  # SMTP协议默认SSL端口是465
+        else:
+            server = smtplib.SMTP(self.MAIL_REVIEW_SMTP_SERVER, self.MAIL_REVIEW_SMTP_PORT)  # SMTP协议默认端口是25
 
         # 如果提供的密码为空，则不需要登录SMTP server
         if self.MAIL_REVIEW_FROM_PASSWORD != '':

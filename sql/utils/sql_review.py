@@ -8,11 +8,13 @@ from sql.utils.group import user_groups
 from sql.utils.inception import InceptionDao
 
 
-# 获取当前请求url
-def getDetailUrl(request):
+# 获取工单地址
+def getDetailUrl(request, workflow_id):
     scheme = request.scheme
     host = request.META['HTTP_HOST']
-    return "%s://%s/detail/" % (scheme, host)
+    from sql.utils.workflow import Workflow
+    audit_id = Workflow.auditinfobyworkflow_id(workflow_id, 2).audit_id
+    return "{}://{}/workflow/{}/".format(scheme, host, audit_id)
 
 
 # 根据实例名获取主库连接字符串，并封装成一个dict
@@ -98,14 +100,10 @@ def can_timingtask(user, workflow_id):
 def can_cancel(user, workflow_id):
     workflow_detail = SqlWorkflow.objects.get(id=workflow_id)
     result = False
-    # 结束的工单不可终止
-    if workflow_detail.status == Const.workflowStatus['manreviewing']:
+    # 结束的工单不可终止，执行前提交人可终止、审核人可打回
+    if workflow_detail.status in [Const.workflowStatus['manreviewing'], Const.workflowStatus['pass'],
+                                  Const.workflowStatus['timingtask']]:
         from sql.utils.workflow import Workflow
         if Workflow.can_review(user, workflow_id, 2) or user.username == workflow_detail.engineer:
-            result = True
-    elif workflow_detail.status in [Const.workflowStatus['pass'], Const.workflowStatus['timingtask']]:
-        # 当前登录用户必须为有审核权限的组内用户
-        group_ids = [group.group_id for group in user_groups(user)]
-        if workflow_detail.group_id in group_ids and user.has_perm('sql.sql_review'):
             result = True
     return result
