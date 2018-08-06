@@ -10,7 +10,7 @@ from django.db.models import Q, Min
 from django.db import connection
 from django.views.decorators.csrf import csrf_exempt
 from django.shortcuts import render
-from django.http import HttpResponse, HttpResponseRedirect
+from django.http import HttpResponse, HttpResponseRedirect, StreamingHttpResponse
 from django.core import serializers
 from django.db import transaction
 import datetime
@@ -728,16 +728,38 @@ def do_async_query(query_export, instance_name, db_name, db_type, sql, limit_num
         query_export.error_msg = str(e)
         query_export.status = 1
     query_export.save()
+
     # 通知审核人审核，并抄送主管
-    msg_content = '''发起人：{}\n审批流程：{}\n当前审批：{}\n工单名称：{}\n工单地址：{}\n工单详情预览：{}\n'''.format(
-        workflow_from,
-        workflow_auditors,
-        current_workflow_auditors,
-        workflow_title,
-        workflow_url,
-        workflow_content)
+    msg_content = '''发起人：{}\n实例名称：{}\n数据库：{}\n执行的sql查询：{}\n提取条数：{}\n操作时间：{}\n工单详情预览：{}\n'''.\
+        format(query_log.user_display, query_log.instance_name, query_log.db_name, query_log.sqllog,
+               query_log.effect_row, query_log.create_time, '')
+    from sql.utils.ding_api import DingSender
+    DingSender().send_msg(query_export.auditor.ding_user_id, msg_content)
 
 
+# 获取sql查询记录
+@csrf_exempt
+@permission_required('sql.query_submit', raise_exception=True)
+def query_result_export(request):
+    query_export_id = request.GET.get("id")
+    qe = QueryExport.objects.get(id=query_export_id)
+
+    def file_iterator(template_file, chunk_size=512):
+        with open(template_file) as f:
+            while True:
+                c = f.read(chunk_size)
+                if c:
+                    yield c
+                else:
+                    break
+
+    if qe.result_file:
+        response = StreamingHttpResponse(file_iterator(qe.result_file))
+        response['Content-Type'] = 'application/octet-stream'
+        response['Content-Disposition'] = 'attachment; filename=result.xlsx'
+        return response
+    else:
+        return HttpResponse(qe.error_msg, content_type='application/text')
 
 
 # 获取sql查询记录

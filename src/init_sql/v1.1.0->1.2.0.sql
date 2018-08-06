@@ -113,3 +113,17 @@ select id,1 from sql_users;
 -- 兼容pt-query-digest3.0.11版本
 alter table mysql_slow_query_review modify `checksum` CHAR(32) NOT NULL;
 alter table mysql_slow_query_review_history modify `checksum` CHAR(32) NOT NULL;
+
+-- 添加查询导出表
+CREATE TABLE `query_export` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `query_log_id` int(11) NOT NULL,
+  `auditor_id` int(11) NOT NULL,
+  `result_file` varchar(255) NOT NULL,
+  `error_msg` varchar(255) NOT NULL,
+  `status` int(11) NOT NULL,
+  PRIMARY KEY (`id`),
+  FOREIGN KEY (`query_log_id`) REFERENCES query_log(id),
+  FOREIGN KEY (`auditor_id`) REFERENCES sql_users(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
