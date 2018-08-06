@@ -120,3 +120,17 @@ alter table mysql_slow_query_review_history modify `checksum` CHAR(32) NOT NULL;
 alter table sql_workflow modify engineer varchar(30) not null;
 alter table workflow_audit modify create_user varchar(30) not null;
 alter table workflow_audit_detail modify audit_user varchar(30) not null;
+
+
+-- 导出查询表
+CREATE TABLE `query_export` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `query_log_id` int(11) NOT NULL,
+  `auditor_id` int(11) NOT NULL,
+  `result_file` varchar(255) NOT NULL,
+  `error_msg` varchar(255) NOT NULL,
+  `status` int(11) NOT NULL,
+  PRIMARY KEY (`id`),
+  FOREIGN KEY (`query_log_id`) REFERENCES query_log(id),
+  FOREIGN KEY (`auditor_id`) REFERENCES sql_users(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
