@@ -29,7 +29,7 @@ class Dao(object):
             self.host = kwargs.get('host', '')
             self.port = kwargs.get('port', 0)
             self.user = kwargs.get('user', '')
-            self.password = kwargs.get('password', '')
+            self.password = prpCryptor.decrypt(kwargs.get('password', ''))
             self.db_type = kwargs.get('db_type', 'mysql')
 
     # 连进指定的mysql实例里，读取所有databases并返回
@@ -39,7 +39,8 @@ class Dao(object):
 
         if self.db_type == "mysql":
             try:
-                conn = MySQLdb.connect(host=self.host, port=self.port, user=self.user, passwd=self.password, charset='utf8')
+                conn = MySQLdb.connect(host=self.host, port=self.port, user=self.user, passwd=self.password,
+                                       charset='utf8')
                 cursor = conn.cursor()
                 sql = "show databases"
                 cursor.execute(sql)

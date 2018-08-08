@@ -166,6 +166,14 @@ LOGGING = {
             'level': 'DEBUG',
             'class': 'logging.StreamHandler',
             'formatter': 'verbose'
+        },
+        'sql': {
+            'level': 'DEBUG',
+            'class': 'logging.handlers.RotatingFileHandler',
+            'filename': '/tmp/archer_sql.log',
+            'maxBytes': 1024 * 1024 * 100,  # 5 MB
+            'backupCount': 5,
+            'formatter': 'verbose',
         }
     },
     'loggers': {
@@ -181,11 +189,11 @@ LOGGING = {
             'handlers': ['default'],
             'level': 'DEBUG',
         },
-        # 'django.db': {  # 打印SQL语句到console，方便开发
-        #     'handlers': ['colock_time_thresholdnsole'],
-        #     'level': 'DEBUG',
-        #     'propagate': True,
-        # },
+        'django.db': {  # 打印SQL语句到console，方便开发
+            'handlers': ['sql'],
+            'level': 'DEBUG',
+            'propagate': True,
+        },
         'django.request': {  # 打印请求错误堆栈信息到console，方便开发
             'handlers': ['console'],
             'level': 'DEBUG',

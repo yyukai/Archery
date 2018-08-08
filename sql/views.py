@@ -7,7 +7,7 @@ import datetime
 
 from django.contrib.auth import logout
 from django.contrib.auth.decorators import permission_required
-from django.contrib.auth.models import Group
+from django.contrib.auth.models import Group, Permission
 from django.core.exceptions import PermissionDenied
 from django.db import connection, transaction
 from django.utils import timezone
@@ -526,8 +526,12 @@ def sqlquery(request):
 def query_export(request):
     # 获取用户关联从库列表
     listAllClusterName = [slave.instance_name for slave in user_instances(request.user, 'slave')]
-
-    context = {'listAllClusterName': listAllClusterName}
+    # 获取导出查询审核人
+    auditors = list()
+    for p in Permission.objects.filter(codename='query_export_review'):
+        for g in p.group_set.all():
+            auditors.extend(g.user_set.all())
+    context = {'listAllClusterName': listAllClusterName, 'auditors': auditors}
     return render(request, 'query_export.html', context)
 
 

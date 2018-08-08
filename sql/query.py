@@ -11,11 +11,13 @@ from django.db import connection
 from django.views.decorators.csrf import csrf_exempt
 from django.shortcuts import render
 from django.http import HttpResponse, HttpResponseRedirect, StreamingHttpResponse
+from wsgiref.util import FileWrapper
 from django.core import serializers
 from django.db import transaction
 import datetime
 import time
 import xlwt
+import traceback
 
 from sql.utils.extend_json_encoder import ExtendJSONEncoder
 from sql.utils.aes_decryptor import Prpcrypt
@@ -661,11 +663,11 @@ def add_async_query(request):
 
     # 查询语句记录存入数据库
     query_log = QueryLog.objects.create(username=user.username, user_display=user.display, db_name=dbName,
-                                        instance_name=instance_name, sqllog=sqlContent)
+                                        instance_name=instance_name, sqllog=sqlContent, effect_row=0)
 
     qe = QueryExport.objects.create(query_log=query_log, auditor=Users.objects.get(username=auditor), status=0)
 
-    add_async_query(qe, instance_name, dbName, slave_info.db_type, sqlContent, limit_num)
+    do_async_query(request, qe, instance_name, dbName, slave_info.db_type, sqlContent, limit_num)
     finalResult['msg'] = '任务提交成功！后台拼命跑数据中... 请耐心等待钉钉或邮件通知！'
 
     return HttpResponse(json.dumps(finalResult, cls=ExtendJSONEncoder, bigint_as_string=True),
@@ -673,7 +675,7 @@ def add_async_query(request):
 
 
 @async
-def do_async_query(query_export, instance_name, db_name, db_type, sql, limit_num):
+def do_async_query(request, query_export, instance_name, db_name, db_type, sql, limit_num):
     query_log = query_export.query_log
     t_start = int(time.time())
     if db_type == "mysql":
@@ -686,21 +688,27 @@ def do_async_query(query_export, instance_name, db_name, db_type, sql, limit_num
     query_log.save()
 
     def write_result_to_excel(sql_result):
-        file_dir = SysConfig().sys_config.get('query_result_dir', BASE_DIR)
-        time_suffix = datetime.datetime.now().strftime("%m%d%H%M")
-        file_name = '{}-{}-{}'.format(query_export.query_log.username, db_name, time_suffix)
-        template_file = os.path.join(file_dir, file_name)
+        try:
+            file_dir = SysConfig().sys_config.get('query_result_dir', BASE_DIR)
+            time_suffix = datetime.datetime.now().strftime("%m%d%H%M%S")
+            file_name = '{}-{}-{}'.format(query_export.query_log.username, db_name, time_suffix)
+            template_file = os.path.join(file_dir, file_name)
 
-        workbook = xlwt.Workbook(encoding='utf-8')
-        sheet = workbook.add_sheet(cell_overwrite_ok=True)
-        # 写入字段信息
-        for field in range(0, len(sql_result["column_list"])):
-            sheet.write(0, field, sql_result["column_list"][field])
-        # 写入数据段信息
-        for row in range(1, int(sql_result["effect_row"]) + 1):
-            for col in range(0, int(sql_result["effect_row"])):
-                sheet.write(row, col, str(sql_result["rows"][row - 1][col]).encode("utf-8"))
-        workbook.save(template_file)
+            workbook = xlwt.Workbook(encoding='utf-8')
+            sheet = workbook.add_sheet('Sheet1', cell_overwrite_ok=True)
+            # 写入字段信息
+            for field in range(0, len(sql_result["column_list"])):
+                sheet.write(0, field, sql_result["column_list"][field])
+            # 写入数据段信息
+            for row in range(1, int(sql_result["effect_row"]) + 1):
+                for col in range(0, len(sql_result["column_list"])):
+                    print(type(sql_result["rows"][row - 1][col]), sql_result["rows"][row - 1][col])
+                    value = '' if sql_result["rows"][row - 1][col] is None else sql_result["rows"][row - 1][col]
+                    sheet.write(row, col, value)
+            workbook.save(template_file)
+        except Exception:
+            print(traceback.print_exc())
+            return ''
         return template_file
 
     try:
@@ -729,12 +737,52 @@ def do_async_query(query_export, instance_name, db_name, db_type, sql, limit_num
         query_export.status = 1
     query_export.save()
 
-    # 通知审核人审核，并抄送主管
-    msg_content = '''发起人：{}\n实例名称：{}\n数据库：{}\n执行的sql查询：{}\n提取条数：{}\n操作时间：{}\n工单详情预览：{}\n'''.\
+    # 通知审核人审核
+    audit_url = "{}://{}/query_export/".format(request.scheme, request.get_host())
+    msg_content = '''导出查询（提取大量数据）下载申请等待您审批：\n发起人：{}\n实例名称：{}\n数据库：{}\n执行的sql查询：{}\n提取条数：{}\n操作时间：{}\n审批地址：{}\n'''.\
         format(query_log.user_display, query_log.instance_name, query_log.db_name, query_log.sqllog,
-               query_log.effect_row, query_log.create_time, '')
+               query_log.effect_row, query_log.create_time, audit_url)
     from sql.utils.ding_api import DingSender
     DingSender().send_msg(query_export.auditor.ding_user_id, msg_content)
+
+
+# 获取sql查询记录
+@csrf_exempt
+@permission_required('sql.query_submit', raise_exception=True)
+def query_export_audit(request):
+    query_export_id = request.POST.get("id")
+    is_allow = request.POST.get("is_allow", '')
+    audit_msg = request.POST.get("audit_msg", '')
+    qe = QueryExport.objects.get(id=query_export_id)
+    ql = qe.query_log
+    applicant = Users.objects.get(username=ql.username)
+    if qe.status == 1:
+        # 执行失败
+        msg = qe.error_msg
+    elif qe.status == 2:
+        # 审核
+        user = request.user
+        if not user.has_perm('sql.query_export_review'):
+            msg = "你没有审核权限！"
+        else:
+            if is_allow == "yes":
+                qe.status = 3
+                msg = "已通过！"
+            else:
+                qe.status = 4
+                msg = "已拒绝！"
+            from sql.utils.ding_api import DingSender
+            msg_content = '''您的导出查询提取数据申请 {}：\n审核理由：\n实例名称：{}\n数据库：{}\n执行的sql查询：{}\n提取条数：{}\n操作时间：{}\n'''.\
+                format(msg, audit_msg, ql.instance_name, ql.db_name, ql.sqllog, ql.effect_row, ql.create_time)
+            DingSender().send_msg(applicant.ding_user_id, msg_content)
+
+        qe.audit_msg = audit_msg
+        qe.auditor = user
+        qe.save()
+    elif qe.status == 4:
+        # 审核人拒绝
+        msg = qe.audit_msg
+    return HttpResponse(msg)
 
 
 # 获取sql查询记录
@@ -745,7 +793,7 @@ def query_result_export(request):
     qe = QueryExport.objects.get(id=query_export_id)
 
     def file_iterator(template_file, chunk_size=512):
-        with open(template_file) as f:
+        with open(template_file, encoding='utf-8') as f:
             while True:
                 c = f.read(chunk_size)
                 if c:
@@ -754,12 +802,13 @@ def query_result_export(request):
                     break
 
     if qe.result_file:
-        response = StreamingHttpResponse(file_iterator(qe.result_file))
-        response['Content-Type'] = 'application/octet-stream'
-        response['Content-Disposition'] = 'attachment; filename=result.xlsx'
+        wrapper = FileWrapper(open(qe.result_file, "rb"))
+        response = HttpResponse(wrapper, content_type='application/vnd.ms-excel')
+        response['Content-Length'] = os.path.getsize(qe.result_file)
+        response['Content-Disposition'] = 'attachment; filename="result.xls"'
         return response
     else:
-        return HttpResponse(qe.error_msg, content_type='application/text')
+        return HttpResponse(str(qe.error_msg, encoding="utf-8"))
 
 
 # 获取sql查询记录
@@ -797,7 +846,53 @@ def querylog(request):
 
     result = {"total": sql_log_count, "rows": sql_log}
     # 返回查询结果
-    return HttpResponse(json.dumps(result), content_type='application/json')
+    return HttpResponse(json.dumps(result, cls=ExtendJSONEncoder, bigint_as_string=True),
+                        content_type='application/json')
+
+
+# 获取sql查询记录
+@csrf_exempt
+@permission_required('sql.menu_query_export', raise_exception=True)
+def query_export_log(request):
+    # 获取用户信息
+    user = request.user
+
+    limit = int(request.POST.get('limit'))
+    offset = int(request.POST.get('offset'))
+    limit = offset + limit
+
+    # 获取搜索参数
+    search = request.POST.get('search')
+    if search is None:
+        search = ''
+
+    # 查询个人记录，超管查看所有数据
+    if user.is_superuser or user.has_perm('sql.query_export_review'):
+        log_count = QueryExport.objects.filter(Q(query_log__sqllog__contains=search) |
+                                                   Q(query_log__username__contains=search) |
+                                                   Q(query_log__db_name__contains=search)).count()
+        qe_list = QueryExport.objects.filter(Q(query_log__sqllog__contains=search) |
+                                                  Q(query_log__username__contains=search) |
+                                                  Q(query_log__db_name__contains=search)).order_by('-id')[offset:limit]
+    else:
+        log_count = QueryExport.objects.filter(query_log__username=user.username).filter(
+                                                    Q(query_log__sqllog__contains=search) |
+                                                    Q(query_log__db_name__contains=search)).count()
+        qe_list = QueryExport.objects.filter(query_log__username=user.username).filter(
+                                                    Q(query_log__sqllog__contains=search) |
+                                                    Q(query_log__db_name__contains=search)).order_by('-id')[offset:limit]
+
+    sql_log_list = list()
+    for qe in qe_list:
+        ql = qe.query_log
+        sql_log_list.append({"user_display": ql.user_display, "instance_name": ql.instance_name, "db_name": ql.db_name,
+                             "create_time": ql.create_time, "sqllog": ql.sqllog, "effect_row": ql.effect_row,
+                             "cost_time": ql.cost_time, "reason": qe.reason, "status": qe.status, "id": qe.id})
+
+    result = {"total": log_count, "rows": sql_log_list}
+    # 返回查询结果
+    return HttpResponse(json.dumps(result, cls=ExtendJSONEncoder, bigint_as_string=True),
+                        content_type='application/json')
 
 
 # 获取SQL执行计划

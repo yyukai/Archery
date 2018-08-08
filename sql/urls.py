@@ -66,9 +66,11 @@ urlpatterns = [
     path('instance/getColumnNameList/', instance.getColumnNameList),
 
     path('query/', query.query),
-    path('async_query/', query.add_async_query),
+    path('add_async_query/', query.add_async_query),
     path('query_result_export/', query.query_result_export),
+    path('query_export_audit/', query.query_export_audit),
     path('query/querylog/', query.querylog),
+    path('query/query_export_log/', query.query_export_log),
     path('query/explain/', query.explain),
     path('query/applylist/', query.getqueryapplylist),
     path('query/userprivileges/', query.getuserprivileges),

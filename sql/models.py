@@ -268,8 +268,10 @@ class QueryLog(models.Model):
 class QueryExport(models.Model):
     query_log = models.ForeignKey(QueryLog, on_delete=models.CASCADE)
     auditor = models.ForeignKey(Users, on_delete=models.CASCADE)
-    result_file = models.CharField('结果文件的存放路径', max_length=255)
-    error_msg = models.CharField('错误信息', max_length=255)
+    result_file = models.CharField('结果文件的存放路径', max_length=255, default='')
+    error_msg = models.CharField('SQL执行错误信息', max_length=255, default='')
+    reason = models.CharField('申请人导出数据原因', max_length=255, default='')
+    audit_msg = models.CharField('审核人审核理由', max_length=255, default='')
     status = models.IntegerField('执行状态', choices=((0, '执行中'), (1, '执行失败'), (2, '待审核'),
                                                   (3, '审核通过'), (4, '审核不通过')))
 
@@ -360,6 +362,7 @@ class Permission(models.Model):
             ('menu_sqlworkflow', '菜单 SQL上线'),
             ('menu_query', '菜单 SQL查询'),
             ('menu_sqlquery', '菜单 MySQL查询'),
+            ('menu_query_export', '菜单 导出查询'),
             ('menu_queryapplylist', '菜单 查询权限申请'),
             ('menu_sqloptimize', '菜单 SQL优化'),
             ('menu_sqladvisor', '菜单 优化工具'),

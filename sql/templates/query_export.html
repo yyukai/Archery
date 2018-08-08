@@ -1,6 +1,31 @@
 {% extends "base.html" %}
 
 {% block content %}
+    <!-- 导出查询审批的模态框-->
+    <div class="modal fade" id="auditModal" tabindex="-1" role="dialog" aria-labelledby="myModalLabel" aria-hidden="true">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span
+                            aria-hidden="true">&times;</span></button>
+                    <h4 class="modal-title" id="myModalLabel">导出查询数据下载审批</h4>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <input type="text" class="form-control" id="audit_msg" placeholder="简单说明审批理由">
+                    </div>
+
+                    <p class="text-info">提示：审批通过后，该用户即可下载。</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-default" data-dismiss="modal">取消</button>
+                    <button type="button" class="btn btn-danger" id="modal_btn_no">拒绝</button>
+                    <button type="button" class="btn btn-success" id="modal_btn_yes">同意</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div id="div_id" class="container-fluid">
         <div class="row clearfix">
             <form id="form-sqlquery" class="form-horizontal" role="form">
@@ -43,6 +68,16 @@
                             <option value=500>50000</option>
                             <option value=1000>200000</option>
                             <option value=0>ALL</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <select id="auditor" name="auditor"
+                                class="form-control selectpicker show-tick bs-select-hidden"
+                                data-placeholder="审核人:" required>
+                            <option value="is-empty" disabled="">审核人:</option>
+                            {% for auditor in auditors %}
+                                <option value="{{ auditor.username }}" selected="selected">{{ auditor.display }}</option>
+                            {% endfor %}
                         </select>
                     </div>
                     <div class="form-group">
@@ -99,7 +134,7 @@
             $('#sql-log').bootstrapTable('destroy').bootstrapTable({
                 method: 'post',
                 contentType: "application/x-www-form-urlencoded",
-                url: "/query/querylog/",
+                url: "/query/query_export_log/",
                 striped: true,                      //是否显示行间隔色
                 cache: false,                       //是否使用缓存，默认为true，所以一般情况下需要设置一下这个属性（*）
                 pagination: true,                   //是否显示分页（*）
@@ -182,6 +217,25 @@
                 }, {
                     title: '耗时(秒)',
                     field: 'cost_time'
+                }, {
+                    title: '导出理由',
+                    field: 'reason'
+                }, {
+                    title: '操作',
+                    field: 'status',
+                    formatter: function (value, row, index) {
+                        if (value == 0){
+                            return '<a type="button" class="label label-warning" href="#">执行中</a>';
+                        } else if (value == 1) {
+                            return '<a type="button" class="label label-danger" onclick="get_audit_msg(' + row.id + ')" >执行失败</a>';
+                        } else if (value == 2) {
+                            return '<a type="button" class="label label-info" onclick="do_audit(' + row.id + ')" >待审核</a>';
+                        } else if (value == 3) {
+                            return '<a type="button" class="label label-success" href="/query_result_export?id=' + row.id + '" >下载</a>';
+                        } else if (value == 4) {
+                            return '<a type="button" class="label label-danger" onclick="get_audit_msg(' + row.id + ')" >审核不通过</a>';
+                        }
+                    }
                 }],
                 onLoadSuccess: function () {
                 },
@@ -197,7 +251,71 @@
                     return res;
                 }
             });
-        }
+        };
+        function get_audit_msg(row_id) {
+            $.ajax({
+                type: "post",
+                url: "/query_export_audit/",
+                timeout: 3000,
+                data: {
+                    id: row_id
+                },
+                success: function (data) {
+                    alert(data);
+                },
+                error: function (data) {
+                    alert(data);
+                }
+            });
+        };
+        function do_audit(row_id) {
+            $('#auditModal').modal({});
+            $("#modal_btn_no").unbind("click").click(function(){
+                var audit_msg = document.getElementById("audit_msg").value;
+                $.ajax({
+                    type: "post",
+                    url: "/query_export_audit/",
+                    timeout: 3000,
+                    data: {
+                        id: row_id,
+                        audit_msg: audit_msg,
+                        is_allow: "no"
+                    },
+                    success: function (data) {
+                        alert(data);
+                        $('#auditModal').modal('hide');
+                        $('#sql-log').bootstrapTable('refresh');
+                    },
+                    error: function (data) {
+                        alert(data);
+                        $('#auditModal').modal('hide');
+                    }
+                });
+            });
+
+            $("#modal_btn_yes").unbind("click").click(function(){
+                var audit_msg = document.getElementById("audit_msg").value;
+                $.ajax({
+                    type: "post",
+                    url: "/query_export_audit/",
+                    timeout: 3000,
+                    data: {
+                        id: row_id,
+                        audit_msg: audit_msg,
+                        is_allow: "yes"
+                    },
+                    success: function (data) {
+                        alert(data);
+                        $('#auditModal').modal('hide');
+                        $('#sql-log').bootstrapTable('refresh');
+                    },
+                    error: function (data) {
+                        alert(data);
+                        $('#auditModal').modal('hide');
+                    }
+                });
+            });
+        };
     </script>
     <!-- 执行结果  -->
     <script>
@@ -363,6 +481,7 @@
                     instance_name: $("#instance_name").val(),
                     db_name: $("#db_name").val(),
                     tb_name: $("#table_name").val(),
+                    auditor: $("#auditor").val(),
                     sql_content: sqlContent,
                     limit_num: $("#limit_num").val()
                 },
@@ -371,127 +490,8 @@
                     $('input[type=button]').prop('disabled', false);
                 },
                 success: function (data) {
-                    if (data.status === 0 || data.status === 2) {
-                        //获取当前的标签页,如果当前不在执行结果页，则默认新增一个页面
-                        var active_li_id = sessionStorage.getItem('active_li_id');
-
-                        if (active_li_id.match(/^execute_result_tab*/)) {
-                            //查看表结构默认打开新窗口
-                            if (sql === 'show create table') {
-                                tab_add();
-                                n = sessionStorage.getItem('tab_num');
-                            }
-                            else {
-                                var n = active_li_id.split("execute_result_tab")[1];
-                            }
-                        }
-                        else {
-                            tab_add();
-                            n = sessionStorage.getItem('tab_num');
-                        }
-
-                        var result = data.data;
-                        //查询报错失败
-                        if (result['Error']) {
-                            alertStyle = "alert-danger";
-                            $("#" + ('query_result' + n)).bootstrapTable('destroy').bootstrapTable({
-                                columns: [{
-                                    field: 'error',
-                                    title: 'Error'
-                                }],
-                                data: [{
-                                    error: 'mysql返回异常：' + result['Error']
-                                }]
-                            })
-                        }
-                        //inception检测报错
-                        else if (data.status === 2) {
-                            var errer_info = data.msg;
-                            //替换所有的换行符
-                            errer_info = errer_info.replace(/\r\n/g, "<br>");
-                            errer_info = errer_info.replace(/\n/g, "<br>");
-                            //替换所有的空格
-                            errer_info = errer_info.replace(/\s/g, "&nbsp;");
-                            alertStyle = "alert-danger";
-                            $("#" + ('query_result' + n)).bootstrapTable('destroy').bootstrapTable({
-                                columns: [{
-                                    field: 'error',
-                                    title: 'Error'
-                                }],
-                                data: [{
-                                    error: errer_info
-                                }]
-                            })
-                        }
-                        else if (result['column_list']) {
-                            //异步获取要动态生成的列
-                            $.each(result['column_list'], function (i, column) {
-                                columns.push({
-                                    "field": i,
-                                    "title": column,
-                                    "sortable": true,
-                                    "formatter": function (value, row, index) {
-                                        //return value;
-                                        return $('<div/>').text(value).html();
-                                    }
-                                });
-                            });
-                            /*//插入选择框
-                            columns.unshift({
-                                title: '',
-                                field: 'checkbox',
-                                checkbox: true
-                            });*/
-                            if (sqlContent.match(/^show\s+create\s+table/)) {
-                                //初始化表结构显示
-                                $("#" + ("query_result" + n)).bootstrapTable('destroy').bootstrapTable({
-                                        data: result['rows'],
-                                        columns: [{
-                                            title: 'Create Table',
-                                            field: 1,
-                                            formatter: function (value, row, index) {
-                                                var sql = value.replace(/\r\n/g, "<br>");
-                                                // var sql = window.sqlFormatter.format(value);
-                                                //替换所有的换行符
-                                                // sql = sql.replace(/\r\n/g, "<br>");
-                                                sql = sql.replace(/\n/g, "<br>");
-                                                //替换所有的空格
-                                                sql = sql.replace(/\s/g, "&nbsp;");
-                                                return sql;
-
-                                            }
-                                        }
-                                        ],
-                                        locale: 'zh-CN'
-                                    }
-                                );
-                            }
-                            else {
-                                //初始化查询结果
-                                $("#" + ('query_result' + n)).bootstrapTable('destroy').bootstrapTable({
-                                    data: result['rows'],
-                                    columns: columns,
-                                    showExport: true,
-                                    exportDataType: "all",
-                                    //exportTypes: ['sql'],
-                                    exportOptions: {
-                                        //ignoreColumn: [0],  //忽略某些列的索引数组
-                                        fileName: 'export_result'  //文件名称设置
-                                    },
-                                    showColumns: true,
-                                    showToggle: true,
-                                    clickToSelect: true,
-                                    striped: true,
-                                    pagination: true,
-                                    pageSize: 30,
-                                    pageList: [30, 50, 100, 500, 1000],
-                                    locale: 'zh-CN'
-                                });
-                            }
-                            //执行时间和脱敏时间赋值
-                            $("#" + ('time') + n).text(result['cost_time'] + ' sec');
-                            $("#" + ('masking_time') + n).text(result['masking_cost_time'] + ' sec');
-                        }
+                    if (data.status === 0) {
+                        alert("status: " + data.status + "\nmsg: " + data.msg);
                     } else {
                         alert("status: " + data.status + "\nmsg: " + data.msg);
                     }

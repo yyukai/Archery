@@ -81,6 +81,7 @@ INSERT INTO auth_permission (name, content_type_id, codename) VALUES ('菜单 Da
 INSERT INTO auth_permission (name, content_type_id, codename) VALUES ('菜单 SQL上线', @content_type_id, 'menu_sqlworkflow');
 INSERT INTO auth_permission (name, content_type_id, codename) VALUES ('菜单 SQL查询', @content_type_id, 'menu_query');
 INSERT INTO auth_permission (name, content_type_id, codename) VALUES ('菜单 MySQL查询', @content_type_id, 'menu_sqlquery');
+INSERT INTO auth_permission (name, content_type_id, codename) VALUES ('菜单 导出查询', @content_type_id, 'menu_query_export');
 INSERT INTO auth_permission (name, content_type_id, codename) VALUES ('菜单 查询权限申请', @content_type_id, 'menu_queryapplylist');
 INSERT INTO auth_permission (name, content_type_id, codename) VALUES ('菜单 SQL优化', @content_type_id, 'menu_sqloptimize');
 INSERT INTO auth_permission (name, content_type_id, codename) VALUES ('菜单 优化工具', @content_type_id, 'menu_sqladvisor');
@@ -96,6 +97,7 @@ INSERT INTO auth_permission (name, content_type_id, codename) VALUES ( '执行SQ
 INSERT INTO auth_permission (name, content_type_id, codename) VALUES ( '申请查询权限', @content_type_id, 'query_applypriv');
 INSERT INTO auth_permission (name, content_type_id, codename) VALUES ( '管理查询权限', @content_type_id, 'query_mgtpriv');
 INSERT INTO auth_permission (name, content_type_id, codename) VALUES ( '审核查询权限', @content_type_id, 'query_review');
+INSERT INTO auth_permission (name, content_type_id, codename) VALUES ( '审核导出查询权限', @content_type_id, 'query_export_review');
 INSERT INTO auth_permission (name, content_type_id, codename) VALUES ( '提交SQL查询', @content_type_id, 'query_submit');
 INSERT INTO auth_permission (name, content_type_id, codename) VALUES ( '查看会话', @content_type_id, 'process_view');
 INSERT INTO auth_permission (name, content_type_id, codename) VALUES ( '终止会话', @content_type_id, 'process_kill');
