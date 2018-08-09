@@ -378,6 +378,7 @@ class Permission(models.Model):
             ('query_applypriv', '申请查询权限'),
             ('query_mgtpriv', '管理查询权限'),
             ('query_review', '审核查询权限'),
+            ('query_export_review', '审核导出查询权限'),
             ('query_submit', '提交SQL查询'),
             ('process_view', '查看会话'),
             ('process_kill', '终止会话'),

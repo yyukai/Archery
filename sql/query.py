@@ -887,7 +887,8 @@ def query_export_log(request):
         ql = qe.query_log
         sql_log_list.append({"user_display": ql.user_display, "instance_name": ql.instance_name, "db_name": ql.db_name,
                              "create_time": ql.create_time, "sqllog": ql.sqllog, "effect_row": ql.effect_row,
-                             "cost_time": ql.cost_time, "reason": qe.reason, "status": qe.status, "id": qe.id})
+                             "cost_time": ql.cost_time, "reason": qe.reason, "status": qe.status,
+                             "auditor": qe.auditor.username, "id": qe.id})
 
     result = {"total": log_count, "rows": sql_log_list}
     # 返回查询结果
