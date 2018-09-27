@@ -3,10 +3,14 @@
 
 import json
 import time
+import re
 import traceback
 from sql.models import Users, Config
 from sql.utils.api import HttpRequests
 from sql.utils.config import SysConfig
+
+# 非研发中心员工，不去获取钉钉ID
+not_in_dev_dept = ['WD27822']
 
 # 是否每次登陆都要去钉钉获取一下 user_id。因为钉钉里的 user_id 是固定的，所以没必要配置成 True。
 FORCE_UPDATE = False
@@ -68,7 +72,9 @@ def set_ding_user_id(username):
 
         user = Users.objects.get(username=username)
         # 非强制每次登陆查询 user_id，且archer中 ding_user_id 已存在
-        if FORCE_UPDATE is False and user.ding_user_id != "":
+        if FORCE_UPDATE is False and user.ding_user_id is not None and user.ding_user_id != '':
+            return
+        if username in not_in_dev_dept or username.upper() in not_in_dev_dept:
             return
         ding_root_dept_id = SysConfig().sys_config.get('ding_root_dept_id', 0)
         token = get_access_token()
@@ -81,7 +87,7 @@ def set_ding_user_id(username):
                 s = json.loads(ret)
                 if s["errcode"] == 0:
                     for u in s["userlist"]:
-                        if u[key] == username:
+                        if re.match(u[key], username, re.I):
                             user.ding_user_id = u["userid"]
                             user.save()
                             return

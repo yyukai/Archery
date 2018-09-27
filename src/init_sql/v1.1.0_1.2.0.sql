@@ -131,6 +131,8 @@ CREATE TABLE `query_export` (
   `auditor_id` int(11) NOT NULL,
   `result_file` varchar(255) NOT NULL,
   `error_msg` varchar(255) NOT NULL,
+  `reason` varchar(255) NOT NULL,
+  `audit_msg` varchar(255) NOT NULL,
   `status` int(11) NOT NULL,
   PRIMARY KEY (`id`),
   FOREIGN KEY (`query_log_id`) REFERENCES query_log(id),

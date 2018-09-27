@@ -58,7 +58,7 @@ class Dao(object):
                     conn.close()
         elif self.db_type == "pgsql":
             try:
-                conn = psycopg2.connect(host=self.host, port=self.port, user=self.user, passwd=self.password,
+                conn = psycopg2.connect(host=self.host, port=self.port, user=self.user, password=self.password,
                                         dbname='postgres')
                 cursor = conn.cursor()
                 cursor.execute("SELECT datname FROM pg_database;")
@@ -94,7 +94,7 @@ class Dao(object):
                 conn.close()
         elif self.db_type == "pgsql":
             try:
-                conn = psycopg2.connect(host=self.host, port=self.port, user=self.user, passwd=self.password, dbname=db_name)
+                conn = psycopg2.connect(host=self.host, port=self.port, user=self.user, password=self.password, dbname=db_name)
                 cursor = conn.cursor()
                 sql = """SELECT tablename FROM pg_tables WHERE tableowner='{}';""".format(self.user)
                 cursor.execute(sql)
@@ -131,7 +131,7 @@ class Dao(object):
                 conn.close()
         elif self.db_type == "pgsql":
             try:
-                conn = psycopg2.connect(host=self.host, port=self.port, user=self.user, passwd=self.password,
+                conn = psycopg2.connect(host=self.host, port=self.port, user=self.user, password=self.password,
                                         dbname=db_name)
                 cursor = conn.cursor()
                 sql = """SELECT column_name FROM information_schema.columns WHERE table_name = '{}';""".format(tb_name)
@@ -211,7 +211,7 @@ class Dao(object):
         cursor = None
         is_show_create_table, tb_name = False, None
         try:
-            conn = psycopg2.connect(host=self.host, port=self.port, user=self.user, passwd=self.password, dbname=db_name)
+            conn = psycopg2.connect(host=self.host, port=self.port, user=self.user, password=self.password, dbname=db_name)
             cursor = conn.cursor()
             if re.match(r"^show\s+create\s+table", sql.lower()):
                 is_show_create_table = True
@@ -272,7 +272,7 @@ class Dao(object):
         cursor = None
 
         try:
-            conn = psycopg2.connect(host=self.host, port=self.port, user=self.user, passwd=self.password, dbname=db_name)
+            conn = psycopg2.connect(host=self.host, port=self.port, user=self.user, password=self.password, dbname=db_name)
             cursor = conn.cursor()
             cursor.execute(sql)
             result['effect_row'] = -1 if cursor.rowcount is None else cursor.rowcount

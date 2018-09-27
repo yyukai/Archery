@@ -1,3 +1,6 @@
+#
+# yum install openldap-devel python-devel
+
 Django==2.0.7
 mysqlclient==1.3.13
 requests==2.18.4
@@ -8,3 +11,6 @@ pyecharts_snapshot==0.1.7
 sqlparse==0.2.4
 pycryptodome==3.6.3
 python-dateutil==2.7.3
+django_auth_ldap==1.7.0
+psycopg2==2.7.5
+xlwt==1.3.0

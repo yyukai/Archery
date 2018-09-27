@@ -97,11 +97,11 @@ DATE_FORMAT = 'Y-m-d'
 # https://docs.djangoproject.com/en/1.8/howto/static-files/
 
 STATIC_URL = '/static/'
-STATIC_ROOT = os.path.join(BASE_DIR, 'static')
+STATIC_ROOT = os.path.join(BASE_DIR, 'sql/static')
 STATICFILES_DIRS = []
 
 # 扩展django admin里users字段用到，指定了sql/models.py里的class users
-AUTH_USER_MODEL = "sql.users"
+AUTH_USER_MODEL = "sql.Users"
 
 ###############以下部分需要用户根据自己环境自行修改###################
 
@@ -127,18 +127,17 @@ DATABASES = {
 # LDAP
 ENABLE_LDAP = True
 if ENABLE_LDAP:
-    import ldap
     from django_auth_ldap.config import LDAPSearch
 
     AUTHENTICATION_BACKENDS = (
-        'django_auth_ldap.backend.LDAPBackend',  # 配置为先使用LDAP认证，如通过认证则不再使用后面的认证方式
+        'django_auth_ldap.backend.LDAPBackend',       # 配置为先使用LDAP认证，如通过认证则不再使用后面的认证方式
         'django.contrib.auth.backends.ModelBackend',  # django系统中手动创建的用户也可使用，优先级靠后。注意这2行的顺序
     )
 
     AUTH_LDAP_SERVER_URI = "ldap://192.168.21.62:389"
     AUTH_LDAP_USER_DN_TEMPLATE = "cn=%(user)s,ou=people,ou=WeidaiDBMSStaff,dc=weidai,dc=com,dc=cn"
-    AUTH_LDAP_ALWAYS_UPDATE_USER = True  # 每次登录从ldap同步用户信息
-    AUTH_LDAP_USER_ATTR_MAP = {  # key为archer.sql_users字段名，value为ldap中字段名，用户同步信息
+    AUTH_LDAP_ALWAYS_UPDATE_USER = True      # 每次登录从ldap同步用户信息
+    AUTH_LDAP_USER_ATTR_MAP = {              # key为archer.sql_users字段名，value为ldap中字段名，用户同步信息
         "username": "cn",
         "display": "displayname",
         "email": "mail"

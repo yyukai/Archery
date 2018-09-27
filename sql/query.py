@@ -470,6 +470,7 @@ def queryprivaudit(request):
 @csrf_exempt
 @permission_required('sql.query_submit', raise_exception=True)
 def query(request):
+    print(request.POST)
     instance_name = request.POST.get('instance_name')
     sqlContent = request.POST.get('sql_content')
     dbName = request.POST.get('db_name')
@@ -707,11 +708,12 @@ def do_async_query(request, query_export, instance_name, db_name, db_type, sql, 
                     sheet.write(row, col, value)
             workbook.save(template_file)
         except Exception:
-            print(traceback.print_exc())
+            query_export.error_msg = str(traceback.print_exc())
             return ''
         return template_file
 
     try:
+        file_path = ''
         if SysConfig().sys_config.get('data_masking') == 'true':
             if db_type == "mysql":
                 # 仅对查询语句进行脱敏

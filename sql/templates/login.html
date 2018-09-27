@@ -3,6 +3,7 @@
 <head>
     <title>SQL审核平台</title>
     {% load staticfiles %}
+    <link rel="shortcut icon" href="/static/favicon.ico" type="image/x-icon">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <!-- 引入 Bootstrap -->
     <link href="{% static 'bootstrap-3.3.7-dist/css/bootstrap.min.css' %}" rel="stylesheet">
@@ -20,20 +21,17 @@
         <form class="login-form fade-in-effect" id="login" method="post" role="form">
             {% csrf_token %}
             <div class="form-group is-focused">
-                <label class="control-label" for="inputUsername">Username</label>
+                <label class="control-label" for="inputUsername">OA账户</label>
                 <input class="form-control ng-valid ng-dirty ng-touched" id="inputUsername" name="username" type="text"
                        required>
             </div>
             <div class="form-group is-focused">
-                <label class="control-label" for="inputPassword">Password</label>
+                <label class="control-label" for="inputPassword">OA密码</label>
                 <input class="form-control ng-valid ng-dirty ng-touched" id="inputPassword" name="password"
                        type="password" required>
             </div>
             <div class="form-group">
-                <button class="btn btn-primary btn-block" id="btnLogin" type="button"><i class="fa-lock"></i>登录</button>
-            </div>
-            <div class="form-group">
-                <a href="#" data-toggle="modal" data-target="#sign-up">注册用户</a>
+                <button class="btn btn-primary btn-block" id="btnLogin" type="button"><i class="fa-lock"></i>每天感觉棒棒哒！我要登录~\(≧▽≦)/~啦啦啦</button>
             </div>
         </form>
     </div>
