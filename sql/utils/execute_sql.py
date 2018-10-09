@@ -1,5 +1,6 @@
 # -*- coding: UTF-8 -*-
 import re
+import traceback
 
 import simplejson as json
 
@@ -10,13 +11,12 @@ from django.db import connection
 from django.utils import timezone
 
 from sql.utils.group import auth_group_users
-from sql.utils.config import SysConfig
+from common.config import SysConfig
 from sql.utils.dao import Dao
-from sql.const import Const, WorkflowDict
-from sql.utils.sendmsg import MailSender
+from common.utils.const import Const, WorkflowDict
+from common.utils.sendmsg import MailSender
 from sql.utils.inception import InceptionDao
 from sql.models import Users, SqlWorkflow, SqlGroup
-from sql.utils.sql_review import getMasterConnStr
 from sql.utils.workflow import Workflow
 import logging
 
@@ -49,8 +49,20 @@ def execute_skipinc_call_back(workflowId, instance_name, db_name, sql_content, u
         # 关闭后重新获取连接，防止超时
         connection.close()
         workflowDetail.save()
-    except Exception as e:
-        logger.error(e)
+    except Exception:
+        logger.error(traceback.format_exc())
+
+    # 增加工单日志
+    # 获取audit_id
+    audit_id = Workflow.auditinfobyworkflow_id(workflow_id=workflowId,
+                                               workflow_type=WorkflowDict.workflow_type['sqlreview']).audit_id
+    Workflow.add_workflow_log(audit_id=audit_id,
+                              operation_type=6,
+                              operation_type_desc='执行结束',
+                              operation_info='执行结果：{}'.format(workflowDetail.status),
+                              operator='',
+                              operator_display='系统'
+                              )
 
     # 发送消息
     send_msg(workflowDetail, url)
@@ -59,10 +71,9 @@ def execute_skipinc_call_back(workflowId, instance_name, db_name, sql_content, u
 # SQL工单执行回调
 def execute_call_back(workflowId, instance_name, url):
     workflowDetail = SqlWorkflow.objects.get(id=workflowId)
-    dictConn = getMasterConnStr(instance_name)
     try:
         # 交给inception先split，再执行
-        (finalStatus, finalList) = InceptionDao().executeFinal(workflowDetail, dictConn)
+        (finalStatus, finalList) = InceptionDao(instance_name=instance_name).executeFinal(workflowDetail)
 
         # 封装成JSON格式存进数据库字段里
         strJsonResult = json.dumps(finalList)
@@ -75,8 +86,20 @@ def execute_call_back(workflowId, instance_name, url):
         # 关闭后重新获取连接，防止超时
         connection.close()
         workflowDetail.save()
-    except Exception as e:
-        logger.error(e)
+    except Exception:
+        logger.error(traceback.format_exc())
+
+    # 增加工单日志
+    # 获取audit_id
+    audit_id = Workflow.auditinfobyworkflow_id(workflow_id=workflowId,
+                                               workflow_type=WorkflowDict.workflow_type['sqlreview']).audit_id
+    Workflow.add_workflow_log(audit_id=audit_id,
+                              operation_type=6,
+                              operation_type_desc='执行结束',
+                              operation_info='执行结果：{}'.format(workflowDetail.status),
+                              operator='',
+                              operator_display='系统'
+                              )
 
     # 发送消息
     send_msg(workflowDetail, url)
@@ -105,8 +128,9 @@ def execute_job(workflowId, url):
         workflowDetail.save()
     logger.debug('execute_job:' + job_id + ' executing')
     # 执行之前重新split并check一遍，更新SHA1缓存；因为如果在执行中，其他进程去做这一步操作的话，会导致inception core dump挂掉
-    splitReviewResult = InceptionDao().sqlautoReview(workflowDetail.sql_content, workflowDetail.instance_name, db_name,
-                                                     isSplit='yes')
+    splitReviewResult = InceptionDao(instance_name=instance_name).sqlautoReview(workflowDetail.sql_content,
+                                                                                db_name,
+                                                                                isSplit='yes')
     workflowDetail.review_content = json.dumps(splitReviewResult)
     try:
         workflowDetail.save()
@@ -118,6 +142,18 @@ def execute_job(workflowId, url):
     # 采取异步回调的方式执行语句，防止出现持续执行中的异常
     t = Thread(target=execute_call_back, args=(workflowId, instance_name, url))
     t.start()
+
+    # 增加工单日志
+    # 获取audit_id
+    audit_id = Workflow.auditinfobyworkflow_id(workflow_id=workflowId,
+                                               workflow_type=WorkflowDict.workflow_type['sqlreview']).audit_id
+    Workflow.add_workflow_log(audit_id=audit_id,
+                              operation_type=5,
+                              operation_type_desc='执行工单',
+                              operation_info='系统定时执行',
+                              operator='',
+                              operator_display='系统'
+                              )
 
 
 # 执行结果通知
@@ -131,9 +167,9 @@ def send_msg(workflowDetail, url):
     msg_title = "[{}]工单{}#{}".format(WorkflowDict.workflow_type['sqlreview_display'], workflowDetail.status, audit_id)
     msg_content = '''发起人：{}\n审批流程：{}\n工单名称：{}\n工单地址：{}\n工单详情预览：{}\n'''.format(
         workflowDetail.engineer_display, audit_auth_group, workflowDetail.workflow_name, url,
-        workflowDetail.sql_content[0:500])
+        re.sub('[\r\n\f]{2,}', '\n', workflowDetail.sql_content[0:500].replace('\r', '')))
 
-    if sys_config.get('mail') == 'true':
+    if sys_config.get('mail'):
         # 邮件通知申请人，审核人，抄送DBA
         notify_users = workflowDetail.audit_auth_groups.split(',')
         notify_users.append(workflowDetail.engineer)
@@ -147,7 +183,7 @@ def send_msg(workflowDetail, url):
         webhook_url = SqlGroup.objects.get(group_id=workflowDetail.group_id).ding_webhook
         MailSender.send_ding(webhook_url, msg_title + '\n' + msg_content)
 
-    if sys_config.get('mail') == 'true' and sys_config.get('ddl_notify_auth_group', None) \
+    if sys_config.get('mail') and sys_config.get('ddl_notify_auth_group', None) \
             and workflowDetail.status == '已正常结束':
         # 判断上线语句是否存在DDL，存在则通知相关人员
         sql_content = workflowDetail.sql_content
@@ -184,7 +220,7 @@ def send_msg(workflowDetail, url):
                 break
 
         if send == 1:
-            # Ding消息内容通知
+            # 消息内容通知
             msg_title = '[Archer]有新的DDL语句执行完成#{}'.format(audit_id)
             msg_content = '''发起人：{}\n变更组：{}\n变更实例：{}\n变更数据库：{}\n工单名称：{}\n工单地址：{}\n工单预览：{}\n'''.format(
                 Users.objects.get(username=workflowDetail.engineer).display,

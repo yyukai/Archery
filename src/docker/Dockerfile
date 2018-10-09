@@ -35,14 +35,24 @@ RUN yum -y install epel-release \
     && make \
     && mv /opt/SQLAdvisor/sqladvisor/sqladvisor /opt \
     && rm -rf /opt/SQLAdvisor/
+#schemasync
+RUN cd /opt \
+    && virtualenv venv4schemasync  --python=python2 \
+    && source venv4schemasync/bin/activate \
+    && git clone https://github.com/hhyo/SchemaSync.git \
+    && git clone https://github.com/hhyo/SchemaObject.git \
+    && cd SchemaObject && python setup.py install \
+    && cd ../SchemaSync && python setup.py install \
+    && cd /opt && rm -rf /opt/SchemaObject/ && rm -rf /opt/SchemaSync/ \
+    && yum install -y python-devel \
+    && pip install mysql-python
 #archer
 RUN cd /opt \
     && yum -y install openldap-devel nginx \
-    && git clone https://github.com/hhyo/archer.git \
+    && git clone https://github.com/hhyo/archer.git && cd archer && git checkout v1.3.2 \
     && source /opt/venv4archer/bin/activate \
     && pip3 install -r /opt/archer/src/docker/requirements.txt -i https://mirrors.ustc.edu.cn/pypi/web/simple/ \
     && cp /opt/archer/src/docker/connections.py /opt/venv4archer/lib/python3.6/site-packages/MySQLdb/connections.py \
-    && yum -y install nginx \
     && cp /opt/archer/src/docker/nginx.conf /etc/nginx/
 
 ENV LANG en_US.UTF-8

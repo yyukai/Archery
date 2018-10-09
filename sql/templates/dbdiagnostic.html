@@ -21,7 +21,7 @@
                 <select id=instance_name class="form-control selectpicker" name="instance_name_list"
                         data-live-search="true">
                     <option value="is-empty" disabled="" selected="selected">请选择实例</option>
-                    {% for instance_name in instance_name_list %}
+                    {% for instance_name in instances %}
                         <option value="{{ instance_name }}">{{ instance_name }}</option>
                     {% endfor %}
                 </select>
@@ -90,9 +90,9 @@
         // 问题诊断--进程列表
         function get_process_list() {
             if ($("#instance_name").val()) {
-                //采取异步请求
                 //初始化table
                 $('#process-list').bootstrapTable('destroy').bootstrapTable({
+                    escape: true,
                     method: 'post',
                     contentType: "application/x-www-form-urlencoded",
                     url: "/db_diagnostic/process/",
@@ -106,7 +106,7 @@
                     pageNumber: 1,                      //初始化加载第一页，默认第一页,并记录
                     pageSize: 30,                     //每页的记录行数（*）
                     pageList: [20, 30, 50, 100],       //可供选择的每页的行数（*）
-                    search: false,                      //是否显示表格搜索
+                    search: true,                      //是否显示表格搜索
                     strictSearch: false,                //是否全匹配搜索
                     showColumns: true,                  //是否显示所有的列（选择显示的列）
                     showRefresh: true,                  //是否显示刷新按钮
@@ -204,6 +204,7 @@
             if ($("#instance_name").val()) {
                 //初始化table
                 $('#tablespace-list').bootstrapTable('destroy').bootstrapTable({
+                    escape: true,
                     method: 'post',
                     contentType: "application/x-www-form-urlencoded",
                     url: "/db_diagnostic/tablesapce/",
@@ -217,7 +218,7 @@
                     pageNumber: 1,                      //初始化加载第一页，默认第一页,并记录
                     pageSize: 30,                     //每页的记录行数（*）
                     pageList: [20, 30, 50, 100],       //可供选择的每页的行数（*）
-                    search: false,                      //是否显示表格搜索
+                    search: true,                      //是否显示表格搜索
                     strictSearch: false,                //是否全匹配搜索
                     showColumns: true,                  //是否显示所有的列（选择显示的列）
                     showRefresh: true,                  //是否显示刷新按钮
@@ -307,6 +308,7 @@
                             if (result['Error']) {
                                 alertStyle = "alert-danger";
                                 $('#trxandlocks-list').bootstrapTable('destroy').bootstrapTable({
+                                    escape: true,
                                     columns: [{
                                         field: 'error',
                                         title: 'Error'
@@ -327,6 +329,7 @@
                                 });
                                 //初始化查询结果
                                 $('#trxandlocks-list').bootstrapTable('destroy').bootstrapTable({
+                                    escape: true,
                                     data: result['rows'],
                                     columns: columns,
                                     striped: true,                      //是否显示行间隔色

@@ -1,7 +1,7 @@
 # -*- coding: UTF-8 -*- 
 from django.db import models
 from django.contrib.auth.models import AbstractUser
-from sql.utils.aes_decryptor import Prpcrypt
+from common.utils.aes_decryptor import Prpcrypt
 
 
 # display字段为展示的中文名。
@@ -147,8 +147,8 @@ class WorkflowAudit(models.Model):
         managed = True
         db_table = 'workflow_audit'
         unique_together = ('workflow_id', 'workflow_type')
-        verbose_name = u'工作流列表'
-        verbose_name_plural = u'工作流列表'
+        verbose_name = u'工作流审批列表'
+        verbose_name_plural = u'工作流审批列表'
 
 
 # 审批明细表
@@ -190,6 +190,27 @@ class WorkflowAuditSetting(models.Model):
         unique_together = ('group_id', 'workflow_type')
         verbose_name = u'审批流程配置'
         verbose_name_plural = u'审批流程配置'
+
+
+# 工作流日志表
+class WorkflowLog(models.Model):
+    id = models.AutoField(primary_key=True)
+    audit_id = models.IntegerField('工单审批id', db_index=True)
+    operation_type = models.SmallIntegerField('操作类型，0提交/待审核、1审核通过、2审核不通过、3审核取消、4定时、5执行、6执行结束')
+    operation_type_desc = models.CharField('操作类型描述', max_length=10)
+    operation_info = models.CharField('操作信息', max_length=200)
+    operator = models.CharField('操作人', max_length=30)
+    operator_display = models.CharField('操作人中文名', max_length=50, default='')
+    operation_time = models.DateTimeField(auto_now_add=True)
+
+    def __int__(self):
+        return self.audit_id
+
+    class Meta:
+        managed = True
+        db_table = 'workflow_log'
+        verbose_name = u'工作流日志表'
+        verbose_name_plural = u'工作流日志表'
 
 
 # 查询权限申请记录表
@@ -255,6 +276,9 @@ class QueryLog(models.Model):
     cost_time = models.CharField('执行耗时', max_length=10, default='')
     username = models.CharField('操作人', max_length=30)
     user_display = models.CharField('申请人中文名', max_length=50, default='')
+    priv_check = models.IntegerField('查询权限是否正常校验', choices=((1, ' 正常'), (2, '跳过'),), default=0)
+    hit_rule = models.IntegerField('查询是否命中脱敏规则', choices=((0, '未知'), (1, '命中'), (2, '未命中'),), default=0)
+    masking = models.IntegerField('查询结果是否正常脱敏', choices=((1, '是'), (2, '否'),), default=0)
     create_time = models.DateTimeField('操作时间', auto_now_add=True)
     sys_time = models.DateTimeField(auto_now=True)
 
@@ -368,8 +392,12 @@ class Permission(models.Model):
             ('menu_sqladvisor', '菜单 优化工具'),
             ('menu_slowquery', '菜单 慢查日志'),
             ('menu_dbdiagnostic', '菜单 会话管理'),
+            ('menu_binlog2sql', '菜单 Binlog2SQL'),
+            ('menu_schemasync', '菜单 SchemaSync'),
             ('menu_system', '菜单 系统管理'),
+            ('menu_instance', '菜单 实例管理'),
             ('menu_document', '菜单 相关文档'),
+            ('menu_themis', '菜单 数据库审核'),
             ('sql_submit', '提交SQL上线工单'),
             ('sql_review', '审核SQL上线工单'),
             ('sql_execute', '执行SQL上线工单'),

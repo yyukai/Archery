@@ -31,8 +31,10 @@ ALLOWED_HOSTS = ['*']
 # 解决nginx部署跳转404
 USE_X_FORWARDED_HOST = True
 
-# Application definition
+# 请求限制
+DATA_UPLOAD_MAX_MEMORY_SIZE = 15728640
 
+# Application definition
 INSTALLED_APPS = (
     'django.contrib.admin',
     'django.contrib.auth',
@@ -42,6 +44,7 @@ INSTALLED_APPS = (
     'django.contrib.staticfiles',
     'django_apscheduler',
     'sql',
+    'themis',
 )
 
 MIDDLEWARE = (
@@ -52,8 +55,8 @@ MIDDLEWARE = (
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'django.middleware.security.SecurityMiddleware',
-    'sql.middleware.check_login_middleware.CheckLoginMiddleware',
-    'sql.middleware.exception_logging_middleware.ExceptionLoggingMiddleware',
+    'common.middleware.check_login_middleware.CheckLoginMiddleware',
+    'common.middleware.exception_logging_middleware.ExceptionLoggingMiddleware',
 )
 
 ROOT_URLCONF = 'archer.urls'
@@ -61,7 +64,7 @@ ROOT_URLCONF = 'archer.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [os.path.join(BASE_DIR, 'sql/templates')],
+        'DIRS': [os.path.join(BASE_DIR, 'common/templates')],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -69,7 +72,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
-                'sql.utils.global_info.global_info',
+                'common.utils.global_info.global_info',
             ],
         },
     },
@@ -97,13 +100,13 @@ DATE_FORMAT = 'Y-m-d'
 # https://docs.djangoproject.com/en/1.8/howto/static-files/
 
 STATIC_URL = '/static/'
-STATIC_ROOT = os.path.join(BASE_DIR, 'sql/static')
-STATICFILES_DIRS = []
+STATIC_ROOT = os.path.join(BASE_DIR, 'static')
+STATICFILES_DIRS = [os.path.join(BASE_DIR, 'common/static'), ]
 
 # 扩展django admin里users字段用到，指定了sql/models.py里的class users
 AUTH_USER_MODEL = "sql.Users"
 
-###############以下部分需要用户根据自己环境自行修改###################
+# 以下部分需要用户根据自己环境自行修改
 
 # Database
 # https://docs.djangoproject.com/en/1.8/ref/settings/#databases
@@ -117,10 +120,33 @@ DATABASES = {
         'PASSWORD': 'root',
         'HOST': '127.0.0.1',
         'PORT': '3306',
+        'OPTIONS': {
+            'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
+            'charset': 'utf8mb4'
+        },
         'TEST': {
             'NAME': 'archer_master',
             'CHARSET': 'utf8',
         },
+    }
+}
+
+# themis审核所需mongodb数据库，账号角色必须有"anyAction" to "anyResource"权限
+MONGODB_DATABASES = {
+    "default": {
+        "NAME": 'themis',
+        "USER": '',
+        "PASSWORD": '',
+        "HOST": '127.0.0.1',
+        "PORT": 27017,
+    },
+}
+
+# 缓存配置
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.filebased.FileBasedCache',
+        'LOCATION': os.path.join(BASE_DIR, "archer"),
     }
 }
 

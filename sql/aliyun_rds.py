@@ -3,8 +3,7 @@
 import simplejson as json
 import datetime
 
-from django.views.decorators.csrf import csrf_exempt
-from sql.utils.aliyun_sdk import Aliyun
+from common.utils.aliyun_sdk import Aliyun
 from .models import AliyunRdsConfig
 
 aliyun = Aliyun()
@@ -159,7 +158,6 @@ def kill_session(request):
 
 
 # 问题诊断--空间列表
-@csrf_exempt
 def sapce_status(request):
     instance_name = request.POST.get('instance_name')
 

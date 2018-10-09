@@ -1,9 +1,8 @@
 import re
 
-from sql.const import Const
-from sql.models import Instance, SqlWorkflow
-from sql.utils.aes_decryptor import Prpcrypt
-from sql.utils.config import SysConfig
+from common.utils.const import Const
+from sql.models import SqlWorkflow
+from common.config import SysConfig
 from sql.utils.group import user_groups
 from sql.utils.inception import InceptionDao
 
@@ -15,19 +14,6 @@ def getDetailUrl(request, workflow_id):
     from sql.utils.workflow import Workflow
     audit_id = Workflow.auditinfobyworkflow_id(workflow_id, 2).audit_id
     return "{}://{}/workflow/{}/".format(scheme, host, audit_id)
-
-
-# 根据实例名获取主库连接字符串，并封装成一个dict
-def getMasterConnStr(instance_name):
-    listMasters = Instance.objects.filter(instance_name=instance_name)
-
-    masterHost = listMasters[0].host
-    masterPort = listMasters[0].port
-    masterUser = listMasters[0].user
-    masterPassword = Prpcrypt().decrypt(listMasters[0].password)
-    dictConn = {'masterHost': masterHost, 'masterPort': masterPort, 'masterUser': masterUser,
-                'masterPassword': masterPassword}
-    return dictConn
 
 
 # 判断SQL上线是否无需审批
@@ -55,15 +41,17 @@ def is_autoreview(workflowid):
             is_autoreview = False
             break
         if is_autoreview:
-            # 更新影响行数加测,单条更新语句影响行数超过指定数量则需要人工审核
-            inception_review = InceptionDao().sqlautoReview(sql_content, instance_name, db_name)
+            # 更新影响行数加测,总语句影响行数超过指定数量则需要人工审核
+            inception_review = InceptionDao(instance_name=instance_name).sqlautoReview(sql_content, db_name)
+            all_affected_rows = 0
             for review_result in inception_review:
                 SQL = review_result[5]
                 Affected_rows = review_result[6]
                 if re.match(r"^update", SQL.strip().lower()):
-                    if int(Affected_rows) > int(SysConfig().sys_config.get('auto_review_max_update_rows', 0)):
-                        is_autoreview = False
-                        break
+                    all_affected_rows = all_affected_rows + int(Affected_rows)
+            if int(all_affected_rows) > int(SysConfig().sys_config.get('auto_review_max_update_rows', 50)):
+                is_autoreview = False
+
     # inception不支持语法都需要审批
     if is_manual == 1:
         is_autoreview = False
@@ -100,10 +88,12 @@ def can_timingtask(user, workflow_id):
 def can_cancel(user, workflow_id):
     workflow_detail = SqlWorkflow.objects.get(id=workflow_id)
     result = False
-    # 结束的工单不可终止，执行前提交人可终止、审核人可打回
-    if workflow_detail.status in [Const.workflowStatus['manreviewing'], Const.workflowStatus['pass'],
-                                  Const.workflowStatus['timingtask']]:
+    # 审核中的工单，审核人和提交人可终止
+    if workflow_detail.status == Const.workflowStatus['manreviewing']:
         from sql.utils.workflow import Workflow
         if Workflow.can_review(user, workflow_id, 2) or user.username == workflow_detail.engineer:
             result = True
+    # 审核通过但未执行的工单，执行人可以打回
+    if workflow_detail.status in [Const.workflowStatus['pass'], Const.workflowStatus['timingtask']]:
+        result = True if can_execute(user, workflow_id) else False
     return result

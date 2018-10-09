@@ -1,0 +1,167 @@
+{% extends "base.html" %}
+
+{% block content %}
+    <!-- 自定义操作按钮-->
+    <div id="toolbar" class="form-inline">
+        <div class="form-group daterange" style="display: inline-block">
+            <div class="input-prepend input-group">
+                <input id="reservation" type="text" readonly class="form-control"/>
+            </div>
+        </div>
+    </div>
+    <!-- 表格-->
+    <div class="table-responsive">
+        <table id="group-list" data-toggle="table" class="table table-striped table-hover"
+               style="table-layout:inherit;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+        </table>
+    </div>
+{% endblock content %}
+{% block js %}
+    {% load staticfiles %}
+    <link href="{% static 'daterangepicker/css/daterangepicker.css' %}" rel="stylesheet" type="text/css"/>
+    <script src="{% static 'daterangepicker/js/moment.min.js' %}"></script>
+    <script src="{% static 'daterangepicker/js/daterangepicker.js' %}"></script>
+    <script src="{% static 'bootstrap-table/js/bootstrap-table-export.min.js' %}"></script>
+    <script src="{% static 'bootstrap-table/js/tableExport.min.js' %}"></script>
+    <script>
+        //获取列表
+        function grouplist() {
+            //采取异步请求
+            //初始化table
+            $('#group-list').bootstrapTable('destroy').bootstrapTable({
+                escape: true,
+                method: 'post',
+                contentType: "application/x-www-form-urlencoded",
+                url: "/backup/list/",
+                striped: true,                      //是否显示行间隔色
+                cache: false,                       //是否使用缓存，默认为true，所以一般情况下需要设置一下这个属性（*）
+                pagination: true,                   //是否显示分页（*）
+                sortable: true,                     //是否启用排序
+                sortOrder: "asc",                   //排序方式
+                sidePagination: "server",           //分页方式：client客户端分页，server服务端分页（*）
+                pageNumber: 1,                      //初始化加载第一页，默认第一页,并记录
+                pageSize: 14,                     //每页的记录行数（*）
+                pageList: [20, 30, 50, 100],       //可供选择的每页的行数（*）
+                showExport: true,                   //是否显示导出按钮
+                exportOptions: {
+                    fileName: 'backup'  //文件名称设置
+                },
+                search: true,                      //是否显示表格搜索
+                strictSearch: false,                //是否全匹配搜索
+                showColumns: true,                  //是否显示所有的列（选择显示的列）
+                showRefresh: true,                  //是否显示刷新按钮
+                minimumCountColumns: 2,             //最少允许的列数
+                clickToSelect: true,                //是否启用点击选中行
+                uniqueId: "id",                     //每一行的唯一标识，一般为主键列
+                showToggle: true,                   //是否显示详细视图和列表视图的切换按钮
+                cardView: false,                    //是否显示详细视图
+                detailView: false,                  //是否显示父子表
+                locale: 'zh-CN',                    //本地化
+                toolbar: "#toolbar",               //指明自定义的toolbar
+                queryParamsType: 'limit',
+                //请求服务数据时所传参数
+                queryParams:
+                    function (params) {
+                        var StartTime = $('#reservation').data('daterangepicker').startDate.format('YYYY-MM-DD');
+                        var EndTime = $("#reservation").data('daterangepicker').endDate.format('YYYY-MM-DD');
+                        return {
+                            StartTime: StartTime,
+                            EndTime: EndTime,
+                            limit: params.limit,
+                            offset: params.offset,
+                            search: params.search
+                        }
+                    },
+                columns: [{
+                    title: 'IP',
+                    field: 'bk_ip'
+                }, {
+                    title: '实例',
+                    field: 'db_cluster'
+                }, {
+                    title: '类型',
+                    field: 'db_type'
+                }, {
+                    title: '路径',
+                    field: 'bk_path'
+                }, {
+                    title: '大小',
+                    field: 'bk_size'
+                }, {
+                    title: '状态',
+                    field: 'bk_state'
+                }, {
+                    title: '检查人',
+                    field: 'check_man'
+                }, {
+                    title: '备份开始',
+                    field: 'bk_start_time'
+                }, {
+                    title: '备份结束',
+                    field: 'bk_end_time'
+                }, {
+                    title: '创建时间',
+                    field: 'create_time'
+                }],
+                onLoadSuccess: function () {
+                },
+                onLoadError: function () {
+                    alert("数据加载失败！请检查接口返回信息和错误日志！");
+                },
+                onSearch: function (e) {
+                    //传搜索参数给服务器
+                    queryParams(e)
+                }
+            });
+
+        }
+
+        //时间变动保存
+        $('#reservation').on('apply.daterangepicker', function (ev, picker) {
+            var start_date = picker.startDate.format('YYYY-MM-DD');
+            var end_date = picker.endDate.format('YYYY-MM-DD');
+            sessionStorage.setItem('start_date', start_date);
+            sessionStorage.setItem('end_date', end_date);
+            grouplist()
+        });
+        //初始化数据
+        $(document).ready(function () {
+            // 初始化时间控件
+            $(".daterange input").each(function () {
+                var $this = $(this);
+
+                $this.daterangepicker({
+                    startDate: moment().startOf('day'),
+                    endDate: moment(),
+                    locale: {
+                        "format": "YYYY-MM-DD",// 显示格式
+                        "separator": " / ",// 两个日期之间的分割线
+                        // 中文化
+                        "applyLabel": "确定",
+                        "cancelLabel": "取消",
+                        "fromLabel": "开始",
+                        "toLabel": "结束",
+                        "customRangeLabel": "自定义",
+                        "daysOfWeek": ["日", "一", "二", "三", "四", "五", "六"],
+                        "monthNames": ["一月", "二月", "三月", "四月", "五月", "六", "七月", "八月", "九月", "十月", "十一月", "十二月"],
+                        "firstDay": 1
+                    },
+                    ranges: {
+                        "今日": [moment().startOf('day'), moment()],
+                        "昨日": [moment().subtract('days', 1).startOf('day'), moment().subtract('days', 1).endOf('day')],
+                        "最近7日": [moment().subtract('days', 6), moment()],
+                        "最近30日": [moment().subtract('days', 29), moment()],
+                        "本月": [moment().startOf("month"), moment().endOf("month")],
+                        "上个月": [moment().subtract(1, "month").startOf("month"), moment().subtract(1, "month").endOf("month")]
+                    }
+                }, function (start, end, label) {
+                    // 设置最小宽度，否则显示不全
+                }).css("min-width", "210px").next("i").click(function () {
+                    // 对日期的i标签增加click事件，使其在鼠标点击时可以拉出日期选择
+                    $(this).parent().find('input').click();
+                });
+            });
+            grouplist();
+        });
+    </script>
+{% endblock %}

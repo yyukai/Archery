@@ -7,8 +7,8 @@ import traceback
 from django.db import connection
 
 from sql.models import Instance, SqlWorkflow
-from sql.utils.aes_decryptor import Prpcrypt
-from sql.utils.config import SysConfig
+from common.utils.aes_decryptor import Prpcrypt
+from common.config import SysConfig
 from sql.utils.dao import Dao
 import logging
 
@@ -16,24 +16,28 @@ logger = logging.getLogger('default')
 
 
 class InceptionDao(object):
-    def __init__(self):
+    def __init__(self, instance_name=None):
         self.sys_config = SysConfig().sys_config
         self.inception_host = self.sys_config.get('inception_host')
-        if self.sys_config.get('inception_port'):
-            self.inception_port = int(self.sys_config.get('inception_port'))
-        else:
-            self.inception_port = 6669
-
+        self.inception_port = int(self.sys_config.get('inception_port')) if self.sys_config.get(
+            'inception_port') else 6669
         self.inception_remote_backup_host = self.sys_config.get('inception_remote_backup_host')
-        if self.sys_config.get('inception_remote_backup_port'):
-            self.inception_remote_backup_port = int(self.sys_config.get('inception_remote_backup_port'))
-        else:
-            self.inception_remote_backup_port = 3306
+        self.inception_remote_backup_port = int(
+            self.sys_config.get('inception_remote_backup_port')) if self.sys_config.get(
+            'inception_remote_backup_port') else 3306
         self.inception_remote_backup_user = self.sys_config.get('inception_remote_backup_user')
         self.inception_remote_backup_password = self.sys_config.get('inception_remote_backup_password')
-        self.prpCryptor = Prpcrypt()
+        if instance_name:
+            try:
+                instance_info = Instance.objects.get(instance_name=instance_name)
+                self.host = instance_info.host
+                self.port = int(instance_info.port)
+                self.user = instance_info.user
+                self.password = Prpcrypt().decrypt(instance_info.password)
+            except Exception:
+                raise Exception('找不到对应的实例配置信息，请配置')
 
-    def criticalDDL(self, sqlContent):
+    def criticalDDL(self, sql_content):
         '''
         识别DROP DATABASE, DROP TABLE, TRUNCATE PARTITION, TRUNCATE TABLE等高危DDL操作，因为对于这些操作，inception在备份时只能备份METADATA，而不会备份数据！
         如果识别到包含高危操作，则返回“审核不通过”
@@ -43,11 +47,11 @@ class InceptionDao(object):
         critical_ddl_regex = self.sys_config.get('critical_ddl_regex')
         p = re.compile(critical_ddl_regex)
         # 删除注释语句
-        sqlContent = ''.join(
+        sql_content = ''.join(
             map(lambda x: re.compile(r'(^--\s+.*|^/\*.*\*/;\s*$)').sub('', x, count=1),
-                sqlContent.splitlines(1))).strip()
+                sql_content.splitlines(1))).strip()
 
-        for row in sqlContent.rstrip(';').split(';'):
+        for row in sql_content.rstrip(';').split(';'):
             if p.match(row.strip().lower()):
                 result = (
                     '', '', 2, '驳回高危SQL', '禁止提交匹配' + critical_ddl_regex + '条件的语句！',
@@ -62,13 +66,13 @@ class InceptionDao(object):
         else:
             return None
 
-    def preCheck(self, sqlContent):
+    def preCheck(self, sql_content):
         '''
         在提交给inception之前，预先识别一些Inception不能正确审核的SQL,比如"alter table t1;"或"alter table test.t1;" 以免导致inception core dump
         '''
         resultList = []
         syntaxErrorSqlFound = 0
-        for row in sqlContent.rstrip(';').split(';'):
+        for row in sql_content.rstrip(';').split(';'):
             if re.match(r"(\s*)alter(\s+)table(\s+)(\S+)(\s*);|(\s*)alter(\s+)table(\s+)(\S+)\.(\S+)(\s*);",
                         row.lower() + ";"):
                 result = ('', '', 2, 'SQL语法错误', 'ALTER TABLE 必须带有选项', row, '', '', '', '')
@@ -81,26 +85,20 @@ class InceptionDao(object):
         else:
             return None
 
-    def sqlautoReview(self, sqlContent, instance_name, db_name, isSplit="no"):
+    def sqlautoReview(self, sql_content, db_name, isSplit="no"):
         '''
         将sql交给inception进行自动审核，并返回审核结果。
         '''
-        listMasters = Instance.objects.filter(instance_name=instance_name)
-        masterHost = listMasters[0].host
-        masterPort = listMasters[0].port
-        masterUser = listMasters[0].user
-        masterPassword = self.prpCryptor.decrypt(listMasters[0].password)
-
         # 高危SQL检查
         if self.sys_config.get('critical_ddl_regex', '') != '':
-            criticalDDL_check = self.criticalDDL(sqlContent)
+            criticalDDL_check = self.criticalDDL(sql_content)
         else:
             criticalDDL_check = None
 
         if criticalDDL_check is not None:
             result = criticalDDL_check
         else:
-            preCheckResult = self.preCheck(sqlContent)
+            preCheckResult = self.preCheck(sql_content)
             if preCheckResult is not None:
                 result = preCheckResult
             else:
@@ -109,21 +107,30 @@ class InceptionDao(object):
                     # 如果一个工单中同时包含DML和DDL，那么执行时被split后的SQL与提交的SQL会不一样（会在每条语句前面加use database;)，导致osc进度更新取不到正确的SHA1值。
                     # 请参考inception文档中--enable-split参数的说明
 
-                    sqlSplit = "/*--user=%s; --password=%s; --host=%s; --enable-execute;--port=%s; --enable-ignore-warnings;--enable-split;*/\
+                    sqlSplit = "/*--user=%s; --password=%s; --host=%s; --enable-execute;--port=%d; --enable-ignore-warnings;--enable-split;*/\
                          inception_magic_start;\
                          use %s;\
                          %s\
                          inception_magic_commit;" % (
-                        masterUser, masterPassword, masterHost, str(masterPort), db_name, sqlContent)
+                        self.user,
+                        self.password,
+                        self.host,
+                        self.port,
+                        db_name,
+                        sql_content)
                     splitResult = self._fetchall(sqlSplit, self.inception_host, self.inception_port, '', '', '')
                     tmpList = []
                     for splitRow in splitResult:
                         sqlTmp = splitRow[1]
-                        sql = "/*--user=%s;--password=%s;--host=%s;--enable-check;--port=%s; --enable-ignore-warnings;*/\
+                        sql = "/*--user=%s;--password=%s;--host=%s;--enable-check;--port=%d; --enable-ignore-warnings;*/\
                                 inception_magic_start;\
                                 %s\
                                 inception_magic_commit;" % (
-                            masterUser, masterPassword, masterHost, str(masterPort), sqlTmp)
+                            self.user,
+                            self.password,
+                            self.host,
+                            self.port,
+                            sqlTmp)
                         reviewResult = self._fetchall(sql, self.inception_host, self.inception_port, '', '', '')
                         tmpList.append(reviewResult)
 
@@ -135,32 +142,39 @@ class InceptionDao(object):
                     result = finalList
                 else:
                     # 工单审核使用
-                    sql = "/*--user=%s;--password=%s;--host=%s;--enable-check=1;--port=%s;*/\
+                    sql = "/*--user=%s;--password=%s;--host=%s;--enable-check=1;--port=%d;*/\
                       inception_magic_start;\
                       use %s;\
                       %s\
                       inception_magic_commit;" % (
-                        masterUser, masterPassword, masterHost, str(masterPort), db_name, sqlContent)
+                        self.user,
+                        self.password,
+                        self.host,
+                        self.port,
+                        db_name,
+                        sql_content)
                     result = self._fetchall(sql, self.inception_host, self.inception_port, '', '', '')
         return result
 
-    def executeFinal(self, workflowDetail, dictConn):
+    def executeFinal(self, workflowDetail):
         '''
         将sql交给inception进行最终执行，并返回执行结果。
         '''
-        strBackup = ""
         if workflowDetail.is_backup == '是':
             strBackup = "--enable-remote-backup;"
         else:
             strBackup = "--disable-remote-backup;"
 
         # 根据inception的要求，执行之前最好先split一下
-        sqlSplit = "/*--user=%s; --password=%s; --host=%s; --enable-execute;--port=%s; --enable-ignore-warnings;--enable-split;*/\
+        sqlSplit = "/*--user=%s; --password=%s; --host=%s; --enable-execute;--port=%d; --enable-ignore-warnings;--enable-split;*/\
              inception_magic_start;\
              use %s;\
              %s\
              inception_magic_commit;" % (
-            dictConn['masterUser'], dictConn['masterPassword'], dictConn['masterHost'], str(dictConn['masterPort']),
+            self.user,
+            self.password,
+            self.host,
+            self.port,
             workflowDetail.db_name, workflowDetail.sql_content)
         splitResult = self._fetchall(sqlSplit, self.inception_host, self.inception_port, '', '', '')
 
@@ -168,12 +182,16 @@ class InceptionDao(object):
         # 对于split好的结果，再次交给inception执行.这里无需保持在长连接里执行，短连接即可.
         for splitRow in splitResult:
             sqlTmp = splitRow[1]
-            sqlExecute = "/*--user=%s;--password=%s;--host=%s;--enable-execute;--port=%s; --enable-ignore-warnings;%s*/\
+            sqlExecute = "/*--user=%s;--password=%s;--host=%s;--enable-execute;--port=%d; --enable-ignore-warnings;%s*/\
                     inception_magic_start;\
                     %s\
                     inception_magic_commit;" % (
-                dictConn['masterUser'], dictConn['masterPassword'], dictConn['masterHost'], str(dictConn['masterPort']),
-                strBackup, sqlTmp)
+                self.user,
+                self.password,
+                self.host,
+                self.port,
+                strBackup,
+                sqlTmp)
 
             executeResult = self._fetchall(sqlExecute, self.inception_host, self.inception_port, '', '', '')
             for sqlRow in executeResult:
@@ -230,6 +248,7 @@ class InceptionDao(object):
                     block_rollback_sql_list.append(block_rollback_sql)
                     listBackupSql.append(block_rollback_sql_list)
             except Exception as e:
+                logger.error(traceback.format_exc())
                 raise Exception(e)
         return listBackupSql
 
@@ -273,23 +292,22 @@ class InceptionDao(object):
             optResult = {"status": 1, "msg": "ERROR 2624 (HY000):未找到OSC执行进程，可能已经执行完成", "data": ""}
         return optResult
 
-    def query_print(self, sqlContent, instance_name, dbName):
+    def query_print(self, sql_content, dbName):
         '''
         将sql交给inception打印语法树。
         '''
-        instance_info = Instance.objects.get(instance_name=instance_name)
-        Host = instance_info.host
-        Port = instance_info.port
-        User = instance_info.user
-        Password = self.prpCryptor.decrypt(instance_info.password)
-
         # 工单审核使用
-        sql = "/*--user=%s;--password=%s;--host=%s;--port=%s;--enable-query-print;*/\
+        sql = "/*--user=%s;--password=%s;--host=%s;--port=%d;--enable-query-print;*/\
                           inception_magic_start;\
                           use %s;\
                           %s\
                           inception_magic_commit;" % (
-            User, Password, Host, str(Port), dbName, sqlContent)
+            self.user,
+            self.password,
+            self.host,
+            self.port,
+            dbName,
+            sql_content)
         result = self._fetchall(sql, self.inception_host, self.inception_port, '', '', '')
         return result
 
@@ -321,4 +339,5 @@ class InceptionDao(object):
                        port=self.inception_remote_backup_port,
                        password=self.inception_remote_backup_password).mysql_query('inception', sql)
         except Exception:
+            logger.error(traceback.format_exc())
             return {'column_list': [], 'rows': [], 'effect_row': 0}
