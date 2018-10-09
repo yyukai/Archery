@@ -45,7 +45,7 @@ class Dao(object):
         if self.db_type == "mysql":
             try:
                 conn = MySQLdb.connect(host=self.host, port=self.port, user=self.user, passwd=self.password,
-                                       charset='utf8')
+                                       charset='utf8', connect_timeout=3)
                 cursor = conn.cursor()
                 sql = "show databases"
                 cursor.execute(sql)
@@ -84,7 +84,7 @@ class Dao(object):
         if self.db_type == "mysql":
             try:
                 conn = MySQLdb.connect(host=self.host, port=self.port, user=self.user, passwd=self.password, db=db_name,
-                                       charset='utf8')
+                                       charset='utf8', connect_timeout=3)
                 cursor = conn.cursor()
                 sql = "show tables"
                 cursor.execute(sql)
@@ -120,7 +120,7 @@ class Dao(object):
         if self.db_type == "mysql":
             try:
                 conn = MySQLdb.connect(host=self.host, port=self.port, user=self.user, passwd=self.password, db=db_name,
-                                       charset='utf8')
+                                       charset='utf8', connect_timeout=3)
                 cursor = conn.cursor()
                 sql = "SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='%s' AND TABLE_NAME='%s';" % (
                     db_name, tb_name)
@@ -164,7 +164,7 @@ class Dao(object):
                     cursor.execute('use {}'.format(db_name))
             else:
                 conn = MySQLdb.connect(host=self.host, port=self.port, user=self.user, passwd=self.password, db=db_name,
-                                       charset='utf8')
+                                       charset='utf8', connect_timeout=3)
                 cursor = conn.cursor()
             effect_row = cursor.execute(sql)
             if int(limit_num) > 0:
@@ -202,7 +202,7 @@ class Dao(object):
         result = {}
         try:
             conn = MySQLdb.connect(host=self.host, port=self.port, user=self.user, passwd=self.password, db=db_name,
-                                   charset='utf8')
+                                   charset='utf8', connect_timeout=3)
             cursor = conn.cursor()
             effect_row = cursor.execute(sql)
             # result = {}

@@ -8,17 +8,10 @@ from django.contrib.auth.decorators import permission_required
 from django.http import HttpResponse
 from django.conf import settings
 from sql.utils.dao import Dao
-<<<<<<< HEAD
-
-from sql.utils.extend_json_encoder import ExtendJSONEncoder
-from .models import Instance
-prpCryptor = Prpcrypt()
-=======
 from .models import Instance
 from common.utils.extend_json_encoder import ExtendJSONEncoder
 from common.config import SysConfig
 from common.utils.aes_decryptor import Prpcrypt
->>>>>>> origin
 
 
 # 获取实例列表

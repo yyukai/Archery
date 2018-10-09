@@ -1,57 +1,34 @@
 # -*- coding: UTF-8 -*-
-import datetime
+
 import logging
 import re
-<<<<<<< HEAD
 import os
-
-import simplejson as json
-from django.contrib.auth.decorators import permission_required
-from django.urls import reverse
-
-from django.db.models import Q, Min
-from django.db import connection
-from django.views.decorators.csrf import csrf_exempt
-from django.shortcuts import render
-from django.http import HttpResponse, HttpResponseRedirect, StreamingHttpResponse
 from wsgiref.util import FileWrapper
-=======
-import time
-import traceback
-
 import simplejson as json
+from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth.decorators import permission_required
->>>>>>> origin
 from django.core import serializers
-from django.db import connection
-from django.db import transaction
-<<<<<<< HEAD
+from django.db import connection, transaction
 import datetime
 import time
 import xlwt
 import traceback
-=======
 from django.db.models import Q, Min
 from django.http import HttpResponse, HttpResponseRedirect
 from django.shortcuts import render
 from django.urls import reverse
->>>>>>> origin
 
 from common.config import SysConfig
 from common.utils.const import WorkflowDict
 from common.utils.extend_json_encoder import ExtendJSONEncoder
 from sql.utils.dao import Dao
-<<<<<<< HEAD
-from sql.utils.api import async
-from .const import WorkflowDict
-from .models import Users, Instance, QueryPrivilegesApply, QueryPrivileges, QueryLog, SqlGroup, QueryExport
-from sql.utils.api import BASE_DIR
-=======
->>>>>>> origin
+from .models import Users, Instance, QueryExport
+from .models import QueryPrivilegesApply, QueryPrivileges, QueryLog, SqlGroup
+from sql.utils.api import BASE_DIR, async
+
 from sql.utils.data_masking import Masking
 from sql.utils.group import user_instances, user_groups
 from sql.utils.workflow import Workflow
-from .models import QueryPrivilegesApply, QueryPrivileges, QueryLog, SqlGroup
 
 logger = logging.getLogger('default')
 
@@ -486,7 +463,6 @@ def queryprivaudit(request):
 # 获取SQL查询结果
 @permission_required('sql.query_submit', raise_exception=True)
 def query(request):
-    print(request.POST)
     instance_name = request.POST.get('instance_name')
     sql_content = request.POST.get('sql_content')
     db_name = request.POST.get('db_name')
@@ -549,50 +525,24 @@ def query(request):
 
         sql_content = sql_content + ';'
 
-<<<<<<< HEAD
-    # 执行查询语句,统计执行时间
-    t_start = time.time()
-    if slave_info.db_type == "mysql":
-        sql_result = Dao(instance_name=instance_name).mysql_query(str(dbName), sqlContent, limit_num)
-    elif slave_info.db_type == "pgsql":
-        sql_result = Dao(instance_name=instance_name).pgsql_query(str(dbName), sqlContent, limit_num)
-    t_end = time.time()
-    cost_time = "%5s" % "{:.4f}".format(t_end - t_start)
-=======
+        instance = Instance.objects.get(instance_name=instance_name)
         # 执行查询语句,统计执行时间
         t_start = time.time()
-        sql_result = Dao(instance_name=instance_name).mysql_query(str(db_name), sql_content, limit_num)
+        if instance.db_type == "mysql":
+            sql_result = Dao(instance_name=instance_name).mysql_query(str(db_name), sql_content, limit_num)
+        elif instance.db_type == "pgsql":
+            sql_result = Dao(instance_name=instance_name).pgsql_query(str(db_name), sql_content, limit_num)
         t_end = time.time()
         cost_time = "%5s" % "{:.4f}".format(t_end - t_start)
->>>>>>> origin
 
         sql_result['cost_time'] = cost_time
 
-<<<<<<< HEAD
-    # 数据脱敏，同样需要检查配置，是否开启脱敏，语法树解析是否允许出错继续执行
-    t_start = time.time()
-    if SysConfig().sys_config.get('data_masking') == 'true':
-        if slave_info.db_type == "mysql":
-            # 仅对查询语句进行脱敏
-            if re.match(r"^select", sqlContent.lower()):
-                try:
-                    masking_result = datamasking.data_masking(instance_name, dbName, sqlContent, sql_result)
-                except Exception:
-                    if SysConfig().sys_config.get('query_check') == 'true':
-                        finalResult['status'] = 1
-                        finalResult['msg'] = '脱敏数据报错,请联系管理员'
-                        return HttpResponse(json.dumps(finalResult), content_type='application/json')
-                else:
-                    if masking_result['status'] != 0:
-                        if SysConfig().sys_config.get('query_check') == 'true':
-                            return HttpResponse(json.dumps(masking_result), content_type='application/json')
-=======
         # 数据脱敏，同样需要检查配置，是否开启脱敏，语法树解析是否允许出错继续执行
         hit_rule = 0 if re.match(r"^select", sql_content.lower()) else 2  # 查询是否命中脱敏规则，0, '未知', 1, '命中', 2, '未命中'
         masking = 2  # 查询结果是否正常脱敏，1, '是', 2, '否'
         t_start = time.time()
         # 仅对查询语句进行脱敏
-        if SysConfig().sys_config.get('data_masking') and re.match(r"^select", sql_content.lower()):
+        if instance.db_type == "mysql" and SysConfig().sys_config.get('data_masking') and re.match(r"^select", sql_content.lower()):
             try:
                 masking_result = datamasking.data_masking(instance_name, db_name, sql_content, sql_result)
                 if masking_result['status'] != 0 and SysConfig().sys_config.get('query_check'):
@@ -608,8 +558,6 @@ def query(request):
                     result['status'] = 1
                     result['msg'] = '脱敏数据报错,请联系管理员'
                     return HttpResponse(json.dumps(result), content_type='application/json')
->>>>>>> origin
-
         t_end = time.time()
         masking_cost_time = "%5s" % "{:.4f}".format(t_end - t_start)
 
@@ -774,19 +722,19 @@ def do_async_query(request, query_export, instance_name, db_name, db_type, sql, 
 
     try:
         file_path = ''
-        if SysConfig().sys_config.get('data_masking') == 'true':
+        if SysConfig().sys_config.get('data_masking'):
             if db_type == "mysql":
                 # 仅对查询语句进行脱敏
                 if re.match(r"^select", sql.lower()):
                     try:
                         masking_result = datamasking.data_masking(instance_name, db_name, sql, sql_result)
                     except Exception:
-                        if SysConfig().sys_config.get('query_check') == 'true':
+                        if SysConfig().sys_config.get('query_check'):
                             query_export.status = 1
                             query_export.error_msg = '脱敏数据报错,请联系管理员'
                     else:
                         if masking_result['status'] != 0:
-                            if SysConfig().sys_config.get('query_check') == 'true':
+                            if SysConfig().sys_config.get('query_check'):
                                 file_path = write_result_to_excel(masking_result)
             else:
                 file_path = write_result_to_excel(sql_result)

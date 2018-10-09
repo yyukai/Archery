@@ -4,7 +4,7 @@ from django.urls import path
 
 from common import auth, config, workflow, dashboard, check
 from sql import views, sql_workflow, query, slowlog, instance, db_diagnostic, sql_tuning, group, \
-    sql_advisor, binlog2sql
+    sql_advisor, binlog2sql, backup, binlog
 from sql.utils import jobs
 
 urlpatterns = [
@@ -89,6 +89,9 @@ urlpatterns = [
     path('query/modifyprivileges/', query.modifyqueryprivileges),
     path('query/privaudit/', query.queryprivaudit),
 
+    path('binlog/', views.binlog),
+    path('binlog/list/', binlog.binlog_list),
+    path('binlog/delete_log/', binlog.delete_log),
     path('binlog2sql/sql/', binlog2sql.binlog2sql),
     path('binlog2sql/binlog_list/', binlog2sql.binlog_list),
 
@@ -102,4 +105,9 @@ urlpatterns = [
     path('db_diagnostic/kill_session/', db_diagnostic.kill_session),
     path('db_diagnostic/tablesapce/', db_diagnostic.tablesapce),
     path('db_diagnostic/trxandlocks/', db_diagnostic.trxandlocks),
+
+    path('backup/', views.backup),
+    path('backup/list/', backup.backup_list),
+    path('backup_detail/<db_cluster>/', views.backup_detail),
+    path('backup_detail/list/<db_cluster>/', backup.backup_detail_list),
 ]

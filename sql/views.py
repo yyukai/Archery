@@ -288,6 +288,22 @@ def group(request):
     return render(request, 'group.html')
 
 
+@superuser_required
+def binlog(request):
+    instances = [instance.instance_name for instance in user_instances(request.user, 'all')]
+    return render(request, 'binlog.html', {'instances': instances})
+
+
+@superuser_required
+def backup(request):
+    return render(request, 'backup.html')
+
+
+@superuser_required
+def backup_detail(request, db_cluster):
+    return render(request, 'backup_detail.html', {'db_cluster': db_cluster})
+
+
 # 资源组组关系管理页面
 @superuser_required
 def groupmgmt(request, group_id):

@@ -3,11 +3,6 @@
 {% block content %}
     <!-- 自定义操作按钮-->
     <div id="toolbar" class="form-inline">
-        <div class="form-group daterange" style="display: inline-block">
-            <div class="input-prepend input-group">
-                <input id="reservation" type="text" readonly class="form-control"/>
-            </div>
-        </div>
     </div>
     <!-- 表格-->
     <div class="table-responsive">
@@ -18,11 +13,9 @@
 {% endblock content %}
 {% block js %}
     {% load staticfiles %}
-    <link href="{% static 'daterangepicker/css/daterangepicker.css' %}" rel="stylesheet" type="text/css"/>
-    <script src="{% static 'daterangepicker/js/moment.min.js' %}"></script>
-    <script src="{% static 'daterangepicker/js/daterangepicker.js' %}"></script>
     <script src="{% static 'bootstrap-table/js/bootstrap-table-export.min.js' %}"></script>
     <script src="{% static 'bootstrap-table/js/tableExport.min.js' %}"></script>
+    <script src="{% static 'js/sql.js' %}"></script>
     <script>
         //获取列表
         function grouplist() {
@@ -38,13 +31,13 @@
                 pagination: true,                   //是否显示分页（*）
                 sortable: true,                     //是否启用排序
                 sortOrder: "asc",                   //排序方式
-                sidePagination: "server",           //分页方式：client客户端分页，server服务端分页（*）
+                sidePagination: "client",           //分页方式：client客户端分页，server服务端分页（*）
                 pageNumber: 1,                      //初始化加载第一页，默认第一页,并记录
                 pageSize: 14,                     //每页的记录行数（*）
                 pageList: [20, 30, 50, 100],       //可供选择的每页的行数（*）
                 showExport: true,                   //是否显示导出按钮
                 exportOptions: {
-                    fileName: 'backup'  //文件名称设置
+                    fileName: 'backup_cluster'  //文件名称设置
                 },
                 search: true,                      //是否显示表格搜索
                 strictSearch: false,                //是否全匹配搜索
@@ -62,46 +55,40 @@
                 //请求服务数据时所传参数
                 queryParams:
                     function (params) {
-                        var StartTime = $('#reservation').data('daterangepicker').startDate.format('YYYY-MM-DD');
-                        var EndTime = $("#reservation").data('daterangepicker').endDate.format('YYYY-MM-DD');
                         return {
-                            StartTime: StartTime,
-                            EndTime: EndTime,
-                            limit: params.limit,
-                            offset: params.offset,
                             search: params.search
                         }
                     },
                 columns: [{
-                    title: 'IP',
-                    field: 'bk_ip'
-                }, {
                     title: '实例',
-                    field: 'db_cluster'
+                    field: 'db_cluster',
+                    formatter: function (value, row, index) {
+                        return "<a href=\"/backup_detail/" + value + "/\">"+value+"</a>"
+                    }
                 }, {
-                    title: '类型',
-                    field: 'db_type'
+                    title: '最近一次数据备份',
+                    field: 'data'
                 }, {
-                    title: '路径',
-                    field: 'bk_path'
-                }, {
-                    title: '大小',
-                    field: 'bk_size'
+                    title: '大小(M)',
+                    field: 'data_size'
                 }, {
                     title: '状态',
-                    field: 'bk_state'
+                    field: 'data_state',
+                    formatter: function (value, row, index) {
+                        return get_status[value]
+                    }
                 }, {
-                    title: '检查人',
-                    field: 'check_man'
+                    title: '最近一次Binlog备份',
+                    field: 'binlog'
                 }, {
-                    title: '备份开始',
-                    field: 'bk_start_time'
+                    title: '大小(M)',
+                    field: 'binlog_size'
                 }, {
-                    title: '备份结束',
-                    field: 'bk_end_time'
-                }, {
-                    title: '创建时间',
-                    field: 'create_time'
+                    title: '状态',
+                    field: 'binlog_state',
+                    formatter: function (value, row, index) {
+                        return get_status[value]
+                    }
                 }],
                 onLoadSuccess: function () {
                 },

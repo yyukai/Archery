@@ -3,7 +3,7 @@ from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
 
 # Register your models here.
-from .models import Users, Instance, SqlWorkflow, \
+from .models import Users, Instance, SqlWorkflow, Backup, \
     DataMaskingColumns, DataMaskingRules, AliyunAccessKey, AliyunRdsConfig, SqlGroup, GroupRelations
 
 
@@ -89,3 +89,10 @@ class AliAccessKeyAdmin(admin.ModelAdmin):
 @admin.register(AliyunRdsConfig)
 class AliRdsConfigAdmin(admin.ModelAdmin):
     list_display = ('instance_name', 'rds_dbinstanceid',)
+
+
+# 备份管理
+@admin.register(Backup)
+class BackupAdmin(admin.ModelAdmin):
+    list_display = ("bk_ip", "db_cluster", "db_type", "bk_path", "bk_size", "bk_state", "check_man", "bk_start_time",
+                    "bk_end_time", "create_time")

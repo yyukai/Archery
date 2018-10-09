@@ -392,6 +392,8 @@ class Permission(models.Model):
             ('menu_sqladvisor', '菜单 优化工具'),
             ('menu_slowquery', '菜单 慢查日志'),
             ('menu_dbdiagnostic', '菜单 会话管理'),
+            ('menu_backup', '菜单 备份'),
+            ('menu_binlog', '菜单 Binlog'),
             ('menu_binlog2sql', '菜单 Binlog2SQL'),
             ('menu_schemasync', '菜单 SchemaSync'),
             ('menu_system', '菜单 系统管理'),
@@ -446,6 +448,28 @@ class SlowQuery(models.Model):
         db_table = 'mysql_slow_query_review'
         verbose_name = u'慢日志统计'
         verbose_name_plural = u'慢日志统计'
+
+
+# Backup
+class Backup(models.Model):
+    bk_ip = models.CharField('备份服务器地址', max_length=15)
+    db_cluster = models.CharField('实例名', max_length=32)
+    db_type = models.CharField('数据库类型', max_length=15, null=True, blank=True)
+    bk_type = models.CharField('备份类型', max_length=15, null=True, blank=True)
+    bk_path = models.CharField('备份路径', max_length=32)
+    bk_size = models.IntegerField()
+    bk_state = models.SmallIntegerField()
+    data_type = models.CharField('备份数据类型', max_length=6, choices=(('data', '数据'), ('binlog', 'Binlog')))
+    check_man = models.CharField(max_length=15, default='DBA')
+    bk_start_time = models.DateTimeField(blank=True, null=True)
+    bk_end_time = models.DateTimeField(blank=True, null=True, db_index=True)
+    create_time = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        managed = True
+        db_table = 'sql_backup'
+        verbose_name = u'备份表'
+        verbose_name_plural = u'备份表'
 
 
 # SlowQueryHistory
