@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+
+{% block content %}
+    <!-- 自定义操作按钮-->
+    <div id="toolbar" class="form-inline">
+        <div class="form-group bootstrap-select ">
+            <select id="instance" class="dropdown-menu-right selectpicker " data-live-search="true">
+                <option value="" selected="selected">请选择实例</option>
+                {% for ins in instances %}
+                    <option value="{{ ins }}"> {{ ins }} </option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="form-group daterange" style="display: inline-block;">
+            <div class="input-prepend input-group">
+                <input id="reservation" type="text" readonly class="form-control" style="width:301px;"/>
+            </div>
+        </div>
+    </div>
+    <div>
+        {{ myechart|safe }}
+    </div>
+{% endblock content %}
+{% block js %}
+    {% load staticfiles %}
+    <link href="{% static 'daterangepicker/css/daterangepicker.css' %}" rel="stylesheet" type="text/css"/>
+    <script src="{% static 'daterangepicker/js/moment.min.js' %}"></script>
+    <script src="{% static 'daterangepicker/js/daterangepicker.js' %}"></script>
+    <script>
+        function open() {
+            var insName = $("#instance").val();
+            var startTime = $('#reservation').data('daterangepicker').startDate.format('YYYY-MM-DD HH:mm:ss');
+            var endTime = $("#reservation").data('daterangepicker').endDate.format('YYYY-MM-DD HH:mm:ss');
+            window.location.href = "/replication_echart/?name=" + insName + "&stime=" + startTime + "&etime=" + endTime;
+        }
+        //初始化数据
+        $(document).ready(function () {
+            // 初始化时间控件
+            $(".daterange input").each(function () {
+                var $this = $(this);
+
+                $this.daterangepicker({
+                    startDate: moment().subtract('minutes', 29),
+                    endDate: moment(),
+                    locale: {
+                        "format": "YYYY-MM-DD HH:mm:ss",  // 显示格式
+                        "separator": " / ",// 两个日期之间的分割线
+                        // 中文化
+                        "applyLabel": "确定",
+                        "cancelLabel": "取消",
+                        "fromLabel": "开始",
+                        "toLabel": "结束",
+                        "customRangeLabel": "自定义",
+                        "daysOfWeek": ["日", "一", "二", "三", "四", "五", "六"],
+                        "monthNames": ["一月", "二月", "三月", "四月", "五月", "六", "七月", "八月", "九月", "十月", "十一月", "十二月"],
+                        "firstDay": 1
+                    },
+                    ranges: {
+                        "最近10分钟": [moment().subtract('minutes', 9), moment()],
+                        "最近30分钟": [moment().subtract('minutes', 29), moment()],
+                        "今日": [moment().startOf('day'), moment()],
+                        "昨日": [moment().subtract('days', 1).startOf('day'), moment().subtract('days', 1).endOf('day')],
+                        "最近3日": [moment().subtract('days', 2), moment()]
+                    }
+                }, function (start, end, label) {
+                    // 设置最小宽度，否则显示不全
+                }).css("min-width", "210px").next("i").click(function () {
+                    // 对日期的i标签增加click事件，使其在鼠标点击时可以拉出日期选择
+                    $(this).parent().find('input').click();
+                });
+            });
+        });
+        $("#instance").change(function () {
+            open();
+        });
+        //时间变动保存
+        $('#reservation').on('apply.daterangepicker', function (ev, picker) {
+            var start_date = picker.startDate.format('YYYY-MM-DD HH:mm:ss');
+            var end_date = picker.endDate.format('YYYY-MM-DD HH:mm:ss');
+            sessionStorage.setItem('start_date', start_date);
+            sessionStorage.setItem('end_date', end_date);
+            open()
+        });
+    </script>
+{% endblock %}

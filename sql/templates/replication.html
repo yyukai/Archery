@@ -1,0 +1,508 @@
+{% extends "base.html" %}
+
+{% block content %}
+    <div class="form-inline pull-left">
+        <div class="form-group ">
+            <select id="ins_name_list" class="form-control selectpicker" name="ins_name_list"
+                    data-live-search="true">
+                <option value="is-empty" disabled="" selected="selected">请选择实例</option>
+                {% for name in ins_names %}
+                    <option value="{{ name }}">{{ name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+    </div>
+
+    <div class="mysvg" style="width: 1000px; height: 700px;"></div>
+    <a href="/replication_echart/" target="_blank" ><input type=submit align=right value=更多日志 class=btn /></a>
+    <div class="form-group">
+        {% for k,v in replication_info.items %}
+            <a color="{{ k }}">{{ v }}</a><br>
+        {% endfor %}
+    </div>
+{% endblock content %}
+{% block js %}
+    {% load staticfiles %}
+    <link href="{% static 'd3js/css/d3.css' %}" rel="stylesheet">
+    <script src="{% static 'd3js/js/d3.v3.min.js' %}"></script>
+    <script>
+        //初始化数据
+        $(document).ready(function () {
+
+        });
+        function graph(d3) {
+            this.config = {
+                size: {
+                    width: 1000,
+                    height: 700
+                },
+                edge_def_width: 5,
+                edge_show_arrow: false, //显示动态箭头
+                node_draggable: true,
+                node_ClickFn: true,
+                show_performance_bar: false
+            };
+
+            var self = this;
+            var cluster = d3.layout.tree().size([self.config.size.height, self.config.size.width - 160]);
+
+            /// step 2, custom the actions
+            var showTitleAction;
+            var showSubheadAction;
+            var showPathDesc;
+
+            this.showTitle = function (f) {
+                showTitleAction = f;
+            };
+
+            this.showSubhead = function (f) {
+                showSubheadAction = f;
+            };
+
+            this.showPathDesc = function (f) {
+                showPathDesc = f;
+            };
+
+            /// final step , bind some data
+            this.bind = function (data) {
+                /**
+                 忽略连通图中的回路，产生一棵树。
+                 这棵树符合cluster.nodes(tree)的调用要求（参见：https://github.com/mbostock/d3/wiki/Cluster-Layout）
+                 */
+                var conv2tree = function (data) {
+                    var root = self.getRoot(data);
+                    var hasParentFlag = {};                       //保证每个节点只有一个父节点，以便形成树状结构
+                    hasParentFlag[root.id] = true;                //根节点不允许作为子节点
+                    self.traverseEdge(data, function (source, target) {            //遍历每条边，即所有节点间关系
+                        if (!hasParentFlag[target.id] && source.id != target.id) { //首次被遍历到的target，作为source的子节点，后续将不被其它节点作为子节点
+                            if (!source.children) {
+                                source.children = [];
+                            }
+                            source.children.push(target);
+                            hasParentFlag[target.id] = true;
+                        }
+                    });
+                    return root;
+                };
+
+                /**
+                 通过cluster.nodes(tree)，为tree的每个节点计算x，y，depth等属性以便定位
+                 */
+                var buildNodes = function (tree) {
+                    return cluster.nodes(tree);
+                }
+
+                /**
+                 建立节点之间各条边。
+                 如果直接调用cluster.links(nodes)，其只支持树状结构，回路会被丢弃，借此把所有边补充完整。
+                 */
+                var buildLinks = function (data) {
+                    var result = [];
+                    self.traverseEdge(data, function (source, target, ref) {
+                        result.push({
+                            'source': source,
+                            'target': target,
+                            'ref': ref
+                        });
+                    });
+                    return result;
+                }
+
+                /**
+                 更新数据时保留原有节点的位置信息
+                 */
+                var merge = function (nodes, links) {
+                    var oldData = [];
+                    if (self.nodes) { //原nodes存在，输出oldData
+                        self.nodes.forEach(function (d) {
+                            oldData[d.id] = d;
+                        });
+                    }
+                    if (oldData) { //用oldData里的数据覆盖现nodes里的数据
+                        nodes.forEach(function (d) {
+                            if (oldData[d.id]) {
+                                d.x = oldData[d.id].x;
+                                d.y = oldData[d.id].y;
+                            }
+                        });
+                    }
+
+                    self.nodes = nodes;
+                    self.links = links;
+
+                };
+
+                //1)连通图->树 参见：https://github.com/mbostock/d3/wiki/Cluster-Layout)
+                //1)temporarily convert a connectivity to a tree
+                var tree = conv2tree(data);
+                //2)根据树状结构计算节点位置.
+                //2)caculate for nodes' coords with <code>cluster.nodes(tree);</code>
+                var nodes = buildNodes(tree);
+                //3)因为连通图是网状而非树状，将所有边补充完整
+                //3)fill in all the edges(links) of the connectivity
+                var links = buildLinks(data);
+                //4)与原有的数据做一次merge，保留位置等信息
+                //4)do merge to keep info like node's position
+                merge(nodes, links);
+                //5)重绘
+                //5)redraw
+                self.redraw();
+            };
+            /// call redraw() if necessary (reconfig,recostom the actions, etc. )
+            this.redraw = function () {
+                var fontSize = 8;
+                var lineSpace = 2;
+                var boxHeight = 15;
+                var boxWidth = 15;
+
+                var width = self.config.size.width;
+                var height = self.config.size.height;
+
+                var yscale_performancebar = d3.scale.linear()
+                    .domain([0, 1])
+                    .rangeRound([boxHeight / 2, -boxHeight / 2]);
+                var diagonal = d3.svg.diagonal()
+                    .projection(function (d) {
+                        return [d.y - boxWidth / 2, d.x];
+                    });
+
+                var _clear = function () {
+                    d3.select("svg").remove();
+
+                    svg = d3.select(".mysvg").append("svg")
+                        .attr("width", width)
+                        .attr("height", height)
+                        .append("g")
+                        .attr("transform", "translate(80,0)");
+
+                    svg.append("svg:defs").selectAll("marker")
+                        .data(["suit"])
+                        .enter().append("svg:marker")
+                        .attr("id", "idArrow")
+                        .attr("viewBox", "0 -5 10 10")
+                        .attr("refX", 15)
+                        .attr("refY", -1.5)
+                        .attr("markerWidth", 6)
+                        .attr("markerHeight", 6)
+                        .attr("orient", "auto")
+                        .append("svg:path")
+                        .attr("d", "M0,-5L10,0L0,5");
+                }
+
+                var _redrawEdges = function () {
+                    var linksWithArrow = self.links;
+                    //to show arrow at the end of the path with fixed size, we have to copy each path with .stroke-width=1
+                    if (self.config.edge_show_arrow) {
+                        linksWithArrow = [];
+                        self.links.forEach(function (d) {
+                            var fake = {};
+                            for (prop in d) {
+                                fake[prop] = d[prop];
+                            }
+
+                            fake.faked = true; //copy each path with .faked=true as flag
+                            linksWithArrow.push(fake);
+                            linksWithArrow.push(d);
+                        })
+                    }
+
+                    var path = svg.selectAll(".link").data(linksWithArrow);
+
+                    // when new path arrives
+                    path.enter().insert("path", ":first-child")
+                        .attr("marker-end", function (d) {
+                            if (d.faked) return "url(#idArrow)";
+                        })
+                        .attr("id", function (d) {
+                            if (!d.faked) return "link" + d.ref.from + "-" + d.ref.to;
+                        })
+                        .attr("class", function (d) {
+                            if (d.ref.loss > 600) {
+                                return "link_error" + " link-" + d.ref.from + " link-" + d.ref.to;
+                            }
+                            else if (d.ref.loss > 300) {
+                                return "link_warn" + " link-" + d.ref.from + " link-" + d.ref.to;
+                            }
+                            else {
+                                return "link" + " link-" + d.ref.from + " link-" + d.ref.to;
+                            }
+
+                        })
+                        .attr("d", diagonal)
+                        .transition()
+                        .duration(1000)
+                        .style("stroke-width", function (d) {
+                            if (d.faked) {
+                                return 1;
+                            }
+                            if (d.ref.edge_width) return Math.max(1, boxHeight / 2 * d.ref.edge_width); //won't become invisible if too thin
+                            else return self.config.edge_def_width; //default value
+                        });
+
+                    // when path changes
+                    path.attr("d", diagonal);
+
+                    // when path's removed
+                    path.exit().remove();
+
+                };
+
+                _clear();
+
+                _redrawEdges();
+
+                ///show description on each path(edge)
+                if (showPathDesc) {
+                    svg.selectAll(".abc").data(self.links).enter().append("text").append("textPath")
+                        .attr("xlink:xlink:href", function (d) {
+                            return "#link" + d.ref.from + "-" + d.ref.to;
+                        }) //why not .attr("xlink:href",...)? this's a hack, see https://groups.google.com/forum/?fromgroups=#!topic/d3-js/vLgbiM4ki1g
+                        .attr("startOffset", "50%")
+                        .text(showPathDesc)
+                }
+
+                ///show each node with text
+
+                var existingNodes = svg.selectAll(".node").data(self.nodes); //选中所有节点
+
+                //矩形
+                //draw rectangle
+                var newNodes = existingNodes.enter().append("g");
+
+                newNodes.attr("class", "node")
+                    .attr("id", function (d) {
+                        return "node-" + d.id
+                    })
+                    .attr("transform", function (d) {
+                        return "translate(" + d.y + "," + d.x + ")";
+                    })
+
+                newNodes.append("svg:image")
+                    .attr("class", "circle")
+                    .attr("xlink:href", function () {
+                        return "/static/pics/database.png";
+                    })
+                    .attr("x", "-18px")
+                    .attr("y", "-18px")
+                    .attr("width", "36px")
+                    .attr("height", "36px");
+
+
+                if (self.config.node_draggable) {
+            newNodes.call(d3.behavior.drag().origin(Object).on("drag", function(d) {
+
+                //拖动时移动节点
+                //translate the node
+                function translate(x, y) {
+                    return {
+                        'x': x,
+                        'y': y
+                    }
+                }
+                var coord = eval(d3.select(this).attr("transform"));
+                d3.select(this)
+                    .attr("transform", "translate(" + (coord.x + d3.event.dx) + "," + (coord.y + d3.event.dy) + ")")
+
+                //拖动时重绘边
+                //update node's coord ,then redraw affected edges
+                d.x = d.x + d3.event.dy;
+                d.y = d.y + d3.event.dx;
+
+               // _redrawEdges();
+			   self.redraw(); //我修改的,原本的重绘会导致边错误
+
+            }));
+        }
+                //标题
+                //node titles
+                newNodes.append("text")
+                    .attr("class", "nodeTitle")
+                    .attr("y", -boxHeight / 2 + 2 * lineSpace - 3 * fontSize)
+                    .attr("text-anchor", "middle");
+
+                newNodes.append("text")
+                    .attr("text-anchor", "middle")
+                    .attr("class", "nodeText f1Text")
+                    .attr("y", -boxHeight / 2 - 2 * fontSize + 3 * lineSpace);
+
+                ///显示文案
+                ///show text
+                existingNodes.select(".nodeTitle").text(showTitleAction ? showTitleAction : function (d) {
+                    return d.id + ")" + d.name
+                });
+
+                existingNodes.select(".f1Text").text(showSubheadAction ? showSubheadAction : function (d) {
+                    return Math.round(d.load * 100) + "%"
+                });
+
+
+                existingNodes.select(".confusionmatrix")     //详情矩阵
+                    .selectAll(".rows")
+                    .data(function (d) {
+                        return d.confusionmatrix ? d.confusionmatrix : []
+                    })
+                    .selectAll(".columns") //rows
+                    .data(function (d) {
+                        return d
+                    })
+                    .select("text")
+                    .text(function (d) {
+                        return d
+                    })
+            };
+
+            /**
+             返回根节点
+             return the root node
+             */
+            this.getRoot = function (data) {
+                return data[root];
+            };
+
+            /**
+             遍历所有节点
+             traverse all nodes
+             callback(node)
+             */
+            this.traverse = function (data, callback) {
+                if (!data) console.error('data is null')
+
+                function _init() {
+                    var i;
+                    for (i in data) {
+                        data[i].visited = false;
+                    }
+                }
+
+                function _traverse(pt, callback) {
+                    if (!pt) {
+                        return;
+                    }
+                    pt.visited = true;
+                    console.debug("traverse node:" + pt.id);
+                    callback(pt);
+                    if (pt.ref) {
+                        pt.ref.forEach(function (ref) {
+                            var childNode = data[ref.to.toString()];
+                            if (childNode && !childNode.visited) {
+                                _traverse(childNode, callback);
+                            }
+                        })
+                    }
+                }
+
+                _init();
+                _traverse(self.getRoot(data), callback);
+            };
+
+            /**
+             遍历所有边
+             traverse all edges
+             callback(sourceNode,targetNode,ref)
+             */
+            this.traverseEdge = function (data, callback) {
+                if (!data) console.error('data is null');
+
+                self.traverse(data, function (node) {
+                    if (node.ref) {
+                        node.ref.forEach(function (ref) {
+                            var childNode = data[ref.to.toString()];
+                            if (childNode) {
+                                console.debug("traverse edge:" + node.id + "-" + childNode.id);
+                                callback(node, childNode, ref);
+                            }
+                        });
+                    }
+                });
+            };
+        }
+
+        /////////function(class) Graph end////////////////
+
+        function init_page(ins_name) {
+            var delay_info = {};
+            var instance_info = [];
+            var masters = [];
+            $.ajax({
+                    type: "post",
+                    async: false,
+                    url: "/replication_delay/",
+                    dataType: "json",
+                    data:{'name': ins_name},
+                    complete: function () {
+                    },
+                    success: function (data) {
+                        masters = data.masters;
+                        delay_info = data.delay_info;
+                        instance_info = data.instance_info;
+                    },
+                    error: function (XMLHttpRequest, textStatus, errorThrown) {
+                        alert(errorThrown);
+                    }
+                });
+
+            var data = {};
+            var num = instance_info.length;
+            for (var n = 0; n < num; n++) {
+                var p = instance_info[n][0];
+                if (p in delay_info) {
+                    var refarray = [];
+                    var x = delay_info[p].length;
+                    for (var i = 0; i < x; i++) {
+                        refarray.push({from: p, to: delay_info[p][i][0], loss: delay_info[p][i][1]});
+
+                    }
+                    data[p] = {
+                        id: p,
+                        name: instance_info[n][1],
+                        position: instance_info[n][2],
+                        load: Math.random(),
+                        confusionmatrix: [],
+                        ref: refarray
+                    };
+                }
+                else {
+                    data[p] = {
+                        id: p,
+                        name: instance_info[n][1],
+                        position: instance_info[n][2],
+                        load: Math.random(),
+                        confusionmatrix: []
+                    };
+                }
+            }
+            var refarray = [];
+
+            for (var n = 0; n < masters.length; n++) {
+                var id = masters[n][0];
+                refarray.push({from: -1, to: id, loss: ''});
+            }
+
+            data[-1] = {id: -1, name: "root", load: 1, confusionmatrix: [], ref: refarray};
+            //customize anything here
+            myGraph.showTitle(function (d) {
+                return d.name;
+            });
+
+            myGraph.showSubhead(function (d) {
+                return "(" + d.position + ")";
+            });
+
+            myGraph.showPathDesc(function (d) {
+                return d.ref.loss;
+            });
+
+            myGraph.bind(data);
+
+        }
+
+        var root = '-1';
+        var myGraph = new graph(d3);
+        init_page();
+
+        $("#ins_name_list").change(function () {
+            init_page($("#ins_name_list").val());
+        });
+
+    </script>
+{% endblock %}

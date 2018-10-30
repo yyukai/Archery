@@ -15,7 +15,7 @@ def user_groups(user):
 
 
 # 获取用户实例列表（通过资源组间接关联）
-def user_instances(user, type, db_type='mysql'):
+def user_instances(user, type, db_type=None):
     # 先获取用户关联资源组列表
     group_list = user_groups(user)
     group_ids = [group.group_id for group in group_list]
@@ -27,10 +27,10 @@ def user_instances(user, type, db_type='mysql'):
                         GroupRelations.objects.filter(group_id__in=group_ids, object_type=1).values('object_id')]
     # 获取实例信息
     if type == 'all':
-        instances = Instance.objects.filter(pk__in=instance_ids).filter(db_type=db_type)
+        instances = Instance.objects.filter(pk__in=instance_ids)
     else:
-        instances = Instance.objects.filter(pk__in=instance_ids, type=type).filter(db_type=db_type)
-    return instances
+        instances = Instance.objects.filter(pk__in=instance_ids, type=type)
+    return instances if db_type is None else instances.filter(db_type=db_type)
 
 
 # 获取资源组内关联指定权限组的用户

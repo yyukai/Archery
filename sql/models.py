@@ -64,11 +64,17 @@ class Instance(models.Model):
     instance_name = models.CharField('实例名称', max_length=50, unique=True)
     type = models.CharField('实例类型', max_length=6, choices=(('master', '主库'), ('slave', '从库')))
     db_type = models.CharField('数据库类型', max_length=10, choices=(('mysql', 'MySQL'), ('pgsql', 'PgSQL'),
-                                                                ('mssql', 'MSSQL')))
+                                                                ('mssql', 'MSSQL'), ('oracle', 'Oracle')))
     host = models.CharField('实例连接', max_length=200)
     port = models.IntegerField('端口', default=3306)
     user = models.CharField('用户名', max_length=100)
     password = models.CharField('密码', max_length=300)
+    bin_path = models.CharField('Bin文件安装路径', max_length=50, null=True, blank=True)
+    conf_path = models.CharField('配置文件路径', max_length=50, null=True, blank=True)
+    data_path = models.CharField('数据目录', max_length=50, null=True, blank=True)
+    err_log_path = models.CharField('错误日志目录', max_length=50, null=True, blank=True)
+    slow_log_path = models.CharField('慢日志目录', max_length=50, null=True, blank=True)
+    parent = models.ManyToManyField("self", symmetrical=False, blank=True, null=True, related_name="children")
     create_time = models.DateTimeField('创建时间', auto_now_add=True)
     update_time = models.DateTimeField('更新时间', auto_now=True)
 
@@ -85,6 +91,19 @@ class Instance(models.Model):
         pc = Prpcrypt()  # 初始化
         self.password = pc.encrypt(self.password)
         super(Instance, self).save(*args, **kwargs)
+
+
+class Replication(models.Model):
+    master = models.CharField('主库实例名称', max_length=50)
+    slave = models.CharField('从库实例名称', max_length=50)
+    delay = models.IntegerField('Seconds_Behind_Master（主从延时）', blank=True, null=True)
+    created = models.DateTimeField('创建时间', auto_now_add=True)
+
+    class Meta:
+        ordering = ("-created",)
+        db_table = 'sql_replication'
+        verbose_name = u'主从同步延时记录表'
+        verbose_name_plural = u'主从同步延时记录表'
 
 
 # 存放各个SQL上线工单的详细内容，可定期归档或清理历史数据，也可通过alter table workflow row_format=compressed; 来进行压缩
@@ -398,6 +417,10 @@ class Permission(models.Model):
             ('menu_schemasync', '菜单 SchemaSync'),
             ('menu_system', '菜单 系统管理'),
             ('menu_instance', '菜单 实例管理'),
+            ('menu_database', '菜单 数据库管理'),
+            ('menu_param', '菜单 参数管理'),
+            ('menu_data_safe', '菜单 数据安全'),
+            ('menu_host', '菜单 主机管理'),
             ('menu_document', '菜单 相关文档'),
             ('menu_themis', '菜单 数据库审核'),
             ('sql_submit', '提交SQL上线工单'),
@@ -411,6 +434,14 @@ class Permission(models.Model):
             ('query_export_review', '审核导出查询权限'),
             ('query_submit', '提交SQL查询'),
             ('process_view', '查看会话'),
+            ('database_edit', '编辑数据库'),
+            ('param_view', '查看数据库参数'),
+            ('param_edit', '编辑数据库参数'),
+            ('instance_user', '实例用户查看'),
+            ('instance_user_edit', '实例用户编辑'),
+            ('query_audit', '查询审计'),
+            ('masking_field', '脱敏字段'),
+            ('host', '物理主机管理'),
             ('process_kill', '终止会话'),
             ('tablespace_view', '查看表空间'),
             ('trxandlocks_view', '查看锁信息'),
@@ -470,6 +501,86 @@ class Backup(models.Model):
         db_table = 'sql_backup'
         verbose_name = u'备份表'
         verbose_name_plural = u'备份表'
+
+
+class ParamTemp(models.Model):
+    db_type = models.CharField(max_length=6, choices=(('mysql', 'MySQL'), ('pgsql', 'PgSQL')))
+    param = models.CharField('参数', max_length=50)
+    default_var = models.CharField('默认值', max_length=32)
+    is_reboot = models.SmallIntegerField('是否重启生效')
+    available_var = models.CharField('可修改参数值', max_length=32)
+    description = models.CharField('参数描述', max_length=254)
+
+    class Meta:
+        db_table = 'sql_param_temp'
+        verbose_name = u'参数模板表'
+        verbose_name_plural = u'参数模板表'
+
+
+class ParamHistory(models.Model):
+    instance = models.ForeignKey(Instance, on_delete=models.CASCADE)
+    param = models.CharField('参数', max_length=50)
+    old_var = models.CharField('默认值', max_length=32)
+    new_var = models.CharField('可修改参数值', max_length=32)
+    is_active = models.SmallIntegerField('是否生效', blank=True, null=True)
+    create_time = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-create_time']
+        db_table = 'sql_param_history'
+        verbose_name = u'参数修改历史表'
+        verbose_name_plural = u'参数修改历史表'
+
+
+class QueryAudit(models.Model):
+    query_time = models.DateTimeField('查询时间')
+    instance_name = models.CharField('实例名', max_length=50)
+    db_name = models.CharField('数据库名', max_length=20)
+    db_user = models.CharField('数据库帐号', max_length=20)
+    query_cost = models.FloatField('查询耗时')
+    query_sql = models.TextField('查询语句')
+    create_time = models.DateTimeField('创建时间', auto_now=True)
+    update_time = models.DateTimeField('更新时间', auto_now_add=True)
+
+    class Meta:
+        ordering = ['-update_time']
+        db_table = 'sql_query_audit'
+        verbose_name = u'查询审计表'
+        verbose_name_plural = u'查询审计表'
+
+
+class Host(models.Model):
+    ip = models.CharField('IP地址', max_length=15)
+    memory = models.CharField('内存', max_length=15)
+    cpu = models.CharField('CPU', max_length=15)
+    type = models.CharField(max_length=6, choices=(('master', 'Master'), ('slave', 'Slave')))
+    inited = models.IntegerField('是否已经初始化环境')
+    create_time = models.DateTimeField('创建时间', auto_now=True)
+    update_time = models.DateTimeField('更新时间', auto_now_add=True)
+
+    class Meta:
+        ordering = ['-update_time']
+        db_table = 'sql_host'
+        verbose_name = u'主机表'
+        verbose_name_plural = u'主机表'
+
+
+class DataBase(models.Model):
+    host = models.ForeignKey(Host, on_delete=models.CASCADE)
+    ip = models.CharField('IP地址', max_length=15)
+    port = models.CharField('MySQL端口', max_length=6)
+    instance_name = models.CharField('实例名', max_length=50)
+    db_name = models.CharField('数据库名', max_length=50, unique=True)
+    db_application = models.CharField('用途', max_length=50)
+    db_person = models.CharField('DB负责人', max_length=50)
+    create_time = models.DateTimeField('创建时间', auto_now=True)
+    update_time = models.DateTimeField('更新时间', auto_now_add=True)
+
+    class Meta:
+        ordering = ['-update_time']
+        db_table = 'sql_database'
+        verbose_name = u'数据库表'
+        verbose_name_plural = u'数据库表'
 
 
 # SlowQueryHistory

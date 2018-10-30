@@ -63,10 +63,10 @@ def email(request):
 def instance(request):
     result = {'status': 0, 'msg': 'ok', 'data': []}
     instance_id = request.POST.get('instance_id')
-    instance_name = Instance.objects.get(id=instance_id).instance_name
-    dao = Dao(instance_name=instance_name)
+    ins = Instance.objects.get(id=instance_id)
+    instance_name = ins.instance_name
     try:
-        conn = MySQLdb.connect(host=dao.host, port=dao.port, user=dao.user, passwd=dao.password, charset='utf8')
+        conn = MySQLdb.connect(host=ins.host, port=ins.port, user=ins.user, passwd=ins.password, charset='utf8')
         cursor = conn.cursor()
         sql = "select 1"
         cursor.execute(sql)

@@ -132,7 +132,8 @@
                         return {
                             limit: params.limit,
                             offset: params.offset,
-                            search: params.search
+                            search: params.search,
+                            instance_name: $("#instance_name").val()
                         }
                     },
                 //格式化详情
@@ -443,53 +444,27 @@
                                 field: 'checkbox',
                                 checkbox: true
                             });*/
-                            if (sqlContent.match(/^show\s+create\s+table/)) {
-                                //初始化表结构显示
-                                $("#" + ("query_result" + n)).bootstrapTable('destroy').bootstrapTable({
-                                        data: result['rows'],
-                                        columns: [{
-                                            title: 'Create Table',
-                                            field: 1,
-                                            formatter: function (value, row, index) {
-                                                var sql = value.replace(/\r\n/g, "<br>");
-                                                // var sql = window.sqlFormatter.format(value);
-                                                //替换所有的换行符
-                                                // sql = sql.replace(/\r\n/g, "<br>");
-                                                sql = sql.replace(/\n/g, "<br>");
-                                                //替换所有的空格
-                                                sql = sql.replace(/\s/g, "&nbsp;");
-                                                return sql;
-
-                                            }
-                                        }
-                                        ],
-                                        locale: 'zh-CN'
-                                    }
-                                );
-                            }
-                            else {
-                                //初始化查询结果
-                                $("#" + ('query_result' + n)).bootstrapTable('destroy').bootstrapTable({
-                                    escape: true,
-                                    data: result['rows'],
-                                    columns: columns,
-                                    showExport: true,
-                                    exportDataType: "all",
-                                    exportTypes: ['json', 'sql', 'csv', 'txt', 'xml'],
-                                    exportOptions: {
-                                        //ignoreColumn: [0],  //忽略某些列的索引数组
-                                        fileName: 'export_result'  //文件名称设置
-                                    },
-                                    showColumns: true,
-                                    showToggle: true,
-                                    clickToSelect: true,
-                                    striped: true,
-                                    pagination: true,
-                                    pageSize: 30,
-                                    pageList: [30, 50, 100, 500, 1000],
-                                    locale: 'zh-CN'
-                                });
-                            }
+                            //初始化查询结果
+                            $("#" + ('query_result' + n)).bootstrapTable('destroy').bootstrapTable({
+                                escape: true,
+                                data: result['rows'],
+                                columns: columns,
+                                showExport: true,
+                                exportDataType: "all",
+                                exportTypes: ['json', 'sql', 'csv', 'txt', 'xml'],
+                                exportOptions: {
+                                    //ignoreColumn: [0],  //忽略某些列的索引数组
+                                    fileName: 'export_result'  //文件名称设置
+                                },
+                                showColumns: true,
+                                showToggle: true,
+                                clickToSelect: true,
+                                striped: true,
+                                pagination: true,
+                                pageSize: 30,
+                                pageList: [30, 50, 100, 500, 1000],
+                                locale: 'zh-CN'
+                            });
                             //执行时间和脱敏时间赋值
                             $("#" + ('time') + n).text(result['cost_time'] + ' sec');
                             $("#" + ('masking_time') + n).text(result['masking_cost_time'] + ' sec');

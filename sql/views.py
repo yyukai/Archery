@@ -1,12 +1,14 @@
 # -*- coding: UTF-8 -*-
 import traceback
-
+import datetime
 import simplejson as json
 
 from django.contrib.auth.decorators import permission_required
 from django.contrib.auth.models import Group, Permission
 from django.shortcuts import render, get_object_or_404
+from django.views.decorators.csrf import csrf_exempt
 from django.http import HttpResponseRedirect
+from django.db.models import Q
 from django.urls import reverse
 
 from sql.utils.inception import InceptionDao
@@ -14,7 +16,7 @@ from common.utils.permission import superuser_required
 from sql.utils.jobs import job_info
 
 from .models import Users, SqlWorkflow, QueryPrivileges, SqlGroup, \
-    QueryPrivilegesApply, Config
+    QueryPrivilegesApply, Config, DataBase, Replication
 from sql.utils.workflow import Workflow
 from sql.utils.sql_review import can_execute, can_timingtask, can_cancel
 from common.utils.const import Const, WorkflowDict
@@ -246,6 +248,95 @@ def dbdiagnostic(request):
 
     context = {'tab': 'process', 'instances': instances}
     return render(request, 'dbdiagnostic.html', context)
+
+
+@permission_required('sql.menu_database', raise_exception=True)
+def database(request):
+    # 获取用户关联实例列表
+    instances = [ins.instance_name for ins in user_instances(request.user, 'all')]
+    return render(request, 'database.html', {'instances': instances})
+
+
+# 主从复制
+@permission_required('sql.menu_instance', raise_exception=True)
+def replication(request):
+    ins_names = [ins.instance_name for ins in user_instances(request.user, 'master', 'mysql')]
+    replication_info = list()
+    for rep in Replication.objects.filter(Q(master__in=ins_names)|Q(slave__in=ins_names))[:10]:
+        if rep.delay > 600:
+            replication_info.append({"red": rep.delay})
+        elif rep.delay > 300:
+            replication_info.append({"yellow": rep.delay})
+        else:
+            replication_info.append({"green": rep.delay})
+    print(replication_info)
+    return render(request, 'replication.html', locals())
+
+
+@permission_required('sql.menu_instance', raise_exception=True)
+def replication_echart(request):
+    from pyecharts import Page, Line
+    instances = [instance.instance_name for instance in user_instances(request.user, 'all')]
+    begin_date = (datetime.datetime.now() - datetime.timedelta(minutes=+29))
+    ins_name = request.GET.get('name', '')
+    dt_s = request.GET.get('stime', begin_date)
+    dt_e = request.GET.get('etime', datetime.datetime.now())
+
+    attr = dict()
+    if ins_name:
+        for rep in Replication.objects.filter(Q(master=ins_name)|Q(slave=ins_name)).filter(created__range=[dt_s, dt_e]):
+            if rep.master + "--" + rep.slave in attr:
+                attr[rep.master + "--" + rep.slave].append([rep.delay, rep.created])
+            else:
+                attr[rep.master + "--" + rep.slave] = [[rep.delay, rep.created]]
+    else:
+        for rep in Replication.objects.filter(created__range=[dt_s, dt_e]):
+            if rep.master + "--" + rep.slave in attr:
+                attr[rep.master + "--" + rep.slave].append([rep.delay, rep.created])
+            else:
+                attr[rep.master + "--" + rep.slave] = [[rep.delay, rep.created]]
+    page = Page()
+    for k, v in attr.items():
+        time_attr, value_attr = list(), list()
+        for vv in v:
+            value_attr.append(vv[0])
+            time_attr.append(vv[1])
+        line1 = Line("%s -> %s 同步延迟统计" % (k.split("--")[0], k.split("--")[1]), width="100%")
+        line1.add("Seconds_Behind_Master", time_attr, value_attr, is_stack=False, legend_selectedmode='single', mark_point=["average"])
+        page.add(line1)
+    myechart = page.render_embed()  # 渲染配置
+    host = 'https://pyecharts.github.io/assets/js'  # js文件源地址
+    script_list = page.get_js_dependencies()  # 获取依赖的js文件名称（只获取当前视图需要的js）
+    return render(request, "replication_echart.html", {"myechart": myechart, "host": host, "script_list": script_list, "instances": instances})
+
+
+# 参数管理
+@permission_required('sql.menu_param', raise_exception=True)
+def param(request):
+    # 获取用户关联实例列表
+    instances = [instance.instance_name for instance in user_instances(request.user, 'all')]
+
+    context = {'tab': 'param_tab', 'instances': instances}
+    return render(request, 'param_setting.html', context)
+
+
+def masking_field(request):
+    return render(request, 'masking_field.html')
+
+
+def query_audit(request):
+    obj_list = user_instances(request.user, 'all')
+    ins_name_list = [n.instance_name for n in obj_list]
+    db_name_list = [db.db_name for db in DataBase.objects.filter(instance_name__in=ins_name_list)]
+    return render(request, 'query_audit.html', locals())
+
+
+def ip_white(request, instance_id):
+    return render(request, "ip_white.html", {'instance_id': instance_id})
+
+
+def host(request):
+    return render(request, "host.html")
 
 
 # 工作流审核列表页面

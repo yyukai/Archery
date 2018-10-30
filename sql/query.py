@@ -532,6 +532,8 @@ def query(request):
             sql_result = Dao(instance_name=instance_name).mysql_query(str(db_name), sql_content, limit_num)
         elif instance.db_type == "pgsql":
             sql_result = Dao(instance_name=instance_name).pgsql_query(str(db_name), sql_content, limit_num)
+        elif instance.db_type == "mssql":
+            sql_result = Dao(instance_name=instance_name).mssql_query(str(db_name), sql_content, limit_num)
         t_end = time.time()
         cost_time = "%5s" % "{:.4f}".format(t_end - t_start)
 
@@ -691,6 +693,8 @@ def do_async_query(request, query_export, instance_name, db_name, db_type, sql, 
         sql_result = Dao(instance_name=instance_name).mysql_query(db_name, sql, limit_num)
     elif db_type == "pgsql":
         sql_result = Dao(instance_name=instance_name).pgsql_query(db_name, sql, limit_num)
+    elif db_type == "mssql":
+        sql_result = Dao(instance_name=instance_name).mssql_query(db_name, sql, limit_num)
     t_end = int(time.time())
     query_log.cost_time = t_end - t_start
     query_log.effect_row = sql_result["effect_row"]

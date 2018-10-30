@@ -4,7 +4,7 @@ from django.urls import path
 
 from common import auth, config, workflow, dashboard, check
 from sql import views, sql_workflow, query, slowlog, instance, db_diagnostic, sql_tuning, group, \
-    sql_advisor, binlog2sql, backup, binlog
+    sql_advisor, binlog2sql, backup, binlog, data_safe, query_audit, ip_white, host
 from sql.utils import jobs
 
 urlpatterns = [
@@ -76,6 +76,18 @@ urlpatterns = [
     path('instance/getTableNameList/', instance.getTableNameList),
     path('instance/getColumnNameList/', instance.getColumnNameList),
 
+    path('database/', views.database),
+    path('database/list/', instance.db_list),
+
+    path('replication/', views.replication),
+    path('replication_delay/', instance.replication_delay),
+    path('replication_echart/', views.replication_echart),
+
+    path('param/', views.param),
+    path('param/list/', instance.param_list),
+    path('param/history/', instance.param_history),
+    path('param/save/', instance.param_save),
+
     path('query/', query.query),
     path('add_async_query/', query.add_async_query),
     path('query_result_export/', query.query_result_export),
@@ -110,4 +122,19 @@ urlpatterns = [
     path('backup/list/', backup.backup_list),
     path('backup_detail/<db_cluster>/', views.backup_detail),
     path('backup_detail/list/<db_cluster>/', backup.backup_detail_list),
+
+    path('masking_field/', views.masking_field),
+    path('masking_field/list/', data_safe.masking_field_list),
+
+    path('query_audit/', views.query_audit),
+    path('query_audit/list/', query_audit.query_audit),
+
+    path('ip_white/<int:instance_id>/', views.ip_white),
+    path('ip_white/list/<int:instance_id>', ip_white.ip_white_list),
+    path('ip_white/add/<int:instance_id>', ip_white.ip_white_add),
+    path('ip_white/edit/<int:instance_id>', ip_white.ip_white_add),
+    path('ip_white/delete/<int:instance_id>', ip_white.ip_white_del),
+
+    path('host/', views.host),
+    path('host/list/', host.host_list),
 ]

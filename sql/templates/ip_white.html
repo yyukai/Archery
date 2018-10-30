@@ -14,7 +14,7 @@
     </div>
     <!-- 表格-->
     <div class="table-responsive">
-        <table id="user-list" data-toggle="table" class="table table-striped table-hover"
+        <table id="group-list" data-toggle="table" class="table table-striped table-hover"
                style="table-layout:inherit;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
         </table>
     </div>
@@ -109,14 +109,14 @@
     <script src="{% static 'dist/js/sql-formatter.min.js' %}"></script>
     <script>
         //获取列表
-        function userlist() {
+        function grouplist() {
             //采取异步请求
             //初始化table
-            $('#user-list').bootstrapTable('destroy').bootstrapTable({
+            $('#group-list').bootstrapTable('destroy').bootstrapTable({
                 escape: true,
                 method: 'post',
                 contentType: "application/x-www-form-urlencoded",
-                url: "/instance/users/",
+                url: "/ip_white/list/" + {{ instance_id }},
                 striped: true,                      //是否显示行间隔色
                 cache: false,                       //是否使用缓存，默认为true，所以一般情况下需要设置一下这个属性（*）
                 pagination: true,                   //是否显示分页（*）
@@ -128,7 +128,7 @@
                 pageList: [20, 30, 50, 100],       //可供选择的每页的行数（*）
                 showExport: true,                   //是否显示导出按钮
                 exportOptions: {
-                    fileName: 'instance'  //文件名称设置
+                    fileName: 'ip_white'       //文件名称设置
                 },
                 search: true,                      //是否显示表格搜索
                 strictSearch: false,                //是否全匹配搜索
@@ -136,7 +136,7 @@
                 showRefresh: true,                  //是否显示刷新按钮
                 minimumCountColumns: 2,             //最少允许的列数
                 clickToSelect: true,                //是否启用点击选中行
-                uniqueId: "id",                     //每一行的唯一标识，一般为主键列
+                uniqueId: "",                     //每一行的唯一标识，一般为主键列
                 showToggle: true,                   //是否显示详细视图和列表视图的切换按钮
                 cardView: false,                    //是否显示详细视图
                 detailView: false,                  //是否显示父子表
@@ -144,42 +144,28 @@
                 toolbar: "#toolbar",               //指明自定义的toolbar
                 queryParamsType: 'limit',
                 //请求服务数据时所传参数
-                queryParams:
-                    function (params) {
-                        return {
-                            search: params.search,
-                            instance_id: "{{ instance_id }}"
-                        }
-                    },
+                queryParams: function (params) {
+                    return {
+                        limit: params.limit,
+                        offset: params.offset,
+                        search: params.search
+                    }
+                },
                 columns: [{
-                        title: 'User@Host',
-                        field: '',
-                        formatter: function (value, row, index) {
-                            return "'" + row.user + "'@'" + row.host + "'"
-                        }
-                    }, {
-                        title: 'privileges',
-                        field: 'privileges',
-                        formatter: function (value, row, index) {
-                            var priv = '';
-                            for (var i = 0; i < value.length; i++) {
-                                if (value[i].toString().length > 100) {
-                                    priv = priv + value[i].toString().substring(0, 100) + '...;</br>'
-                                } else {
-                                    priv = priv + value[i] + ';</br>'
-                                }
-                            }
-                            return priv
-                        }
-                    }, {
-                        title: '操作',
-                        field: '',
-                        formatter: function (value, row, index) {
-                            {% if perms.sql.instance_user_edit %}
-                                return "<button class=\"btn btn-warning btn-xs\" onclick=\"edit_user('"+row.user+"','"+row.host+"')\">修改</button>"
-                                + "<button class=\"btn btn-danger btn-xs\" onclick=\"del_user('" + row.user+"','"+row.host+"')\">删除</button>"
-                            {% endif %}
-                        }
+                    title: 'User',
+                    field: 'user'
+                }, {
+                    title: 'Host',
+                    field: 'host'
+                }, {
+                    title: '操作',
+                    field: '',
+                    formatter: function (value, row, index) {
+                        {% if perms.sql.instance_user_edit %}
+                            return "<button class=\"btn btn-warning btn-xs\" onclick=\"edit_ip_white('"+row.user+"','"+row.host+"')\">修改</button>"
+                            + "<button class=\"btn btn-danger btn-xs\" onclick=\"del_ip_white('" + row.user+"','"+row.host+"')\">删除</button>"
+                        {% endif %}
+                    }
                 }],
                 onLoadSuccess: function () {
                 },
@@ -196,7 +182,7 @@
 
         //初始化数据
         $(document).ready(function () {
-            userlist()
+            grouplist();
         });
         $("#btn_add").on('click',function(){
             $('#addModal').modal({});
@@ -214,7 +200,7 @@
                 });
             });
         });
-        function edit_user(user, host){
+        function edit_ip_white(user, host){
             $('#oldUser').val(user);
             $('#upUser').val(user);
             $('#oldHost').val(host);
@@ -232,7 +218,7 @@
                 });
             });
         }
-        function del_user(user, host) {
+        function del_ip_white(user, host) {
             if (confirm("确定删除")) {
                 $.ajax({
                     url: "/ip_white/delete/" + {{ instance_id }},

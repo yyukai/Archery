@@ -52,7 +52,7 @@ def tuning(request):
 
 class SqlTuning(object):
     def __init__(self, instance_name, db_name, sqltext):
-        self.dao = Dao(instance_name=instance_name, flag=True)
+        self.dao = Dao(instance_name=instance_name, db_name=db_name, flag=True)
         self.db_name = db_name
         self.sqltext = sqltext
         self.sql_variable = '''

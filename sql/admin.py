@@ -3,8 +3,9 @@ from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
 
 # Register your models here.
-from .models import Users, Instance, SqlWorkflow, Backup, \
-    DataMaskingColumns, DataMaskingRules, AliyunAccessKey, AliyunRdsConfig, SqlGroup, GroupRelations
+from .models import Users, Instance, SqlWorkflow, Backup, DataMaskingColumns, \
+    DataMaskingRules, AliyunAccessKey, AliyunRdsConfig, SqlGroup, GroupRelations, ParamTemp, ParamHistory, Host, \
+    DataBase, Replication
 
 
 # 用户管理
@@ -53,6 +54,11 @@ class InstanceAdmin(admin.ModelAdmin):
     list_filter = ('db_type', 'type',)
 
 
+@admin.register(Replication)
+class ReplicationAdmin(admin.ModelAdmin):
+    list_display = ('id', 'master', 'slave', 'delay', 'created')
+
+
 # 工单管理
 @admin.register(SqlWorkflow)
 class SqlWorkflowAdmin(admin.ModelAdmin):
@@ -96,3 +102,24 @@ class AliRdsConfigAdmin(admin.ModelAdmin):
 class BackupAdmin(admin.ModelAdmin):
     list_display = ("bk_ip", "db_cluster", "db_type", "bk_path", "bk_size", "bk_state", "check_man", "bk_start_time",
                     "bk_end_time", "create_time")
+
+
+@admin.register(ParamTemp)
+class ParamTempAdmin(admin.ModelAdmin):
+    list_display = ("db_type", "param", "default_var", "is_reboot", "available_var", "description")
+
+
+@admin.register(ParamHistory)
+class ParamHistoryAdmin(admin.ModelAdmin):
+    list_display = ("instance", "param", "old_var", "new_var", "is_active", "create_time")
+
+
+@admin.register(Host)
+class HostAdmin(admin.ModelAdmin):
+    list_display = ("ip", "memory", "cpu", "type", "create_time", "update_time")
+
+
+@admin.register(DataBase)
+class DatabaseAdmin(admin.ModelAdmin):
+    list_display = ("host", "ip", "port", "instance_name", "db_name", "db_application", "db_person",
+                    "create_time", "update_time")
