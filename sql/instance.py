@@ -249,7 +249,7 @@ def replication_delay(request):
     for ins in user_instances(request.user, type='all', db_type='mysql'):
         all_instances.append([str(ins.id), ins.host + ":" + str(ins.port), ins.instance_name])
     hour = datetime.datetime.now() - datetime.timedelta(hours=1)
-    ins_name = request.POST.get('name', '')
+    ins_name = request.GET.get('name', '')
     if ins_name:
         for ins in Instance.objects.filter(instance_name=ins_name):
             masters.append([str(ins.id), ins.host + ":" + str(ins.port), ins.instance_name])
@@ -276,7 +276,7 @@ def param_list(request):
     try:
         ins = Instance.objects.get(instance_name=instance_name)
         params = dict()
-        for p in ParamTemp.objects.filter(ins_type=ins.db_type, param__contains=search):
+        for p in ParamTemp.objects.filter(db_type=ins.db_type, param__contains=search):
             params[p.param] = [p.default_var, p.is_reboot, p.available_var, p.description]
         p_list = list(params.keys())
         sql = "SELECT * FROM `information_schema`.`GLOBAL_VARIABLES` WHERE VARIABLE_NAME in ('{}');".format("','".join(p_list))

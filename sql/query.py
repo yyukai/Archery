@@ -719,9 +719,11 @@ def do_async_query(request, query_export, instance_name, db_name, db_type, sql, 
                     value = '' if sql_result["rows"][row - 1][col] is None else sql_result["rows"][row - 1][col]
                     sheet.write(row, col, value)
             workbook.save(template_file)
-        except Exception:
+        except Exception as e:
+            print(e)
             query_export.error_msg = str(traceback.print_exc())
-            return ''
+            query_export.save(update_fields=['error_msg'])
+            return str(e)
         return template_file
 
     try:
@@ -732,20 +734,21 @@ def do_async_query(request, query_export, instance_name, db_name, db_type, sql, 
                 if re.match(r"^select", sql.lower()):
                     try:
                         masking_result = datamasking.data_masking(instance_name, db_name, sql, sql_result)
-                    except Exception:
+                    except Exception as e:
                         if SysConfig().sys_config.get('query_check'):
                             query_export.status = 1
-                            query_export.error_msg = '脱敏数据报错,请联系管理员'
+                            query_export.error_msg = '脱敏数据报错,请联系管理员。报错：%s' % str(e)
                     else:
-                        if masking_result['status'] != 0:
-                            if SysConfig().sys_config.get('query_check'):
-                                file_path = write_result_to_excel(masking_result)
+                        if masking_result['status'] == 0 or not SysConfig().sys_config.get('query_check'):
+                            file_path = write_result_to_excel(sql_result)
+                            query_export.status = 2
             else:
                 file_path = write_result_to_excel(sql_result)
+                query_export.status = 2
         else:
             file_path = write_result_to_excel(sql_result)
+            query_export.status = 2
         query_export.result_file = file_path
-        query_export.status = 2
     except Exception as e:
         query_export.error_msg = str(e)
         query_export.status = 1
@@ -786,7 +789,7 @@ def query_export_audit(request):
                 qe.status = 4
                 msg = "已拒绝！"
             from sql.utils.ding_api import DingSender
-            msg_content = '''您的导出查询提取数据申请 {}：\n审核理由：\n实例名称：{}\n数据库：{}\n执行的sql查询：{}\n提取条数：{}\n操作时间：{}\n'''.\
+            msg_content = '''您的导出查询提取数据申请 {}：\n审核理由：{}\n实例名称：{}\n数据库：{}\n执行的sql查询：{}\n提取条数：{}\n操作时间：{}\n'''.\
                 format(msg, audit_msg, ql.instance_name, ql.db_name, ql.sqllog, ql.effect_row, ql.create_time)
             DingSender().send_msg(applicant.ding_user_id, msg_content)
 
@@ -822,7 +825,7 @@ def query_result_export(request):
         response['Content-Disposition'] = 'attachment; filename="result.xls"'
         return response
     else:
-        return HttpResponse(str(qe.error_msg, encoding="utf-8"))
+        return HttpResponse(qe.error_msg)
 
 
 # 获取sql查询记录

@@ -9,11 +9,13 @@ from django.http import HttpResponse
 
 from common.utils.permission import superuser_required
 from common.utils.sendmsg import MailSender
+from common.utils.aes_decryptor import Prpcrypt
 from sql.utils.inception import InceptionDao
 from sql.utils.dao import Dao
 from sql.models import Instance
 
 logger = logging.getLogger('default')
+decryptor = Prpcrypt()
 
 
 # 检测inception配置
@@ -66,7 +68,8 @@ def instance(request):
     ins = Instance.objects.get(id=instance_id)
     instance_name = ins.instance_name
     try:
-        conn = MySQLdb.connect(host=ins.host, port=ins.port, user=ins.user, passwd=ins.password, charset='utf8')
+        conn = MySQLdb.connect(host=ins.host, port=ins.port, user=ins.user,
+                               passwd=decryptor.decrypt(ins.password), charset='utf8')
         cursor = conn.cursor()
         sql = "select 1"
         cursor.execute(sql)

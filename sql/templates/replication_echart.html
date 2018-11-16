@@ -4,7 +4,7 @@
     <!-- 自定义操作按钮-->
     <div id="toolbar" class="form-inline">
         <div class="form-group bootstrap-select ">
-            <select id="instance" class="dropdown-menu-right selectpicker " data-live-search="true">
+            <select id="ins_name_list" class="dropdown-menu-right selectpicker " data-live-search="true">
                 <option value="" selected="selected">请选择实例</option>
                 {% for ins in instances %}
                     <option value="{{ ins }}"> {{ ins }} </option>
@@ -29,7 +29,7 @@
     <script src="{% static 'daterangepicker/js/daterangepicker.js' %}"></script>
     <script>
         function open() {
-            var insName = $("#instance").val();
+            var insName = $("#ins_name_list").val();
             var startTime = $('#reservation').data('daterangepicker').startDate.format('YYYY-MM-DD HH:mm:ss');
             var endTime = $("#reservation").data('daterangepicker').endDate.format('YYYY-MM-DD HH:mm:ss');
             window.location.href = "/replication_echart/?name=" + insName + "&stime=" + startTime + "&etime=" + endTime;
@@ -70,9 +70,6 @@
                     $(this).parent().find('input').click();
                 });
             });
-        });
-        $("#instance").change(function () {
-            open();
         });
         //时间变动保存
         $('#reservation').on('apply.daterangepicker', function (ev, picker) {

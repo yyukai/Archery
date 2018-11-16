@@ -12,7 +12,8 @@
         </div>
         {% if perms.sql.host %}
             <div class="form-group ">
-                <button id="btn_add" type="button" class="btn btn-default" onclick="">
+                <button id="btn_add" type="button" class="btn btn-default"
+                        onclick="window.location.href='/admin/sql/host/add/'">
                     <span class="glyphicon glyphicon-plus" aria-hidden="true"></span>
                     添加主机
                 </button>

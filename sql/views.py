@@ -264,12 +264,11 @@ def replication(request):
     replication_info = list()
     for rep in Replication.objects.filter(Q(master__in=ins_names)|Q(slave__in=ins_names))[:10]:
         if rep.delay > 600:
-            replication_info.append({"red": rep.delay})
+            replication_info.append({"red": rep.created.strftime("%Y-%m-%d %H:%M:%S") + " " + rep.master + " -> " + rep.slave + " 延迟：" + str(rep.delay)})
         elif rep.delay > 300:
-            replication_info.append({"yellow": rep.delay})
+            replication_info.append({"yellow": rep.created.strftime("%Y-%m-%d %H:%M:%S") + " " + rep.master + " -> " + rep.slave + " 延迟：" + str(rep.delay)})
         else:
-            replication_info.append({"green": rep.delay})
-    print(replication_info)
+            replication_info.append({"green": rep.created.strftime("%Y-%m-%d %H:%M:%S") + " " + rep.master + " -> " + rep.slave + " 延迟：" + str(rep.delay)})
     return render(request, 'replication.html', locals())
 
 

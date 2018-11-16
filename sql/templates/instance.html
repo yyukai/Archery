@@ -146,7 +146,7 @@
                     if (data.status === 0) {
                         alert('连接成功')
                     } else {
-                        alert("status: " + data.status + "\nmsg: " + data.msg);
+                        alert("连接失败: " + data.msg);
                     }
                 },
                 error: function (XMLHttpRequest, textStatus, errorThrown) {

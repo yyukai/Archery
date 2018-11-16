@@ -505,10 +505,10 @@ class Backup(models.Model):
 
 class ParamTemp(models.Model):
     db_type = models.CharField(max_length=6, choices=(('mysql', 'MySQL'), ('pgsql', 'PgSQL')))
-    param = models.CharField('参数', max_length=50)
-    default_var = models.CharField('默认值', max_length=32)
+    param = models.CharField('参数', max_length=100)
+    default_var = models.CharField('默认值', max_length=256)
     is_reboot = models.SmallIntegerField('是否重启生效')
-    available_var = models.CharField('可修改参数值', max_length=32)
+    available_var = models.CharField('可修改参数值', max_length=256)
     description = models.CharField('参数描述', max_length=254)
 
     class Meta:

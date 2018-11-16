@@ -5,7 +5,7 @@
         <div class="form-group ">
             <select id="ins_name_list" class="form-control selectpicker" name="ins_name_list"
                     data-live-search="true">
-                <option value="is-empty" disabled="" selected="selected">请选择实例</option>
+                <option value="" selected="selected">请选择实例</option>
                 {% for name in ins_names %}
                     <option value="{{ name }}">{{ name }}</option>
                 {% endfor %}
@@ -13,11 +13,13 @@
         </div>
     </div>
 
-    <div class="mysvg" style="width: 1000px; height: 700px;"></div>
+    <div class="mysvg"></div>
     <a href="/replication_echart/" target="_blank" ><input type=submit align=right value=更多日志 class=btn /></a>
     <div class="form-group">
-        {% for k,v in replication_info.items %}
-            <a color="{{ k }}">{{ v }}</a><br>
+        {% for rep in replication_info %}
+            {% for k,v in rep.items %}
+                <p style="color:{{ k }}">{{ v }}</p>
+            {% endfor %}
         {% endfor %}
     </div>
 {% endblock content %}
@@ -27,13 +29,11 @@
     <script src="{% static 'd3js/js/d3.v3.min.js' %}"></script>
     <script>
         //初始化数据
-        $(document).ready(function () {
 
-        });
         function graph(d3) {
             this.config = {
                 size: {
-                    width: 1000,
+                    width: 1200,
                     height: 700
                 },
                 edge_def_width: 5,
@@ -158,6 +158,10 @@
                 var width = self.config.size.width;
                 var height = self.config.size.height;
 
+                var xscale_performancebar = d3.scale.linear()
+                    //.domain([0, 1])
+                    .rangeRound([-100, boxWidth]);
+
                 var yscale_performancebar = d3.scale.linear()
                     .domain([0, 1])
                     .rangeRound([boxHeight / 2, -boxHeight / 2]);
@@ -173,7 +177,8 @@
                         .attr("width", width)
                         .attr("height", height)
                         .append("g")
-                        .attr("transform", "translate(80,0)");
+                        .style("padding-left", "80")
+                    // .attr("transform", "translate(80,0)");
 
                     svg.append("svg:defs").selectAll("marker")
                         .data(["suit"])
@@ -269,6 +274,7 @@
                 //draw rectangle
                 var newNodes = existingNodes.enter().append("g");
 
+
                 newNodes.attr("class", "node")
                     .attr("id", function (d) {
                         return "node-" + d.id
@@ -287,32 +293,38 @@
                     .attr("width", "36px")
                     .attr("height", "36px");
 
+                d3.select(newNodes[0][0]).attr("transform", function (d) {
+                    return "translate(" + (d.y + 16) + "," + d.x + ")";
+                })
+
 
                 if (self.config.node_draggable) {
-            newNodes.call(d3.behavior.drag().origin(Object).on("drag", function(d) {
+                    newNodes.call(d3.behavior.drag().origin(Object).on("drag", function (d) {
 
-                //拖动时移动节点
-                //translate the node
-                function translate(x, y) {
-                    return {
-                        'x': x,
-                        'y': y
-                    }
+                        //拖动时移动节点
+                        //translate the node
+                        function translate(x, y) {
+                            return {
+                                'x': x,
+                                'y': y
+                            }
+                        }
+
+                        var coord = eval(d3.select(this).attr("transform"));
+                        if (d3.event.dx > 150) { return false }
+                        // console.log(coord);
+                        d3.select(this)
+                            .attr("transform", "translate(" + (coord.x + d3.event.dx) + "," + (coord.y + d3.event.dy) + ")")
+                        // console.log(eval(d3.select(this).attr("transform")));
+                        //拖动时重绘边
+                        //update node's coord ,then redraw affected edges
+                        d.x = d.x + d3.event.dy;
+                        d.y = d.y + d3.event.dx;
+                        // _redrawEdges();
+                        self.redraw();       //我修改的,原本的重绘会导致边错误
+
+                    }));
                 }
-                var coord = eval(d3.select(this).attr("transform"));
-                d3.select(this)
-                    .attr("transform", "translate(" + (coord.x + d3.event.dx) + "," + (coord.y + d3.event.dy) + ")")
-
-                //拖动时重绘边
-                //update node's coord ,then redraw affected edges
-                d.x = d.x + d3.event.dy;
-                d.y = d.y + d3.event.dx;
-
-               // _redrawEdges();
-			   self.redraw(); //我修改的,原本的重绘会导致边错误
-
-            }));
-        }
                 //标题
                 //node titles
                 newNodes.append("text")
@@ -419,16 +431,16 @@
 
         /////////function(class) Graph end////////////////
 
-        function init_page(ins_name) {
+        function init_page() {
             var delay_info = {};
             var instance_info = [];
             var masters = [];
             $.ajax({
-                    type: "post",
+                    type: "get",
                     async: false,
                     url: "/replication_delay/",
                     dataType: "json",
-                    data:{'name': ins_name},
+                    data: {'name': $('#ins_name_list').val()},
                     complete: function () {
                     },
                     success: function (data) {
@@ -449,7 +461,7 @@
                     var refarray = [];
                     var x = delay_info[p].length;
                     for (var i = 0; i < x; i++) {
-                        refarray.push({from: p, to: delay_info[p][i][0], loss: delay_info[p][i][1]});
+                        refarray.push({ from: p, to: delay_info[p][i][0], loss: delay_info[p][i][1] });
 
                     }
                     data[p] = {
@@ -475,10 +487,10 @@
 
             for (var n = 0; n < masters.length; n++) {
                 var id = masters[n][0];
-                refarray.push({from: -1, to: id, loss: ''});
+                refarray.push({ from: -1, to: id, loss: '' });
             }
 
-            data[-1] = {id: -1, name: "root", load: 1, confusionmatrix: [], ref: refarray};
+            data[-1] = { id: -1, name: "root", load: 1, confusionmatrix: [], ref: refarray };
             //customize anything here
             myGraph.showTitle(function (d) {
                 return d.name;
@@ -501,8 +513,7 @@
         init_page();
 
         $("#ins_name_list").change(function () {
-            init_page($("#ins_name_list").val());
+            init_page();
         });
-
     </script>
 {% endblock %}

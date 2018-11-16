@@ -7,7 +7,7 @@ import re
 import traceback
 from sql.models import Users, Config
 from sql.utils.api import HttpRequests
-from sql.utils.config import SysConfig
+from common.config import SysConfig
 
 # 非研发中心员工，不去获取钉钉ID
 not_in_dev_dept = ['WD27822']
