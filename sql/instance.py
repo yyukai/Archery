@@ -32,19 +32,16 @@ def lists(request):
     if search is None:
         search = ''
     if type and db_type:
-        instances = Instance.objects.filter(instance_name__contains=search, type=type, db_type=db_type)[offset:limit] \
-            .values("id", "instance_name", "db_type", "type", "host", "port", "user")
+        instances = Instance.objects.filter(instance_name__contains=search, type=type, db_type=db_type)
     elif type:
-        instances = Instance.objects.filter(instance_name__contains=search, type=type)[offset:limit] \
-            .values("id", "instance_name", "db_type", "type", "host", "port", "user")
+        instances = Instance.objects.filter(instance_name__contains=search, type=type)
     elif db_type:
-        instances = Instance.objects.filter(instance_name__contains=search, db_type=db_type)[offset:limit] \
-            .values("id", "instance_name", "db_type", "type", "host", "port", "user")
+        instances = Instance.objects.filter(instance_name__contains=search, db_type=db_type)
     else:
-        instances = Instance.objects.filter(instance_name__contains=search)[offset:limit] \
-            .values("id", "instance_name", "db_type", "type", "host", "port", "user")
+        instances = Instance.objects.filter(instance_name__contains=search)
 
     count = instances.count()
+    instances = instances[offset:limit].values("id", "instance_name", "db_type", "type", "host", "port", "user")
 
     # QuerySet 序列化
     rows = [row for row in instances]
