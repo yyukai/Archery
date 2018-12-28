@@ -1,19 +1,15 @@
 # -*- coding: UTF-8 -*-
-
+import datetime
 import logging
 import re
-import os
-import shutil
-from wsgiref.util import FileWrapper
+import time
+import traceback
+
 import simplejson as json
-from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth.decorators import permission_required
 from django.core import serializers
-from django.db import connection, transaction
-import datetime
-import time
-import xlwt
-import traceback
+from django.db import connection
+from django.db import transaction
 from django.db.models import Q, Min
 from django.http import HttpResponse, HttpResponseRedirect
 from django.shortcuts import render
@@ -23,13 +19,10 @@ from common.config import SysConfig
 from common.utils.const import WorkflowDict
 from common.utils.extend_json_encoder import ExtendJSONEncoder
 from sql.utils.dao import Dao
-from .models import Users, Instance, QueryExport
-from .models import QueryPrivilegesApply, QueryPrivileges, QueryLog, SqlGroup
-from sql.utils.api import BASE_DIR, async
-
 from sql.utils.data_masking import Masking
-from sql.utils.group import user_instances, user_groups
+from sql.utils.resource_group import user_instances, user_groups
 from sql.utils.workflow import Workflow
+from .models import QueryPrivilegesApply, QueryPrivileges, QueryLog, ResourceGroup
 
 logger = logging.getLogger('default')
 
@@ -221,7 +214,7 @@ def applyforprivileges(request):
     title = request.POST['title']
     instance_name = request.POST['instance_name']
     group_name = request.POST['group_name']
-    group_id = SqlGroup.objects.get(group_name=group_name).group_id
+    group_id = ResourceGroup.objects.get(group_name=group_name).group_id
     priv_type = request.POST['priv_type']
     db_name = request.POST['db_name']
     valid_date = request.POST['valid_date']
@@ -510,17 +503,9 @@ def query(request):
 
         sql_content = sql_content + ';'
 
-        instance = Instance.objects.get(instance_name=instance_name)
         # 执行查询语句,统计执行时间
         t_start = time.time()
-        if instance.db_type == "mysql":
-            sql_result = Dao(instance_name=instance_name).mysql_query(str(db_name), sql_content, limit_num)
-        elif instance.db_type == "pgsql":
-            sql_result = Dao(instance_name=instance_name).pgsql_query(str(db_name), sql_content, limit_num)
-        elif instance.db_type == "mssql":
-            sql_result = Dao(instance_name=instance_name).mssql_query(str(db_name), sql_content, limit_num)
-        elif instance.db_type == "oracle":
-            sql_result = Dao(instance_name=instance_name).oracle_query(str(db_name), sql_content, limit_num)
+        sql_result = Dao(instance_name=instance_name).mysql_query(str(db_name), sql_content, limit_num)
         t_end = time.time()
         cost_time = "%5s" % "{:.4f}".format(t_end - t_start)
 
@@ -531,7 +516,7 @@ def query(request):
         masking = 2  # 查询结果是否正常脱敏，1, '是', 2, '否'
         t_start = time.time()
         # 仅对查询语句进行脱敏
-        if instance.db_type == "mysql" and SysConfig().sys_config.get('data_masking') and re.match(r"^select", sql_content.lower()):
+        if SysConfig().sys_config.get('data_masking') and re.match(r"^select", sql_content.lower()):
             try:
                 masking_result = datamasking.data_masking(instance_name, db_name, sql_content, sql_result)
                 if masking_result['status'] != 0 and SysConfig().sys_config.get('query_check'):
@@ -547,6 +532,7 @@ def query(request):
                     result['status'] = 1
                     result['msg'] = '脱敏数据报错,请联系管理员'
                     return HttpResponse(json.dumps(result), content_type='application/json')
+
         t_end = time.time()
         masking_cost_time = "%5s" % "{:.4f}".format(t_end - t_start)
 
@@ -593,233 +579,6 @@ def query(request):
                             content_type='application/json')
 
 
-# 获取SQL查询结果
-@csrf_exempt
-@permission_required('sql.query_submit', raise_exception=True)
-def add_async_query(request):
-    instance_name = request.POST.get('instance_name')
-    sqlContent = request.POST.get('sql_content')
-    dbName = request.POST.get('db_name')
-    limit_num = request.POST.get('limit_num')
-    auditor = request.POST.get('auditor')
-
-    finalResult = {'status': 0, 'msg': 'ok', 'data': {}}
-
-    # 服务器端参数验证
-    if sqlContent is None or dbName is None or instance_name is None or limit_num is None:
-        finalResult['status'] = 1
-        finalResult['msg'] = '页面提交参数可能为空'
-        return HttpResponse(json.dumps(finalResult), content_type='application/json')
-
-    sqlContent = sqlContent.strip()
-    if sqlContent[-1] != ";":
-        finalResult['status'] = 1
-        finalResult['msg'] = 'SQL语句结尾没有以;结尾，请重新修改并提交！'
-        return HttpResponse(json.dumps(finalResult), content_type='application/json')
-
-    # 获取用户信息
-    user = request.user
-
-    # 过滤注释语句和非查询的语句
-    sqlContent = ''.join(
-        map(lambda x: re.compile(r'(^--\s+.*|^/\*.*\*/;\s*$)').sub('', x, count=1),
-            sqlContent.splitlines(1))).strip()
-    # 去除空行
-    sqlContent = re.sub('[\r\n\f]{2,}', '\n', sqlContent)
-
-    sql_list = sqlContent.strip().split('\n')
-    for sql in sql_list:
-        if re.match(r"^select|^show|^explain", sql.lower()):
-            break
-        else:
-            finalResult['status'] = 1
-            finalResult['msg'] = '仅支持^select|^show|^explain语法，请联系管理员！'
-            return HttpResponse(json.dumps(finalResult), content_type='application/json')
-
-    # 取出该实例的连接方式,查询只读账号,按照分号截取第一条有效sql执行
-    slave_info = Instance.objects.get(instance_name=instance_name)
-    sqlContent = sqlContent.strip().split(';')[0]
-
-    # 查询权限校验
-    priv_check_info = query_priv_check(user, instance_name, dbName, sqlContent, limit_num)
-
-    if priv_check_info['status'] == 0:
-        pass
-    else:
-        return HttpResponse(json.dumps(priv_check_info), content_type='application/json')
-
-    if re.match(r"^explain", sqlContent.lower()):
-        limit_num = 0
-
-    # 对查询sql增加limit限制
-    if re.match(r"^select", sqlContent.lower()) and int(limit_num) > 0:
-        if re.search(r"limit\s+(\d+)$", sqlContent.lower()) is None:
-            if re.search(r"limit\s+\d+\s*,\s*(\d+)$", sqlContent.lower()) is None:
-                sqlContent = sqlContent + ' limit ' + str(limit_num)
-
-    sqlContent = sqlContent + ';'
-
-    # 查询语句记录存入数据库
-    query_log = QueryLog.objects.create(username=user.username, user_display=user.display, db_name=dbName,
-                                        instance_name=instance_name, sqllog=sqlContent, effect_row=0)
-
-    qe = QueryExport.objects.create(query_log=query_log, auditor=Users.objects.get(username=auditor), status=0)
-
-    do_async_query(request, qe, instance_name, dbName, slave_info.db_type, sqlContent, limit_num)
-    finalResult['msg'] = '任务提交成功！后台拼命跑数据中... 请耐心等待钉钉或邮件通知！'
-
-    return HttpResponse(json.dumps(finalResult, cls=ExtendJSONEncoder, bigint_as_string=True),
-                        content_type='application/json')
-
-
-@async
-def do_async_query(request, query_export, instance_name, db_name, db_type, sql, limit_num):
-    query_log = query_export.query_log
-    t_start = int(time.time())
-    if db_type == "mysql":
-        sql_result = Dao(instance_name=instance_name).mysql_query(db_name, sql, limit_num)
-    elif db_type == "pgsql":
-        sql_result = Dao(instance_name=instance_name).pgsql_query(db_name, sql, limit_num)
-    elif db_type == "mssql":
-        sql_result = Dao(instance_name=instance_name).mssql_query(db_name, sql, limit_num)
-    elif db_type == "oracle":
-        sql_result = Dao(instance_name=instance_name).oracle_query(db_name, sql, limit_num)
-    t_end = int(time.time())
-    query_log.cost_time = t_end - t_start
-    query_log.effect_row = sql_result["effect_row"]
-    query_log.save()
-
-    def write_result_to_excel(sql_result):
-        try:
-            file_dir = SysConfig().sys_config.get('query_result_dir', BASE_DIR)
-            time_suffix = datetime.datetime.now().strftime("%m%d%H%M%S")
-            file_name = '{}-{}-{}-{}'.format(query_export.query_log.username, query_log.instance_name, db_name, time_suffix)
-            template_file = os.path.join(file_dir, file_name)
-
-            workbook = xlwt.Workbook(encoding='utf-8')
-            sheet = workbook.add_sheet('Sheet1', cell_overwrite_ok=True)
-            # 写入字段信息
-            for field in range(0, len(sql_result["column_list"])):
-                sheet.write(0, field, sql_result["column_list"][field])
-            # 写入数据段信息
-            for row in range(1, int(sql_result["effect_row"]) + 1):
-                for col in range(0, len(sql_result["column_list"])):
-                    print(type(sql_result["rows"][row - 1][col]), sql_result["rows"][row - 1][col])
-                    value = '' if sql_result["rows"][row - 1][col] is None else sql_result["rows"][row - 1][col]
-                    sheet.write(row, col, value)
-            workbook.save(template_file)
-        except Exception as e:
-            print(e)
-            query_export.error_msg = str(traceback.print_exc())
-            query_export.save(update_fields=['error_msg'])
-            return str(e)
-        return template_file
-
-    try:
-        file_path = ''
-        if SysConfig().sys_config.get('data_masking'):
-            if db_type == "mysql":
-                # 仅对查询语句进行脱敏
-                if re.match(r"^select", sql.lower()):
-                    try:
-                        masking_result = datamasking.data_masking(instance_name, db_name, sql, sql_result)
-                    except Exception as e:
-                        if SysConfig().sys_config.get('query_check'):
-                            query_export.status = 1
-                            query_export.error_msg = '脱敏数据报错,请联系管理员。报错：%s' % str(e)
-                    else:
-                        if masking_result['status'] == 0 or not SysConfig().sys_config.get('query_check'):
-                            file_path = write_result_to_excel(sql_result)
-                            query_export.status = 2
-            else:
-                file_path = write_result_to_excel(sql_result)
-                query_export.status = 2
-        else:
-            file_path = write_result_to_excel(sql_result)
-            query_export.status = 2
-        query_export.result_file = file_path
-    except Exception as e:
-        query_export.error_msg = str(e)
-        query_export.status = 1
-    query_export.save()
-
-    # 通知审核人审核
-    audit_url = "{}://{}/query_export/".format(request.scheme, request.get_host())
-    msg_content = '''导出查询（提取大量数据）下载申请等待您审批：\n发起人：{}\n实例名称：{}\n数据库：{}\n执行的sql查询：{}\n提取条数：{}\n操作时间：{}\n审批地址：{}\n'''.\
-        format(query_log.user_display, query_log.instance_name, query_log.db_name, query_log.sqllog,
-               query_log.effect_row, query_log.create_time, audit_url)
-    from sql.utils.ding_api import DingSender
-    DingSender().send_msg(query_export.auditor.ding_user_id, msg_content)
-
-
-# 获取sql查询记录
-@csrf_exempt
-@permission_required('sql.query_submit', raise_exception=True)
-def query_export_audit(request):
-    query_export_id = request.POST.get("id")
-    is_allow = request.POST.get("is_allow", '')
-    audit_msg = request.POST.get("audit_msg", '')
-    qe = QueryExport.objects.get(id=query_export_id)
-    ql = qe.query_log
-    applicant = Users.objects.get(username=ql.username)
-    if qe.status == 1:
-        # 执行失败
-        msg = qe.error_msg
-    elif qe.status == 2:
-        # 审核
-        user = request.user
-        if not user.has_perm('sql.query_export_review'):
-            msg = "你没有审核权限！"
-        else:
-            if is_allow == "yes":
-                qe.status = 3
-                msg = "已通过！"
-                if os.path.exists(qe.result_file):
-                    if os.path.getsize(qe.result_file) > 0:
-                        shutil.copy2(qe.result_file, "{}.xls".format(qe.result_file.split('/')[-1]))
-            else:
-                qe.status = 4
-                msg = "已拒绝！"
-            from sql.utils.ding_api import DingSender
-            msg_content = '''您的导出查询提取数据申请 {}：\n审核理由：{}\n实例名称：{}\n数据库：{}\n执行的sql查询：{}\n提取条数：{}\n操作时间：{}\n'''.\
-                format(msg, audit_msg, ql.instance_name, ql.db_name, ql.sqllog, ql.effect_row, ql.create_time)
-            DingSender().send_msg(applicant.ding_user_id, msg_content)
-
-        qe.audit_msg = audit_msg
-        qe.auditor = user
-        qe.save()
-    elif qe.status == 4:
-        # 审核人拒绝
-        msg = qe.audit_msg
-    return HttpResponse(msg)
-
-
-# 获取sql查询记录
-@csrf_exempt
-@permission_required('sql.query_submit', raise_exception=True)
-def query_result_export(request):
-    query_export_id = request.GET.get("id")
-    qe = QueryExport.objects.get(id=query_export_id)
-
-    def file_iterator(template_file, chunk_size=512):
-        with open(template_file, encoding='utf-8') as f:
-            while True:
-                c = f.read(chunk_size)
-                if c:
-                    yield c
-                else:
-                    break
-
-    if qe.result_file:
-        wrapper = FileWrapper(open(qe.result_file, "rb"))
-        response = HttpResponse(wrapper, content_type='application/vnd.ms-excel')
-        response['Content-Length'] = os.path.getsize(qe.result_file)
-        response['Content-Disposition'] = 'attachment; filename="result.xls"'
-        return response
-    else:
-        return HttpResponse(qe.error_msg)
-
-
 # 获取sql查询记录
 @permission_required('sql.menu_sqlquery', raise_exception=True)
 def querylog(request):
@@ -850,54 +609,7 @@ def querylog(request):
 
     result = {"total": sql_log_count, "rows": sql_log}
     # 返回查询结果
-    return HttpResponse(json.dumps(result, cls=ExtendJSONEncoder, bigint_as_string=True),
-                        content_type='application/json')
-
-
-# 获取sql查询记录
-@csrf_exempt
-@permission_required('sql.menu_query_export', raise_exception=True)
-def query_export_log(request):
-    # 获取用户信息
-    user = request.user
-
-    limit = int(request.POST.get('limit'))
-    offset = int(request.POST.get('offset'))
-    limit = offset + limit
-
-    # 获取搜索参数
-    search = request.POST.get('search')
-    if search is None:
-        search = ''
-
-    # 查询个人记录，超管查看所有数据
-    if user.is_superuser or user.has_perm('sql.query_export_review'):
-        log_count = QueryExport.objects.filter(Q(query_log__sqllog__contains=search) |
-                                                   Q(query_log__username__contains=search) |
-                                                   Q(query_log__db_name__contains=search)).count()
-        qe_list = QueryExport.objects.filter(Q(query_log__sqllog__contains=search) |
-                                                  Q(query_log__username__contains=search) |
-                                                  Q(query_log__db_name__contains=search)).order_by('-id')[offset:limit]
-    else:
-        log_count = QueryExport.objects.filter(query_log__username=user.username).filter(
-                                                    Q(query_log__sqllog__contains=search) |
-                                                    Q(query_log__db_name__contains=search)).count()
-        qe_list = QueryExport.objects.filter(query_log__username=user.username).filter(
-                                                    Q(query_log__sqllog__contains=search) |
-                                                    Q(query_log__db_name__contains=search)).order_by('-id')[offset:limit]
-
-    sql_log_list = list()
-    for qe in qe_list:
-        ql = qe.query_log
-        sql_log_list.append({"user_display": ql.user_display, "instance_name": ql.instance_name, "db_name": ql.db_name,
-                             "create_time": ql.create_time, "sqllog": ql.sqllog, "effect_row": ql.effect_row,
-                             "cost_time": ql.cost_time, "reason": qe.reason, "status": qe.status,
-                             "auditor": qe.auditor.username, "id": qe.id})
-
-    result = {"total": log_count, "rows": sql_log_list}
-    # 返回查询结果
-    return HttpResponse(json.dumps(result, cls=ExtendJSONEncoder, bigint_as_string=True),
-                        content_type='application/json')
+    return HttpResponse(json.dumps(result), content_type='application/json')
 
 
 # 获取SQL执行计划
