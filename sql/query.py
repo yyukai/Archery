@@ -1,16 +1,19 @@
 # -*- coding: UTF-8 -*-
-import datetime
+
 import logging
 import re
-import time
-import traceback
-
+import os
+import shutil
+from wsgiref.util import FileWrapper
 import simplejson as json
-import sqlparse
+from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth.decorators import permission_required
 from django.core import serializers
-from django.db import connection
-from django.db import transaction
+from django.db import connection, transaction
+import datetime
+import time
+import xlwt
+import traceback
 from django.db.models import Q, Min
 from django.http import HttpResponse, HttpResponseRedirect
 from django.shortcuts import render
@@ -20,11 +23,14 @@ from common.config import SysConfig
 from common.utils.const import WorkflowDict
 from common.utils.extend_json_encoder import ExtendJSONEncoder
 from sql.utils.dao import Dao
+from .models import Users, Instance, QueryExport
+from .models import QueryPrivilegesApply, QueryPrivileges, QueryLog, SqlGroup
+from sql.utils.api import BASE_DIR, async
+
 from sql.utils.data_masking import Masking
-from sql.utils.resource_group import user_instances, user_groups
+from sql.utils.group import user_instances, user_groups
 from sql.utils.workflow import Workflow
-from .models import QueryPrivilegesApply, QueryPrivileges, QueryLog, ResourceGroup, Instance
-from sql.engines import get_engine
+
 logger = logging.getLogger('default')
 
 datamasking = Masking()
@@ -68,10 +74,10 @@ def query_priv_check(user, instance_name, db_name, sql_content, limit_num):
 
     # 检查用户是否有该数据库/表的查询权限
     if user.is_superuser:
-        if SysConfig().sys_config.get('admin_query_limit', 5000):
+        if SysConfig().sys_config.get('admin_query_limit'):
             user_limit_num = int(SysConfig().sys_config.get('admin_query_limit'))
         else:
-            user_limit_num = 5000
+            user_limit_num = 0
         limit_num = int(user_limit_num) if int(limit_num) == 0 else min(int(limit_num), int(user_limit_num))
 
     # 查看表结构和执行计划，inception会报错，故单独处理，explain直接跳过不做校验
@@ -169,7 +175,11 @@ def getqueryapplylist(request):
     limit = int(request.POST.get('limit'))
     offset = int(request.POST.get('offset'))
     limit = offset + limit
-    search = request.POST.get('search', '')
+
+    # 获取搜索参数
+    search = request.POST.get('search')
+    if search is None:
+        search = ''
 
     # 获取列表数据,申请人只能查看自己申请的数据,管理员可以看到全部数据,审核人可以看到自己审核的数据
     if user.is_superuser:
@@ -215,11 +225,15 @@ def applyforprivileges(request):
     title = request.POST['title']
     instance_name = request.POST['instance_name']
     group_name = request.POST['group_name']
-    group_id = ResourceGroup.objects.get(group_name=group_name).group_id
+    group_id = SqlGroup.objects.get(group_name=group_name).group_id
     priv_type = request.POST['priv_type']
     db_name = request.POST['db_name']
     valid_date = request.POST['valid_date']
     limit_num = request.POST['limit_num']
+    try:
+        workflow_remark = request.POST['apply_remark']
+    except Exception:
+        workflow_remark = ''
 
     # 获取用户信息
     user = request.user
@@ -241,7 +255,7 @@ def applyforprivileges(request):
     try:
         user_instances(request.user, 'slave').get(instance_name=instance_name)
     except Exception:
-        context = {'errMsg': '你所在组未关联该实例！'}
+        context = {'errMsg': '你所在组未关联该从库！'}
         return render(request, 'error.html', context)
 
     # 判断是否需要限制到表级别的权限
@@ -288,7 +302,7 @@ def applyforprivileges(request):
             applyinfo.title = title
             applyinfo.group_id = group_id
             applyinfo.group_name = group_name
-            applyinfo.audit_auth_groups = Workflow.audit_settings(group_id, WorkflowDict.workflow_type['query'])
+            applyinfo.audit_auth_groups = Workflow.auditsettings(group_id, WorkflowDict.workflow_type['query'])
             applyinfo.user_name = user.username
             applyinfo.user_display = user.display
             applyinfo.instance_name = instance_name
@@ -307,16 +321,16 @@ def applyforprivileges(request):
             apply_id = applyinfo.apply_id
 
             # 调用工作流插入审核信息,查询权限申请workflow_type=1
-            audit_result = workflowOb.addworkflowaudit(request, WorkflowDict.workflow_type['query'], apply_id)
-            if audit_result['status'] == 0:
+            auditresult = workflowOb.addworkflowaudit(request, WorkflowDict.workflow_type['query'], apply_id)
+            if auditresult['status'] == 0:
                 # 更新业务表审核状态,判断是否插入权限信息
-                query_audit_call_back(apply_id, audit_result['data']['workflow_status'])
+                query_audit_call_back(apply_id, auditresult['data']['workflow_status'])
     except Exception as msg:
         logger.error(traceback.format_exc())
         result['status'] = 1
         result['msg'] = str(msg)
     else:
-        result = audit_result
+        result = auditresult
     return HttpResponse(json.dumps(result), content_type='application/json')
 
 
@@ -326,7 +340,11 @@ def getuserprivileges(request):
     limit = int(request.POST.get('limit'))
     offset = int(request.POST.get('offset'))
     limit = offset + limit
-    search = request.POST.get('search', '')
+
+    # 获取搜索参数
+    search = request.POST.get('search')
+    if search is None:
+        search = ''
 
     # 判断权限，除了管理员外其他人只能查看自己的权限信息，
     user = request.user
@@ -334,45 +352,45 @@ def getuserprivileges(request):
     # 获取用户的权限数据
     if user.is_superuser:
         if user_name != 'all':
-            privileges_list = QueryPrivileges.objects.all().filter(user_name=user_name,
-                                                                   is_deleted=0,
-                                                                   table_name__contains=search,
-                                                                   valid_date__gte=datetime.datetime.now()
-                                                                   ).order_by('-privilege_id')[offset:limit]
-            privileges_count = QueryPrivileges.objects.all().filter(user_name=user_name,
-                                                                    is_deleted=0,
-                                                                    table_name__contains=search,
-                                                                    valid_date__gte=datetime.datetime.now()).count()
+            privilegeslist = QueryPrivileges.objects.all().filter(user_name=user_name,
+                                                                  is_deleted=0,
+                                                                  table_name__contains=search,
+                                                                  valid_date__gte=datetime.datetime.now()
+                                                                  ).order_by('-privilege_id')[offset:limit]
+            privilegeslistCount = QueryPrivileges.objects.all().filter(user_name=user_name,
+                                                                       is_deleted=0,
+                                                                       table_name__contains=search,
+                                                                       valid_date__gte=datetime.datetime.now()).count()
         else:
-            privileges_list = QueryPrivileges.objects.all().filter(is_deleted=0,
-                                                                   table_name__contains=search,
-                                                                   valid_date__gte=datetime.datetime.now()
-                                                                   ).order_by('-privilege_id')[offset:limit]
-            privileges_count = QueryPrivileges.objects.all().filter(is_deleted=0,
-                                                                    table_name__contains=search,
-                                                                    valid_date__gte=datetime.datetime.now()
-                                                                    ).count()
+            privilegeslist = QueryPrivileges.objects.all().filter(is_deleted=0,
+                                                                  table_name__contains=search,
+                                                                  valid_date__gte=datetime.datetime.now()
+                                                                  ).order_by('-privilege_id')[offset:limit]
+            privilegeslistCount = QueryPrivileges.objects.all().filter(is_deleted=0,
+                                                                       table_name__contains=search,
+                                                                       valid_date__gte=datetime.datetime.now()
+                                                                       ).count()
     else:
-        privileges_list = QueryPrivileges.objects.filter(user_name=user.username,
-                                                         table_name__contains=search,
-                                                         is_deleted=0,
-                                                         valid_date__gte=datetime.datetime.now()
-                                                         ).order_by('-privilege_id')[offset:limit]
-        privileges_count = QueryPrivileges.objects.filter(user_name=user.username,
-                                                          table_name__contains=search,
-                                                          is_deleted=0,
-                                                          valid_date__gte=datetime.datetime.now()
-                                                          ).count()
+        privilegeslist = QueryPrivileges.objects.filter(user_name=user.username,
+                                                        table_name__contains=search,
+                                                        is_deleted=0,
+                                                        valid_date__gte=datetime.datetime.now()
+                                                        ).order_by('-privilege_id')[offset:limit]
+        privilegeslistCount = QueryPrivileges.objects.filter(user_name=user.username,
+                                                             table_name__contains=search,
+                                                             is_deleted=0,
+                                                             valid_date__gte=datetime.datetime.now()
+                                                             ).count()
 
     # QuerySet 序列化
-    privileges_list = serializers.serialize("json", privileges_list)
-    privileges_list = json.loads(privileges_list)
+    privilegeslist = serializers.serialize("json", privilegeslist)
+    privilegeslist = json.loads(privilegeslist)
     privilegeslist_result = []
-    for i in range(len(privileges_list)):
-        privileges_list[i]['fields']['id'] = privileges_list[i]['pk']
-        privilegeslist_result.append(privileges_list[i]['fields'])
+    for i in range(len(privilegeslist)):
+        privilegeslist[i]['fields']['id'] = privilegeslist[i]['pk']
+        privilegeslist_result.append(privilegeslist[i]['fields'])
 
-    result = {"total": privileges_count, "rows": privilegeslist_result}
+    result = {"total": privilegeslistCount, "rows": privilegeslist_result}
     # 返回查询结果
     return HttpResponse(json.dumps(result), content_type='application/json')
 
@@ -423,17 +441,17 @@ def queryprivaudit(request):
     try:
         with transaction.atomic():
             # 获取audit_id
-            audit_id = Workflow.audit_info_by_workflow_id(workflow_id=apply_id,
-                                                          workflow_type=WorkflowDict.workflow_type['query']).audit_id
+            audit_id = Workflow.auditinfobyworkflow_id(workflow_id=apply_id,
+                                                       workflow_type=WorkflowDict.workflow_type['query']).audit_id
 
             # 调用工作流接口审核
-            audit_result = workflowOb.auditworkflow(request, audit_id, audit_status, user.username, audit_remark)
+            auditresult = workflowOb.auditworkflow(request, audit_id, audit_status, user.username, audit_remark)
 
             # 按照审核结果更新业务表审核状态
-            audit_detail = Workflow.audit_detail(audit_id)
-            if audit_detail.workflow_type == WorkflowDict.workflow_type['query']:
+            auditInfo = Workflow.auditinfo(audit_id)
+            if auditInfo.workflow_type == WorkflowDict.workflow_type['query']:
                 # 更新业务表审核状态,插入权限信息
-                query_audit_call_back(audit_detail.workflow_id, audit_result['data']['workflow_status'])
+                query_audit_call_back(auditInfo.workflow_id, auditresult['data']['workflow_status'])
 
     except Exception as msg:
         logger.error(traceback.format_exc())
@@ -452,12 +470,7 @@ def query(request):
     limit_num = request.POST.get('limit_num')
 
     result = {'status': 0, 'msg': 'ok', 'data': {}}
-    try:
-        instance = Instance.objects.get(instance_name=instance_name)
-    except Instance.DoesNotExist:
-        result['status'] = 1
-        result['msg'] = '实例不存在'
-        return result
+
     # 服务器端参数验证
     if sql_content is None or db_name is None or instance_name is None or limit_num is None:
         result['status'] = 1
@@ -465,12 +478,11 @@ def query(request):
         return HttpResponse(json.dumps(result), content_type='application/json')
 
     sql_content = sql_content.strip()
-    archer_config = SysConfig()
-    if archer_config.get('disable_star'):
-        if '*' in sql_content:
-            result['status'] = 1
-            result['msg'] = '不允许 * 标记, 请指定具体字段名.'
-            return HttpResponse(json.dumps(result), content_type='application/json')
+    if sql_content[-1] != ";":
+        result['status'] = 1
+        result['msg'] = 'SQL语句结尾没有以;结尾，请重新修改并提交！'
+        return HttpResponse(json.dumps(result), content_type='application/json')
+
     # 获取用户信息
     user = request.user
 
@@ -490,8 +502,8 @@ def query(request):
             result['msg'] = '仅支持^select|^show|^explain语法，请联系管理员！'
             return HttpResponse(json.dumps(result), content_type='application/json')
 
-    # 执行第一条有效sql
-    sql_content = sqlparse.split(sql_content)[0].rstrip(';')
+    # 按照分号截取第一条有效sql执行
+    sql_content = sql_content.strip().split(';')[0]
 
     try:
         # 查询权限校验
@@ -505,20 +517,29 @@ def query(request):
 
         if re.match(r"^explain", sql_content.lower()):
             limit_num = 0
-        query_engine = get_engine(instance=instance)
-        filter_result = query_engine.query_check(db_name=db_name, sql=sql_content, limit_num=limit_num)
-        if filter_result.get('bad_query'):
-            pass
-        else:
-            sql_content = filter_result['filtered_sql']
+
+        # 对查询sql增加limit限制
+        if re.match(r"^select", sql_content.lower()):
+            if re.search(r"limit\s+(\d+)$", sql_content.lower()) is None:
+                if re.search(r"limit\s+\d+\s*,\s*(\d+)$", sql_content.lower()) is None:
+                    sql_content = sql_content + ' limit ' + str(limit_num)
+
         sql_content = sql_content + ';'
 
+        instance = Instance.objects.get(instance_name=instance_name)
         # 执行查询语句,统计执行时间
         t_start = time.time()
-        query_result = query_engine.query(db_name=str(db_name), sql=sql_content, limit_num=limit_num)
+        if instance.db_type == "mysql":
+            sql_result = Dao(instance_name=instance_name).mysql_query(str(db_name), sql_content, limit_num)
+        elif instance.db_type == "pgsql":
+            sql_result = Dao(instance_name=instance_name).pgsql_query(str(db_name), sql_content, limit_num)
+        elif instance.db_type == "mssql":
+            sql_result = Dao(instance_name=instance_name).mssql_query(str(db_name), sql_content, limit_num)
+        elif instance.db_type == "oracle":
+            sql_result = Dao(instance_name=instance_name).oracle_query(str(db_name), sql_content, limit_num)
         t_end = time.time()
         cost_time = "%5s" % "{:.4f}".format(t_end - t_start)
-        sql_result = query_result.__dict__
+
         sql_result['cost_time'] = cost_time
 
         # 数据脱敏，同样需要检查配置，是否开启脱敏，语法树解析是否允许出错继续执行
@@ -526,7 +547,7 @@ def query(request):
         masking = 2  # 查询结果是否正常脱敏，1, '是', 2, '否'
         t_start = time.time()
         # 仅对查询语句进行脱敏
-        if SysConfig().sys_config.get('data_masking') and re.match(r"^select", sql_content.lower()):
+        if instance.db_type == "mysql" and SysConfig().sys_config.get('data_masking') and re.match(r"^select", sql_content.lower()):
             try:
                 masking_result = datamasking.data_masking(instance_name, db_name, sql_content, sql_result)
                 if masking_result['status'] != 0 and SysConfig().sys_config.get('query_check'):
@@ -542,7 +563,6 @@ def query(request):
                     result['status'] = 1
                     result['msg'] = '脱敏数据报错,请联系管理员'
                     return HttpResponse(json.dumps(result), content_type='application/json')
-
         t_end = time.time()
         masking_cost_time = "%5s" % "{:.4f}".format(t_end - t_start)
 
@@ -561,9 +581,9 @@ def query(request):
             query_log.instance_name = instance_name
             query_log.sqllog = sql_content
             if int(limit_num) == 0:
-                limit_num = int(sql_result['affected_rows'])
+                limit_num = int(sql_result['effect_row'])
             else:
-                limit_num = min(int(limit_num), int(sql_result['affected_rows']))
+                limit_num = min(int(limit_num), int(sql_result['effect_row']))
             query_log.effect_row = limit_num
             query_log.cost_time = cost_time
             query_log.priv_check = priv_check
@@ -585,8 +605,235 @@ def query(request):
         return HttpResponse(json.dumps(result, cls=ExtendJSONEncoder, bigint_as_string=True),
                             content_type='application/json')
     except Exception:
-        return HttpResponse(json.dumps(result, default=str, bigint_as_string=True, encoding='latin1'),
+        return HttpResponse(json.dumps(result, default=str, bigint_as_string=True),
                             content_type='application/json')
+
+
+# 获取SQL查询结果
+@csrf_exempt
+@permission_required('sql.query_submit', raise_exception=True)
+def add_async_query(request):
+    instance_name = request.POST.get('instance_name')
+    sqlContent = request.POST.get('sql_content')
+    dbName = request.POST.get('db_name')
+    limit_num = request.POST.get('limit_num')
+    auditor = request.POST.get('auditor')
+
+    finalResult = {'status': 0, 'msg': 'ok', 'data': {}}
+
+    # 服务器端参数验证
+    if sqlContent is None or dbName is None or instance_name is None or limit_num is None:
+        finalResult['status'] = 1
+        finalResult['msg'] = '页面提交参数可能为空'
+        return HttpResponse(json.dumps(finalResult), content_type='application/json')
+
+    sqlContent = sqlContent.strip()
+    if sqlContent[-1] != ";":
+        finalResult['status'] = 1
+        finalResult['msg'] = 'SQL语句结尾没有以;结尾，请重新修改并提交！'
+        return HttpResponse(json.dumps(finalResult), content_type='application/json')
+
+    # 获取用户信息
+    user = request.user
+
+    # 过滤注释语句和非查询的语句
+    sqlContent = ''.join(
+        map(lambda x: re.compile(r'(^--\s+.*|^/\*.*\*/;\s*$)').sub('', x, count=1),
+            sqlContent.splitlines(1))).strip()
+    # 去除空行
+    sqlContent = re.sub('[\r\n\f]{2,}', '\n', sqlContent)
+
+    sql_list = sqlContent.strip().split('\n')
+    for sql in sql_list:
+        if re.match(r"^select|^show|^explain", sql.lower()):
+            break
+        else:
+            finalResult['status'] = 1
+            finalResult['msg'] = '仅支持^select|^show|^explain语法，请联系管理员！'
+            return HttpResponse(json.dumps(finalResult), content_type='application/json')
+
+    # 取出该实例的连接方式,查询只读账号,按照分号截取第一条有效sql执行
+    slave_info = Instance.objects.get(instance_name=instance_name)
+    sqlContent = sqlContent.strip().split(';')[0]
+
+    # 查询权限校验
+    priv_check_info = query_priv_check(user, instance_name, dbName, sqlContent, limit_num)
+
+    if priv_check_info['status'] == 0:
+        pass
+    else:
+        return HttpResponse(json.dumps(priv_check_info), content_type='application/json')
+
+    if re.match(r"^explain", sqlContent.lower()):
+        limit_num = 0
+
+    # 对查询sql增加limit限制
+    if re.match(r"^select", sqlContent.lower()) and int(limit_num) > 0:
+        if re.search(r"limit\s+(\d+)$", sqlContent.lower()) is None:
+            if re.search(r"limit\s+\d+\s*,\s*(\d+)$", sqlContent.lower()) is None:
+                sqlContent = sqlContent + ' limit ' + str(limit_num)
+
+    sqlContent = sqlContent + ';'
+
+    # 查询语句记录存入数据库
+    query_log = QueryLog.objects.create(username=user.username, user_display=user.display, db_name=dbName,
+                                        instance_name=instance_name, sqllog=sqlContent, effect_row=0)
+
+    qe = QueryExport.objects.create(query_log=query_log, auditor=Users.objects.get(username=auditor), status=0)
+
+    do_async_query(request, qe, instance_name, dbName, slave_info.db_type, sqlContent, limit_num)
+    finalResult['msg'] = '任务提交成功！后台拼命跑数据中... 请耐心等待钉钉或邮件通知！'
+
+    return HttpResponse(json.dumps(finalResult, cls=ExtendJSONEncoder, bigint_as_string=True),
+                        content_type='application/json')
+
+
+@async
+def do_async_query(request, query_export, instance_name, db_name, db_type, sql, limit_num):
+    query_log = query_export.query_log
+    t_start = int(time.time())
+    if db_type == "mysql":
+        sql_result = Dao(instance_name=instance_name).mysql_query(db_name, sql, limit_num)
+    elif db_type == "pgsql":
+        sql_result = Dao(instance_name=instance_name).pgsql_query(db_name, sql, limit_num)
+    elif db_type == "mssql":
+        sql_result = Dao(instance_name=instance_name).mssql_query(db_name, sql, limit_num)
+    elif db_type == "oracle":
+        sql_result = Dao(instance_name=instance_name).oracle_query(db_name, sql, limit_num)
+    t_end = int(time.time())
+    query_log.cost_time = t_end - t_start
+    query_log.effect_row = sql_result["effect_row"]
+    query_log.save()
+
+    def write_result_to_excel(sql_result):
+        try:
+            file_dir = SysConfig().sys_config.get('query_result_dir', BASE_DIR)
+            time_suffix = datetime.datetime.now().strftime("%m%d%H%M%S")
+            file_name = '{}-{}-{}-{}'.format(query_export.query_log.username, query_log.instance_name, db_name, time_suffix)
+            template_file = os.path.join(file_dir, file_name)
+
+            workbook = xlwt.Workbook(encoding='utf-8')
+            sheet = workbook.add_sheet('Sheet1', cell_overwrite_ok=True)
+            # 写入字段信息
+            for field in range(0, len(sql_result["column_list"])):
+                sheet.write(0, field, sql_result["column_list"][field])
+            # 写入数据段信息
+            for row in range(1, int(sql_result["effect_row"]) + 1):
+                for col in range(0, len(sql_result["column_list"])):
+                    print(type(sql_result["rows"][row - 1][col]), sql_result["rows"][row - 1][col])
+                    value = '' if sql_result["rows"][row - 1][col] is None else sql_result["rows"][row - 1][col]
+                    sheet.write(row, col, value)
+            workbook.save(template_file)
+        except Exception as e:
+            print(e)
+            query_export.error_msg = str(traceback.print_exc())
+            query_export.save(update_fields=['error_msg'])
+            return str(e)
+        return template_file
+
+    try:
+        file_path = ''
+        if SysConfig().sys_config.get('data_masking'):
+            if db_type == "mysql":
+                # 仅对查询语句进行脱敏
+                if re.match(r"^select", sql.lower()):
+                    try:
+                        masking_result = datamasking.data_masking(instance_name, db_name, sql, sql_result)
+                    except Exception as e:
+                        if SysConfig().sys_config.get('query_check'):
+                            query_export.status = 1
+                            query_export.error_msg = '脱敏数据报错,请联系管理员。报错：%s' % str(e)
+                    else:
+                        if masking_result['status'] == 0 or not SysConfig().sys_config.get('query_check'):
+                            file_path = write_result_to_excel(sql_result)
+                            query_export.status = 2
+            else:
+                file_path = write_result_to_excel(sql_result)
+                query_export.status = 2
+        else:
+            file_path = write_result_to_excel(sql_result)
+            query_export.status = 2
+        query_export.result_file = file_path
+    except Exception as e:
+        query_export.error_msg = str(e)
+        query_export.status = 1
+    query_export.save()
+
+    # 通知审核人审核
+    audit_url = "{}://{}/query_export/".format(request.scheme, request.get_host())
+    msg_content = '''导出查询（提取大量数据）下载申请等待您审批：\n发起人：{}\n实例名称：{}\n数据库：{}\n执行的sql查询：{}\n提取条数：{}\n操作时间：{}\n审批地址：{}\n'''.\
+        format(query_log.user_display, query_log.instance_name, query_log.db_name, query_log.sqllog,
+               query_log.effect_row, query_log.create_time, audit_url)
+    from sql.utils.ding_api import DingSender
+    DingSender().send_msg(query_export.auditor.ding_user_id, msg_content)
+
+
+# 获取sql查询记录
+@csrf_exempt
+@permission_required('sql.query_submit', raise_exception=True)
+def query_export_audit(request):
+    query_export_id = request.POST.get("id")
+    is_allow = request.POST.get("is_allow", '')
+    audit_msg = request.POST.get("audit_msg", '')
+    qe = QueryExport.objects.get(id=query_export_id)
+    ql = qe.query_log
+    applicant = Users.objects.get(username=ql.username)
+    if qe.status == 1:
+        # 执行失败
+        msg = qe.error_msg
+    elif qe.status == 2:
+        # 审核
+        user = request.user
+        if not user.has_perm('sql.query_export_review'):
+            msg = "你没有审核权限！"
+        else:
+            if is_allow == "yes":
+                qe.status = 3
+                msg = "已通过！"
+                if os.path.exists(qe.result_file):
+                    if os.path.getsize(qe.result_file) > 0:
+                        shutil.copy2(qe.result_file, "{}.xls".format(qe.result_file.split('/')[-1]))
+            else:
+                qe.status = 4
+                msg = "已拒绝！"
+            from sql.utils.ding_api import DingSender
+            msg_content = '''您的导出查询提取数据申请 {}：\n审核理由：{}\n实例名称：{}\n数据库：{}\n执行的sql查询：{}\n提取条数：{}\n操作时间：{}\n'''.\
+                format(msg, audit_msg, ql.instance_name, ql.db_name, ql.sqllog, ql.effect_row, ql.create_time)
+            DingSender().send_msg(applicant.ding_user_id, msg_content)
+
+        qe.audit_msg = audit_msg
+        qe.auditor = user
+        qe.save()
+    elif qe.status == 4:
+        # 审核人拒绝
+        msg = qe.audit_msg
+    return HttpResponse(msg)
+
+
+# 获取sql查询记录
+@csrf_exempt
+@permission_required('sql.query_submit', raise_exception=True)
+def query_result_export(request):
+    query_export_id = request.GET.get("id")
+    qe = QueryExport.objects.get(id=query_export_id)
+
+    def file_iterator(template_file, chunk_size=512):
+        with open(template_file, encoding='utf-8') as f:
+            while True:
+                c = f.read(chunk_size)
+                if c:
+                    yield c
+                else:
+                    break
+
+    if qe.result_file:
+        wrapper = FileWrapper(open(qe.result_file, "rb"))
+        response = HttpResponse(wrapper, content_type='application/vnd.ms-excel')
+        response['Content-Length'] = os.path.getsize(qe.result_file)
+        response['Content-Disposition'] = 'attachment; filename="result.xls"'
+        return response
+    else:
+        return HttpResponse(qe.error_msg)
 
 
 # 获取sql查询记录
@@ -598,7 +845,11 @@ def querylog(request):
     limit = int(request.POST.get('limit'))
     offset = int(request.POST.get('offset'))
     limit = offset + limit
-    search = request.POST.get('search', '')
+
+    # 获取搜索参数
+    search = request.POST.get('search')
+    if search is None:
+        search = ''
 
     # 查询个人记录，超管查看所有数据
     if user.is_superuser:
@@ -619,7 +870,54 @@ def querylog(request):
 
     result = {"total": sql_log_count, "rows": sql_log}
     # 返回查询结果
-    return HttpResponse(json.dumps(result), content_type='application/json')
+    return HttpResponse(json.dumps(result, cls=ExtendJSONEncoder, bigint_as_string=True),
+                        content_type='application/json')
+
+
+# 获取sql查询记录
+@csrf_exempt
+@permission_required('sql.menu_query_export', raise_exception=True)
+def query_export_log(request):
+    # 获取用户信息
+    user = request.user
+
+    limit = int(request.POST.get('limit'))
+    offset = int(request.POST.get('offset'))
+    limit = offset + limit
+
+    # 获取搜索参数
+    search = request.POST.get('search')
+    if search is None:
+        search = ''
+
+    # 查询个人记录，超管查看所有数据
+    if user.is_superuser or user.has_perm('sql.query_export_review'):
+        log_count = QueryExport.objects.filter(Q(query_log__sqllog__contains=search) |
+                                                   Q(query_log__username__contains=search) |
+                                                   Q(query_log__db_name__contains=search)).count()
+        qe_list = QueryExport.objects.filter(Q(query_log__sqllog__contains=search) |
+                                                  Q(query_log__username__contains=search) |
+                                                  Q(query_log__db_name__contains=search)).order_by('-id')[offset:limit]
+    else:
+        log_count = QueryExport.objects.filter(query_log__username=user.username).filter(
+                                                    Q(query_log__sqllog__contains=search) |
+                                                    Q(query_log__db_name__contains=search)).count()
+        qe_list = QueryExport.objects.filter(query_log__username=user.username).filter(
+                                                    Q(query_log__sqllog__contains=search) |
+                                                    Q(query_log__db_name__contains=search)).order_by('-id')[offset:limit]
+
+    sql_log_list = list()
+    for qe in qe_list:
+        ql = qe.query_log
+        sql_log_list.append({"user_display": ql.user_display, "instance_name": ql.instance_name, "db_name": ql.db_name,
+                             "create_time": ql.create_time, "sqllog": ql.sqllog, "effect_row": ql.effect_row,
+                             "cost_time": ql.cost_time, "reason": qe.reason, "status": qe.status,
+                             "auditor": qe.auditor.username, "id": qe.id})
+
+    result = {"total": log_count, "rows": sql_log_list}
+    # 返回查询结果
+    return HttpResponse(json.dumps(result, cls=ExtendJSONEncoder, bigint_as_string=True),
+                        content_type='application/json')
 
 
 # 获取SQL执行计划
@@ -637,6 +935,10 @@ def explain(request):
         return HttpResponse(json.dumps(result), content_type='application/json')
 
     sql_content = sql_content.strip()
+    if sql_content[-1] != ";":
+        result['status'] = 1
+        result['msg'] = 'SQL语句结尾没有以;结尾，请重新修改并提交！'
+        return HttpResponse(json.dumps(result), content_type='application/json')
 
     # 过滤非查询的语句
     if re.match(r"^explain", sql_content.lower()):
@@ -646,8 +948,8 @@ def explain(request):
         result['msg'] = '仅支持explain开头的语句，请检查'
         return HttpResponse(json.dumps(result), content_type='application/json')
 
-    # 执行第一条有效sql
-    sql_content = sqlparse.split(sql_content)[0].rstrip(';')
+    # 按照分号截取第一条有效sql执行
+    sql_content = sql_content.strip().split(';')[0]
 
     # 执行获取执行计划语句
     sql_result = Dao(instance_name=instance_name).mysql_query(str(db_name), sql_content)

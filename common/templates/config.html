@@ -72,7 +72,7 @@
                                 <label for="inception_port"
                                        class="col-sm-4 control-label">INCEPTION_PORT</label>
                                 <div class="col-sm-5">
-                                    <input type="number" class="form-control"
+                                    <input type="text" class="form-control"
                                            id="inception_port"
                                            key="inception_port"
                                            value="{{ config.inception_port }}"
@@ -94,7 +94,7 @@
                                 <label for="inception_remote_backup_port"
                                        class="col-sm-4 control-label">REMOTE_BACKUP_PORT</label>
                                 <div class="col-sm-5">
-                                    <input type="number" class="form-control"
+                                    <input type="text" class="form-control"
                                            id="inception_remote_backup_port"
                                            key="inception_remote_backup_port"
                                            value="{{ config.inception_remote_backup_port }}"
@@ -138,18 +138,7 @@
                                            id="critical_ddl_regex"
                                            key="critical_ddl_regex"
                                            value="{{ config.critical_ddl_regex }}"
-                                           placeholder="正则条件，匹配的语句会禁止提交">
-                                </div>
-                            </div>
-                            <div class="form-group">
-                                <label for="auto_review_wrong"
-                                       class="col-sm-4 control-label">AUTO_REVIEW_WRONG</label>
-                                <div class="col-sm-5">
-                                    <input type="number" class="form-control"
-                                           id="auto_review_wrong"
-                                           key="auto_review_wrong"
-                                           value="{{ config.auto_review_wrong }}"
-                                           placeholder="自动驳回的等级，1表示警告驳回，2和空表示错误才驳回，其他表示不驳回">
+                                           placeholder="高危SQL判断条件，匹配的语句会禁止提交">
                                 </div>
                             </div>
                             <div class="form-group">
@@ -176,14 +165,14 @@
                                                id="auto_review_regex"
                                                key="auto_review_regex"
                                                value="{{ config.auto_review_regex }}"
-                                               placeholder="正则条件，匹配的语句需要人工审批">
+                                               placeholder="高危SQL判断条件，匹配的语句需要人工审批">
                                     </div>
                                 </div>
                                 <div class="form-group">
                                     <label for="auto_review_max_update_rows"
                                            class="col-sm-4 control-label">MAX_UPDATE_ROWS</label>
                                     <div class="col-sm-5">
-                                        <input type="number" class="form-control"
+                                        <input type="text" class="form-control"
                                                id="auto_review_max_update_rows"
                                                key="auto_review_max_update_rows"
                                                value="{{ config.auto_review_max_update_rows }}"
@@ -196,55 +185,56 @@
                         <hr/>
                         <div class="form-horizontal">
                             <div class="form-group">
-                                <label for="query_check"
-                                       class="col-sm-4 control-label">QUERY_CHECK</label>
+                                <label for="query"
+                                       class="col-sm-4 control-label">QUERY</label>
                                 <div class="col-sm-8">
                                     <div class="switch switch-small">
                                         <label>
-                                            <input id="query_check"
-                                                   key="query_check"
-                                                   value="{{ config.query_check }}" type="checkbox">
-                                            是否开启Inception检测(表权限和脱敏校验)
+                                            <input id="query" key="query"
+                                                   value="{{ config.query }}"
+                                                   type="checkbox"> 是否开启SQL查询功能
                                         </label>
                                     </div>
                                 </div>
                             </div>
-                            <div class="form-group">
-                                <label for="disable_star"
-                                       class="col-sm-4 control-label">DISABLE_STAR</label>
-                                <div class="col-sm-8">
-                                    <div class="switch switch-small">
-                                        <label>
-                                            <input id="disable_star"
-                                                   key="disable_star"
-                                                   value="{{ config.disable_star }}" type="checkbox">
-                                            禁止在查询时使用 * 
-                                        </label>
+                            <div id="div-query-config" style="display: none">
+                                <div class="form-group">
+                                    <label for="query_check"
+                                           class="col-sm-4 control-label">QUERY_CHECK</label>
+                                    <div class="col-sm-8">
+                                        <div class="switch switch-small">
+                                            <label>
+                                                <input id="query_check"
+                                                       key="query_check"
+                                                       value="{{ config.query_check }}" type="checkbox">
+                                                是否强制开启Inception检测
+                                            </label>
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
-                            <div class="form-group">
-                                <label for="data_masking"
-                                       class="col-sm-4 control-label">DATA_MASKING</label>
-                                <div class="col-sm-8">
-                                    <div class="switch switch-small">
-                                        <label>
-                                            <input id="data_masking"
-                                                   key="data_masking"
-                                                   value="{{ config.data_masking }}" type="checkbox">
-                                            是否开启动态脱敏
-                                        </label>
+                                <div class="form-group">
+                                    <label for="data_masking"
+                                           class="col-sm-4 control-label">DATA_MASKING</label>
+                                    <div class="col-sm-8">
+                                        <div class="switch switch-small">
+                                            <label>
+                                                <input id="data_masking"
+                                                       key="data_masking"
+                                                       value="{{ config.data_masking }}" type="checkbox">
+                                                是否开启动态脱敏
+                                            </label>
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
-                            <div class="form-group">
-                                <label for="admin_query_limit"
-                                       class="col-sm-4 control-label">ADMIN_QUERY_LIMIT</label>
-                                <div class="col-sm-5">
-                                    <input type="number" class="form-control" id="admin_query_limit"
-                                           key="admin_query_limit"
-                                           value="{{ config.admin_query_limit }}"
-                                           placeholder="管理员/DBA查询结果集限制">
+                                <div class="form-group">
+                                    <label for="admin_query_limit"
+                                           class="col-sm-4 control-label">ADMIN_QUERY_LIMIT</label>
+                                    <div class="col-sm-5">
+                                        <input type="text" class="form-control" id="admin_query_limit"
+                                               key="admin_query_limit"
+                                               value="{{ config.admin_query_limit }}"
+                                               placeholder="管理员/DBA查询结果集限制">
+                                    </div>
                                 </div>
                             </div>
                             <h5 style="color: darkgrey"><b>SQL优化</b></h5>
@@ -257,28 +247,6 @@
                                         <input type="text" class="form-control" id="sqladvisor" key="sqladvisor"
                                                value="{{ config.sqladvisor }}"
                                                placeholder="SQLADVISOR路径">
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="form-group">
-                                <label for="soar"
-                                       class="col-sm-4 control-label">SOAR_PATH</label>
-                                <div class="col-sm-5">
-                                    <div class="switch switch-small">
-                                        <input type="text" class="form-control" id="soar" key="soar"
-                                               value="{{ config.soar }}"
-                                               placeholder="SOAR路径">
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="form-group">
-                                <label for="soar_test_dsn"
-                                       class="col-sm-4 control-label">SOAR_TEST_DSN</label>
-                                <div class="col-sm-5">
-                                    <div class="switch switch-small">
-                                        <input type="text" class="form-control" id="soar_test_dsn" key="soar_test_dsn"
-                                               value="{{ config.soar_test_dsn }}"
-                                               placeholder="SOAR测试实例：user:pwd@host:port/db">
                                     </div>
                                 </div>
                             </div>
@@ -329,7 +297,7 @@
                                     <label for="mail_smtp_port"
                                            class="col-sm-4 control-label">MAIL_SMTP_PORT</label>
                                     <div class="col-sm-5">
-                                        <input type="number" class="form-control"
+                                        <input type="text" class="form-control"
                                                id="mail_smtp_port"
                                                key="mail_smtp_port"
                                                value="{{ config.mail_smtp_port }}"
@@ -488,6 +456,19 @@
                         <hr/>
                         <div class="form-horizontal">
                             <div class="form-group">
+                                <label for="aliyun_rds_manage"
+                                       class="col-sm-4 control-label">ALIYUN_RDS_MANAGE</label>
+                                <div class="col-sm-8">
+                                    <div class="switch switch-small">
+                                        <label>
+                                            <input id="aliyun_rds_manage" key="aliyun_rds_manage"
+                                                   value="{{ config.aliyun_rds_manage }}"
+                                                   type="checkbox"> 是否开启阿里云RDS管理
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="form-group">
                                 <label for="lock_time_threshold"
                                        class="col-sm-4 control-label">SCHEMASYNC</label>
                                 <div class="col-sm-5">
@@ -510,21 +491,10 @@
                                 </div>
                             </div>
                             <div class="form-group">
-                                <label for="default_resource_group"
-                                       class="col-sm-4 control-label">DEFAULT_RESOURCE_GROUP</label>
-                                <div class="col-sm-5">
-                                    <input type="text" class="form-control"
-                                           id="default_resource_group"
-                                           key="default_resource_group"
-                                           value="{{ config.default_resource_group }}"
-                                           placeholder="默认资源组名，每次用户登录会自动关联">
-                                </div>
-                            </div>
-                            <div class="form-group">
                                 <label for="lock_time_threshold"
                                        class="col-sm-4 control-label">LOCK_TIME_THRESHOLD</label>
                                 <div class="col-sm-5">
-                                    <input type="number" class="form-control"
+                                    <input type="text" class="form-control"
                                            id="lock_time_threshold"
                                            key="lock_time_threshold"
                                            value="{{ config.lock_time_threshold }}"
@@ -535,35 +505,11 @@
                                 <label for="lock_cnt_threshold"
                                        class="col-sm-4 control-label">LOCK_CNT_THRESHOLD</label>
                                 <div class="col-sm-5">
-                                    <input type="number" class="form-control"
+                                    <input type="text" class="form-control"
                                            id="lock_cnt_threshold"
                                            key="lock_cnt_threshold"
                                            value="{{ config.lock_cnt_threshold }}"
                                            placeholder="账户登录失败几次锁账户">
-                                </div>
-                            </div>
-                            <div class="form-group">
-                                <label for="sign_up_enabled"
-                                       class="col-sm-4 control-label">SIGN_UP_ENABLED</label>
-                                <div class="col-sm-8">
-                                    <div class="switch switch-small">
-                                        <label>
-                                            <input id="sign_up_enabled" key="sign_up_enabled" value="{{ config.sign_up_enabled }}"
-                                                   type="checkbox"> 是否开启注册功能
-                                        </label>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="form-group">
-                                <label for="archery_base_url"
-                                       class="col-sm-4 control-label">ARCHERY_BASE_URL</label>
-                                <div class="col-sm-8">
-                                    <div class="switch switch-small">
-                                        <label>
-                                            <input id="archery_base_url" key="archery_base_url" value="{{ config.archery_base_url }}"
-                                                   type="checkbox"> 系统首页地址, 用于钉钉和邮件发送链接使用, 如 http://archery.com
-                                        </label>
-                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -643,7 +589,10 @@
         $('input[type="checkbox"]').on('switchChange.bootstrapSwitch', function (event, state) {
             if (state) {
                 $(this).val(true);
-                if ($(this).attr("id") === 'mail') {
+                if ($(this).attr("id") === 'query') {
+                    $("#div-query-config").show();
+                }
+                else if ($(this).attr("id") === 'mail') {
                     $("#div-mail-config").show();
                 }
                 else if ($(this).attr("id") === 'ding_to_person') {
@@ -655,7 +604,13 @@
             }
             else {
                 $(this).val(false);
-                if ($(this).attr("id") === 'mail') {
+                if ($(this).attr("id") === 'query') {
+                    $("#query_check").val(false);
+                    $("#data_masking").val(false);
+                    $("#admin_query_limit").val(0);
+                    $("#div-query-config").hide();
+                }
+                else if ($(this).attr("id") === 'mail') {
                     $("#mail_ssl").val(false);
                     $("#div-mail-config").hide();
                 }
@@ -708,7 +663,7 @@
                     if (data.status === 0) {
                         window.location.reload()
                     } else {
-                        alert(data.msg);
+                        alert("status: " + data.status + "\nmsg: " + data.msg + data.data);
                     }
                 },
                 error: function (XMLHttpRequest, textStatus, errorThrown) {
@@ -763,7 +718,7 @@
                             var result = data.data;
                             $("#workflow_auditors").text(result['auditors_display']);
                         } else {
-                            alert(data.msg);
+                            alert("status: " + data.status + "\nmsg: " + data.msg + data.data);
                         }
                     },
                     error: function (XMLHttpRequest, textStatus, errorThrown) {
@@ -775,7 +730,7 @@
 
         // 变更组工单审批流程
         $("#btn-workflow-config").click(function () {
-            if ($("#group").val() && $("#workflow_type").val() && $("#workflow_auditors_text").val()) {
+            if ($("#group").val() && $("#workflow_type").val()) {
                 $(this).addClass('disabled');
                 $(this).prop('disabled', true);
                 var audit_auth_groups = $("#workflow_auditors_text").val().replace(/->/g, ",");
@@ -797,7 +752,7 @@
                             //alert('修改成功');
                             $("#workflow_type").trigger("change")
                         } else {
-                            alert(data.msg);
+                            alert("status: " + data.status + "\nmsg: " + data.msg + data.data);
                         }
                     },
                     error: function (XMLHttpRequest, textStatus, errorThrown) {
@@ -806,7 +761,7 @@
                 });
             }
             else {
-                alert('请选择组、工单类型和审批流程！')
+                alert('请选择项目和工单类型！')
             }
 
         });
@@ -816,26 +771,19 @@
             $(this).addClass('disabled');
             $(this).prop('disabled', true);
             $.ajax({
-                type: "post",
+                type: "get",
                 url: "/check/inception/",
                 dataType: "json",
-                data: {
-                    inception_host: $("#inception_host").val(),
-                    inception_port: $("#inception_port").val(),
-                    inception_remote_backup_host: $("#inception_remote_backup_host").val(),
-                    inception_remote_backup_port: $("#inception_remote_backup_port").val(),
-                    inception_remote_backup_user: $("#inception_remote_backup_user").val(),
-                    inception_remote_backup_password: $("#inception_remote_backup_password").val(),
-                },
+                data: {},
                 complete: function () {
                     $("#check_incption").removeClass('disabled');
                     $("#check_incption").prop('disabled', false);
                 },
                 success: function (data) {
                     if (data.status === 0) {
-                        alert('inception和备份库测试连接成功，请点击保存生效！')
+                        alert('连接成功')
                     } else {
-                        alert(data.msg);
+                        alert("status: " + data.status + "\nmsg: " + data.msg);
                     }
                 },
                 error: function (XMLHttpRequest, textStatus, errorThrown) {
@@ -849,26 +797,19 @@
             $(this).addClass('disabled');
             $(this).prop('disabled', true);
             $.ajax({
-                type: "post",
+                type: "get",
                 url: "/check/email/",
                 dataType: "json",
-                data: {
-                    mail: $("#mail").val(),
-                    mail_ssl: $("#mail_ssl").val(),
-                    mail_smtp_server: $("#mail_smtp_server").val(),
-                    mail_smtp_port: $("#mail_smtp_port").val(),
-                    mail_smtp_user: $("#mail_smtp_user").val(),
-                    mail_smtp_password: $("#mail_smtp_password").val(),
-                },
+                data: {},
                 complete: function () {
                     $("#check_email").removeClass('disabled');
                     $("#check_email").prop('disabled', false);
                 },
                 success: function (data) {
                     if (data.status === 0) {
-                        alert('测试邮件已成功发送给当前用户，注意查收，请点击保存生效！')
+                        alert('连接成功')
                     } else {
-                        alert(data.msg);
+                        alert("status: " + data.status + "\nmsg: " + data.msg);
                     }
                 },
                 error: function (XMLHttpRequest, textStatus, errorThrown) {
