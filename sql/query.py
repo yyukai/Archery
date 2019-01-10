@@ -3,6 +3,7 @@
 import logging
 import re
 import os
+import shutil
 from wsgiref.util import FileWrapper
 import simplejson as json
 from django.views.decorators.csrf import csrf_exempt
@@ -534,6 +535,8 @@ def query(request):
             sql_result = Dao(instance_name=instance_name).pgsql_query(str(db_name), sql_content, limit_num)
         elif instance.db_type == "mssql":
             sql_result = Dao(instance_name=instance_name).mssql_query(str(db_name), sql_content, limit_num)
+        elif instance.db_type == "oracle":
+            sql_result = Dao(instance_name=instance_name).oracle_query(str(db_name), sql_content, limit_num)
         t_end = time.time()
         cost_time = "%5s" % "{:.4f}".format(t_end - t_start)
 
@@ -695,6 +698,8 @@ def do_async_query(request, query_export, instance_name, db_name, db_type, sql, 
         sql_result = Dao(instance_name=instance_name).pgsql_query(db_name, sql, limit_num)
     elif db_type == "mssql":
         sql_result = Dao(instance_name=instance_name).mssql_query(db_name, sql, limit_num)
+    elif db_type == "oracle":
+        sql_result = Dao(instance_name=instance_name).oracle_query(db_name, sql, limit_num)
     t_end = int(time.time())
     query_log.cost_time = t_end - t_start
     query_log.effect_row = sql_result["effect_row"]
@@ -704,7 +709,7 @@ def do_async_query(request, query_export, instance_name, db_name, db_type, sql, 
         try:
             file_dir = SysConfig().sys_config.get('query_result_dir', BASE_DIR)
             time_suffix = datetime.datetime.now().strftime("%m%d%H%M%S")
-            file_name = '{}-{}-{}'.format(query_export.query_log.username, db_name, time_suffix)
+            file_name = '{}-{}-{}-{}'.format(query_export.query_log.username, query_log.instance_name, db_name, time_suffix)
             template_file = os.path.join(file_dir, file_name)
 
             workbook = xlwt.Workbook(encoding='utf-8')
@@ -785,6 +790,9 @@ def query_export_audit(request):
             if is_allow == "yes":
                 qe.status = 3
                 msg = "已通过！"
+                if os.path.exists(qe.result_file):
+                    if os.path.getsize(qe.result_file) > 0:
+                        shutil.copy2(qe.result_file, "{}.xls".format(qe.result_file.split('/')[-1]))
             else:
                 qe.status = 4
                 msg = "已拒绝！"

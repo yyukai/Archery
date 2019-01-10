@@ -24,6 +24,7 @@ class Dao(object):
                 self.port = int(instance_info.port)
                 self.user = instance_info.user
                 self.password = decryptor.decrypt(instance_info.password)
+                self.osn = instance_info.osn
                 self.db_type = instance_info.db_type
                 if flag is True:
                     if self.db_type == "mysql":
@@ -95,13 +96,11 @@ class Dao(object):
                     conn.close()
         elif self.db_type == "oracle":
             try:
-                driver = '{}/{}@{}/orcl'.format(self.user, self.password, self.host)
+                driver = '{}/{}@{}/{}'.format(self.user, self.password, self.host, self.osn)
                 conn = cx_Oracle.connect(driver)
                 cursor = conn.cursor()
-                cursor.execute("SELECT name FROM sys.databases ;")
+                cursor.execute("select * from dba_users where owner='{}'".format(self.user))
                 db_list = [item[0] for item in cursor.fetchall()]
-            except (pyodbc.Error, pyodbc.OperationalError) as e:
-                raise Exception(e)
             except Exception as e:
                 raise Exception(e)
             finally:
@@ -166,6 +165,22 @@ class Dao(object):
                 if conn is not None:
                     conn.commit()
                     conn.close()
+        elif self.db_type == "oracle":
+            try:
+                driver = '{}/{}@{}/{}'.format(self.user, self.password, self.host, self.osn)
+                conn = cx_Oracle.connect(driver)
+                cursor = conn.cursor()
+                print("sdfsdfsf")
+                cursor.execute("""select OBJECT_NAME from dba_objects where OWNER = '{}'""".format(self.user))
+                tb_list = [item[0] for item in cursor.fetchall()]
+            except Exception as e:
+                raise Exception(e)
+            finally:
+                if cursor is not None:
+                    cursor.close()
+                if conn is not None:
+                    conn.commit()
+                    conn.close()
         elif self.db_type == "mssql":
             try:
                 driver = 'DRIVER={ODBC Driver 17 for SQL Server};' + """SERVER={},{};DATABASE={};UID={};PWD={}""".format(
@@ -218,6 +233,21 @@ class Dao(object):
             except psycopg2.Warning as w:
                 raise Exception(w)
             except psycopg2.Error as e:
+                raise Exception(e)
+            finally:
+                if cursor is not None:
+                    cursor.close()
+                if conn is not None:
+                    conn.commit()
+                    conn.close()
+        elif self.db_type == "oracle":
+            try:
+                driver = '{}/{}@{}/{}'.format(self.user, self.password, self.host, self.osn)
+                conn = cx_Oracle.connect(driver)
+                cursor = conn.cursor()
+                cursor.execute("select * from dba_tab_columns where owner in ('{}') and table_name in ('{}');".format(self.user, tb_name))
+                col_list = [col[0] for col in cursor.fetchall()]
+            except Exception as e:
                 raise Exception(e)
             finally:
                 if cursor is not None:
@@ -515,6 +545,93 @@ class Dao(object):
         except pyodbc.Warning as w:
             raise Exception(w)
         except pyodbc.Error as e:
+            raise Exception(e)
+        except:
+            raise Exception()
+        finally:
+            if cursor is not None:
+                cursor.close()
+            if conn is not None:
+                conn.commit()
+                conn.close()
+        return result
+
+    def oracle_query(self, db_name=None, sql='', limit_num=0):
+        result = {}
+        conn = None
+        cursor = None
+        is_show_create_table, tb_name = False, None
+        try:
+            if self.flag:
+                conn = self.conn
+                cursor = self.cursor
+            else:
+                driver = '{}/{}@{}/{}'.format(self.user, self.password, self.host, self.osn)
+                conn = cx_Oracle.connect(driver)
+                cursor = conn.cursor()
+            if re.match(r"^show\s+create\s+table", sql.lower()):
+                is_show_create_table = True
+                tb_name = re.sub('^show\s+create\s+table', '', sql[:-1], count=1, flags=0).strip()
+                sql = """select dbms_metadata.get_ddl('TABLE','{}','{}') from dual
+                      """.format(tb_name, self.user)
+            effect_row = cursor.execute(sql)
+            if int(limit_num) > 0:
+                rows = cursor.fetchmany(int(limit_num))
+            else:
+                rows = cursor.fetchall()
+            print('rows:', rows)
+            fields = cursor.description
+
+            column_list = []
+            if fields:
+                for i in fields:
+                    column_list.append(i[0])
+            result['column_list'] = column_list
+            result['effect_row'] = effect_row.arraysize
+            if is_show_create_table is True:
+                result['column_list'] = ["ColumnName", "ColumnType", "ColumnLength", "ColumnScale", "ColumnNull"]
+                result['rows'] = [list(r) for r in rows]
+            else:
+                result['rows'] = list(rows)
+            print(result)
+            conn.commit()
+        except cx_Oracle.DatabaseError as e:
+            raise Exception(e)
+        except Exception as e:
+            raise Exception(e)
+        finally:
+            if cursor is not None:
+                cursor.close()
+            if conn is not None:
+                conn.commit()
+                conn.close()
+        return result
+
+    def oracle_execute(self, db_name, sql):
+        result = {}
+        try:
+            if self.flag:
+                conn = self.conn
+                cursor = self.cursor
+            else:
+                driver = '{}/{}@{}/{}'.format(self.user, self.password, self.host, self.osn)
+                conn = cx_Oracle.connect(driver)
+                cursor = conn.cursor()
+            effect_row = cursor.execute(sql)
+            conn.commit()
+            rows = cursor.fetchall()
+            fields = cursor.description
+
+            column_list = []
+            if fields:
+                for i in fields:
+                    column_list.append(i[0])
+            result['column_list'] = column_list
+            result['effect_row'] = effect_row.arraysize
+            result['rows'] = list(rows)
+        except cx_Oracle.DatabaseError as e:
+            raise Exception(e)
+        except Exception as e:
             raise Exception(e)
         except:
             raise Exception()

@@ -41,7 +41,7 @@ def loginAuthenticate(username, password):
         # 登录成功
         if user:
             # 从钉钉获取该用户的userid，用于给他发消息
-            if sys_config.get("ding_to_person") is True and username != 'admin':
+            if sys_config.get("ding_to_person") is True and username not in ['admin', 'wdadmin']:
                 print(username, '-----------------------------')
                 set_ding_user_id(username)
 

@@ -425,6 +425,33 @@
                             </div>
                         </div>
                         <br>
+                        <h4 style="color: darkgrey"><b>临时文件配置</b></h4>
+                        <hr/>
+                        <div class="form-horizontal">
+                            <div class="form-group">
+                                <label for="query_result_dir"
+                                       class="col-sm-4 control-label">导出查询临时目录</label>
+                                <div class="col-sm-5">
+                                    <input type="text" class="form-control"
+                                           id="query_result_dir"
+                                           key="query_result_dir"
+                                           value="{{ config.query_result_dir }}"
+                                           placeholder="存放查询大数据的结果文件">
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label for="wpan_upload_dir"
+                                       class="col-sm-4 control-label">文件外传目录</label>
+                                <div class="col-sm-5">
+                                    <input type="text" class="form-control"
+                                           id="wpan_upload_dir"
+                                           key="wpan_upload_dir"
+                                           value="{{ config.wpan_upload_dir }}"
+                                           placeholder="该目录下文件可推送到微贷云盘">
+                                </div>
+                            </div>
+                        </div>
+                        <br>
                         <h4 style="color: darkgrey"><b>其他配置</b></h4>
                         <hr/>
                         <div class="form-horizontal">
@@ -485,18 +512,8 @@
                                            placeholder="账户登录失败几次锁账户">
                                 </div>
                             </div>
-                            <div class="form-group">
-                                <label for="query_result_dir"
-                                       class="col-sm-4 control-label">QUERY_RESULT_DIR</label>
-                                <div class="col-sm-5">
-                                    <input type="text" class="form-control"
-                                           id="query_result_dir"
-                                           key="query_result_dir"
-                                           value="{{ config.query_result_dir }}"
-                                           placeholder="存放查询大数据的结果文件">
-                                </div>
-                            </div>
                         </div>
+
                         <div class="form-group">
                             <div class="col-sm-offset-4 col-sm-10">
                                 <button id="saveconfig" type="button" class="btn btn-default">保存配置</button>

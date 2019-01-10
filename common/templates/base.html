@@ -20,6 +20,17 @@
     {% for jsfile_name in script_list %}
         <script src="{{ host }}/{{ jsfile_name }}.js"></script>
     {% endfor %}
+    <style>
+        .width100 {
+            width: 100% !important;
+        }
+        .width100px {
+            width: 100px !important;
+        }
+        .width150px {
+            width: 150px !important;
+        }
+    </style>
 </head>
 <body>
 
@@ -100,6 +111,22 @@
                                 {% if perms.sql.menu_queryapplylist %}
                                     <li>
                                         <a href="/queryapplylist/">查询权限申请</a>
+                                    </li>
+                                {% endif %}
+                            </ul>
+                            <!-- /.nav-second-level -->
+                        </li>
+                    {% endif %}
+                    {% if perms.sql.menu_redis %}
+                        <li>
+                            <a href="#"><i class="fa fa-search fa-fw"></i> Redis查询<span class="fa arrow"></span></a>
+                            <ul class="nav nav-second-level">
+                                {% if perms.sql.redis_view %}
+                                    <li>
+                                        <a href="/redis/">Redis查询</a>
+                                    </li>
+                                    <li>
+                                        <a href="/redis_apply/">Redis审核</a>
                                     </li>
                                 {% endif %}
                             </ul>
@@ -231,6 +258,20 @@
                             <!-- /.nav-second-level -->
                         </li>
                     {% endif %}
+                    {% if perms.sql.menu_wpan_upload %}
+                        <li>
+                            <a href="#"><i class="glyphicon glyphicon-cloud-upload"></i> 上传网盘<span class="fa arrow"></span></a>
+                            <ul class="nav nav-second-level">
+                                <li>
+                                    <a href="/wpan_upload/">我的文件</a>
+                                </li>
+                                <li>
+                                    <a href="/wpan_audit/">我的待审核</a>
+                                </li>
+                            </ul>
+                            <!-- /.nav-second-level -->
+                        </li>
+                    {% endif %}
                     {% if perms.sql.menu_backup %}
                         <li>
                             <a href="/backup/"><i class="fa fa-save fa-fw"></i> 备份管理</a>
@@ -310,6 +351,7 @@
 </div>
 
 <script src="{% static 'jquery/jquery.min.js' %}"></script>
+<script src="{% static 'jquery/jquery.form.min.js' %}"></script>
 <script src="{% static 'bootstrap-3.3.7-dist/js/bootstrap.min.js' %}"></script>
 <script src="{% static 'metisMenu/js/metisMenu.min.js' %}"></script>
 <script src="{% static 'sb-admin-2/js/sb-admin-2.js' %}"></script>

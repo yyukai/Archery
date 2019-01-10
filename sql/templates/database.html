@@ -4,7 +4,7 @@
     <!-- 自定义操作按钮-->
     <div id="toolbar" class="form-inline">
         <div class="form-group bootstrap-select ">
-            <select id="type" class="dropdown-menu-right selectpicker ">
+            <select id="instance_name" class="dropdown-menu-right selectpicker " data-live-search="true">
                 <option value="is-empty" disabled="" selected="selected">请选择实例</option>
                 {% for instance_name in instances %}
                     <option value="{{ instance_name }}">{{ instance_name }}</option>
@@ -40,7 +40,7 @@
                 escape: true,
                 method: 'post',
                 contentType: "application/x-www-form-urlencoded",
-                url: "/database/list/",
+                url: "/database_list/",
                 striped: true,                      //是否显示行间隔色
                 cache: false,                       //是否使用缓存，默认为true，所以一般情况下需要设置一下这个属性（*）
                 pagination: true,                   //是否显示分页（*）
@@ -111,7 +111,7 @@
         $(document).ready(function () {
             grouplist();
         });
-        $("#hostType").change(function () {
+        $("#instance_name").change(function () {
             grouplist();
         });
         function host_init(id) {
