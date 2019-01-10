@@ -1,0 +1,387 @@
+{% extends "base.html" %}
+
+{% block content %}
+    <div class="wrapper wrapper-content">
+        <div class="row">
+            <div class="col-lg-3" id="split-left" style="padding-left: 3px">
+                <div class="ibox float-e-margins">
+                    搜索：<input type="text" id="key" value="" class="empty"/>
+                </div>
+                <div class="ibox float-e-margins">
+                    <div class="ibox-content mailbox-content" style="padding-top: 10px;padding-left: 1px">
+                        <div class="file-manager ">
+                            <div id="assetTree" class="ztree">
+                            </div>
+                            <div class="clearfix"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-9 animated fadeInRight" id="split-right">
+                <div id="toolbar" class="form-inline">
+                    <div class="form-group ">
+                        <button id="btn_import" type="button" class="btn btn-default">
+                            <span class="glyphicon glyphicon-plus" aria-hidden="true"></span>上传数据文件
+                        </button>
+                    </div>
+                </div>
+                <!-- 列表的表格-->
+                <div class="table-responsive">
+                    <table id="name-list" data-toggle="table" class="table table-striped table-hover"
+                           style="table-layout:inherit;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!--上传文件模态窗-->
+    <div class="modal fade" id="importModal">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <button type="button" class="close" data-dismiss="modal"><span
+                            aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>
+                    <h4 class="modal-title">上传数据文件（存放到当天日期目录下，文件名相同会覆盖）</h4>
+                </div>
+                <div class="modal-body">
+                    <form id="importForm" class="form-horizontal  nice-validator n-yellow" novalidate="novalidate"
+                    action="/wpan_upload/file_list/" enctype="multipart/form-data" method="post">
+                        {% csrf_token %}
+                        <div class="form-group">
+                            <label for="file" class="col-sm-4 control-label">文件：</label>
+                            <div class="col-sm-7">
+                                <input id="upload_file" name="files" type="file" >
+                            </div>
+                            <br/>
+                            <span class="help-block red-fonts"></span>
+                        </div>
+                    </form>
+                    <p>
+                        <p class="text-success" id="id_created"></p>
+                        <p id="created_detail"></p>
+                        <p class="text-danger" id="id_failed"></p>
+                        <p id="failed_detail"></p>
+                    </p>
+                </div>
+                <div class="modal-footer">
+                    <button data-dismiss="modal" class="btn btn-white" type="button">取消</button>
+                    <button class="btn btn-primary" type="button" id="btn_import_submit">上传</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="showModal">
+        <div class="modal-dialog" style="width: 60%">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <button type="button" class="close" data-dismiss="modal"><span
+                            aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>
+                    <input type="hidden" id="showPath" class="form-control">
+                    <div class="form-group">
+                        <label class="col-sm-2 control-label" id="showTitle"></label>
+                        <div class="col-sm-4">
+                            <button type="button" id="save" class="btn btn-primary" onclick="savePlaybook();"
+                                    style="display: none;">
+                                提交保存
+                            </button>
+                            <input id="editorSwitch" value="false" class="switch switch-small" type="checkbox">
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-body">
+                    <div class="column">
+                        <pre id="editor" class="ace_editor" style="min-height:350px;"></pre>
+                    </div>
+                </div> <!--modal-body-->
+            </div><!-- /.modal-content -->
+        </div><!-- /.modal-dialog -->
+    </div><!-- /.modal -->
+
+    <div class="modal fade" id="applyModal" tabindex="-1" role="dialog" aria-labelledby="myModalLabel" aria-hidden="true">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span
+                            aria-hidden="true">&times;</span></button>
+                    <h4 class="modal-title" id="myModalLabel">文件外传微贷云盘申请</h4>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <input type="text" class="form-control" id="reason" placeholder="简单说明将该文件外传到云盘理由">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-default" data-dismiss="modal">取消</button>
+                    <button type="button" class="btn btn-success" id="modal_btn">提交</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+{% endblock content %}
+{% block js %}
+    {% load staticfiles %}
+    <script src="{% static 'bootstrap-table/js/bootstrap-table-export.min.js' %}"></script>
+    <script src="{% static 'bootstrap-table/js/tableExport.min.js' %}"></script>
+    <link rel="stylesheet" href="/static/zTree_v3/css/awesomeStyle/awesome.css" type="text/css">
+    <script type="text/javascript" src="/static/zTree_v3/js/jquery.ztree.core.js"></script>
+    <script type="text/javascript" src="/static/zTree_v3/js/jquery.ztree.excheck.js"></script>
+    <script type="text/javascript" src="/static/zTree_v3/js/jquery.ztree.exedit.js"></script>
+    <script type="text/javascript" src="/static/zTree_v3/js/jquery.ztree.exhide.js"></script>
+    <script type="text/javascript" src="/static/zTree_v3/js/fuzzysearch.js"></script>
+    <link rel="stylesheet" href="/static/toastr/toastr.min.css" type="text/css">
+    <script type="text/javascript" src="/static/toastr/toastr.min.js"></script>
+    <script type="text/javascript" src="/static/layer/layer.min.js"></script>
+    <script type="text/javascript" src="{% static 'ace/ace.js' %}"></script>
+    <script type="text/javascript" src="{% static 'js/sql.js' %}"></script>
+    <style type="text/css">
+        #editor {
+            margin: 0;
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            left: 0;
+            right: 0;
+        }
+        </style>
+    <script>
+        var zTree = 0;
+
+        function get_name_list() {
+            $('#name-list').bootstrapTable('destroy').bootstrapTable({
+                method: 'get',
+                contentType: "application/x-www-form-urlencoded",
+                url: "/wpan_upload/file_list/?path=" + sessionStorage.getItem('path'),
+                striped: true,                      //是否显示行间隔色
+                cache: false,                       //是否使用缓存，默认为true，所以一般情况下需要设置一下这个属性（*）
+                pagination: true,                   //是否显示分页（*）
+                sortable: true,                     //是否启用排序
+                sortOrder: "asc",                   //排序方式
+                sidePagination: "client",           //分页方式：client客户端分页，server服务端分页（*）
+                pageNumber: 1,                      //初始化加载第一页，默认第一页,并记录
+                pageSize: 14,                       //每页的记录行数（*）
+                pageList: [20, 30, 50, 100],        //可供选择的每页的行数（*）
+                showExport: true,                   //是否显示导出按钮
+                exportOptions: {
+                    fileName: 'files'                //文件名称设置
+                },
+                search: true,                       //是否显示表格搜索
+                strictSearch: false,                //是否全匹配搜索
+                showColumns: true,                  //是否显示所有的列（选择显示的列）
+                showRefresh: true,                  //是否显示刷新按钮
+                minimumCountColumns: 2,             //最少允许的列数
+                clickToSelect: true,                //是否启用点击选中行
+                uniqueId: "name",                     //每一行的唯一标识，一般为主键列
+                showToggle: true,                   //是否显示详细视图和列表视图的切换按钮
+                cardView: false,                    //是否显示详细视图
+                detailView: false,                  //是否显示父子表
+                locale: 'zh-CN',                    //本地化
+                toolbar: "#toolbar",               //指明自定义的toolbar
+                queryParamsType: 'limit',
+                columns: [{
+                    title: '文件(目录)名',
+                    field: 'name',
+                    formatter: function (value, row, index) {
+                        if (row.type === "file") {
+                            return '<a class="btn-xs" onclick="showCont(\'/wpan_upload/file_cont/?path='+row.path+'\')">'+value+'</a>';
+                        } else {
+                            return value
+                        }
+                    }
+                }, {
+                    title: '大小(K)',
+                    field: 'size'
+                }, {
+                    title: '上次修改',
+                    field: 'mtime'
+                }, {
+                    title: '操作',
+                    field: 'path',
+                    formatter: function (value, row, index) {
+                        if (row.type === "file") {
+                            var text = '<a type="button" class="btn btn-success" href="/wpan_upload/download/?path=' + value + '" >下载</a>';
+                            text += '<button class="btn btn-warning" onclick="do_apply(\'' +value+ '\')">传至微贷云盘</button>';
+                            return text
+                        }
+                    }
+                }],
+                onLoadSuccess: function () {
+                },
+                onLoadError: function () {
+                    alert("数据加载失败！请检查接口返回信息和错误日志！");
+                },
+                queryParams: function (e) {
+                    return {
+                        search: e.search
+                    }
+                },
+                onSearch: function (e) {
+                    //传搜索参数给服务器
+                    return {
+                        search: e.search
+                    }
+                },
+                responseHandler: function (res) {
+                    //在ajax获取到数据，渲染表格之前，修改数据源
+                    return res;
+                }
+            });
+        }
+
+        function onClick(event, treeId, treeNode) {
+            console.log(event, treeId, treeNode.id);
+            sessionStorage.setItem('path', treeNode.id);
+            get_name_list();
+        }
+
+        function beforeClick(treeId, treeNode, clickFlag) {
+            return true;
+        }
+
+        function selectQueryNode() {
+            var query_node_id = getUrlParam("node");
+            var cookie_node_id = getCookie('node_selected');
+            var node;
+            var node_id;
+
+            if (query_node_id !== null) {
+                node_id = query_node_id
+            } else if (cookie_node_id !== null) {
+                node_id = cookie_node_id;
+            }
+
+            node = zTree.getNodesByParam("id", node_id, null);
+            if (node) {
+                zTree.selectNode(node[0]);
+            }
+        }
+
+        function beforeDrag() {
+            return false
+        }
+
+        function beforeDrop(treeId, treeNodes, targetNode, moveType) {
+        }
+
+        function onDrag(event, treeId, treeNodes) {
+        }
+
+        function onDrop(event, treeId, treeNodes, targetNode, moveType, isCopy) {
+        }
+
+        function initTree() {
+            var setting = {
+                view: {
+                    dblClickExpand: false,
+                    showLine: true
+                },
+                data: {
+                    simpleData: {
+                        enable: true
+                    }
+                },
+                edit: {
+                    enable: true,
+                    showRemoveBtn: false,
+                    showRenameBtn: false,
+                    drag: {
+                        isCopy: false,
+                        isMove: true
+                    }
+                },
+                callback: {
+                    onClick: onClick,
+                    beforeClick: beforeClick,
+                    beforeDrag: beforeDrag,
+                    onDrag: onDrag,
+                    beforeDrop: beforeDrop,
+                    onDrop: onDrop
+                }
+            };
+
+            var zNodes = [];
+            $.get("/wpan_upload/dir_list/", function (data) {
+                console.log(data);
+                if (data.length === 0) {
+                    zNodes.push({"id": 0, "name": "/", "pId": -1, "open": open});
+                } else {
+                    $.each(data, function (index, v) {
+                        zNodes.push({"id": v["id"], "name": v["name"], "pId": v["parent_id"], "open": false});
+                    });
+                }
+                $.fn.zTree.init($("#assetTree"), setting, zNodes);
+                fuzzySearch('assetTree','#key',null,false);     //initialize fuzzysearch function
+                zTree = $.fn.zTree.getZTreeObj("assetTree");
+                selectQueryNode();
+            });
+            get_name_list();
+        }
+
+        $(document).ready(function () {
+            initTree();
+        });
+
+        function showCont(url) {
+            console.log(url);
+            $.layer({
+                type: 2,
+                title: '文件内容预览',
+                maxmin: true,
+                shift: 'top',
+                border: [2, 0.3, '#1AB394'],
+                shade: [0.5, '#000000'],
+                shadeClose: true,
+                area: ['800px', '600px'],
+                iframe: {src: url}
+            });
+        }
+
+        $("#btn_import").on('click',function(){
+            $('#importModal').modal('show');
+        });
+        $("#btn_import_submit").on('click', function () {
+            if (confirm("是否确定上传该文件？")) {
+                var $form = $('#importForm');
+                $form.find('.help-block').remove();
+                function success(data) {
+                    // console.log(data);
+                    $('<span />', {class: 'help-block text-danger'}).html(data.msg).insertAfter($('#upload_file'));
+                    if (data.code === 0) {
+                        var obj = document.getElementById('upload_file');
+                        obj.outerHTML = obj.outerHTML;
+                        $('#id_created').html(data.created_info);
+                        $('#created_detail').html(data.created.join('</br>'));
+                        $('#id_failed').html(data.failed_info);
+                        $('#failed_detail').html(data.failed.join('</br>'));
+                    }
+                }
+                $form.ajaxSubmit({success: success});
+            }
+        });
+        function do_apply(path) {
+            $('#applyModal').modal({});
+            $("#modal_btn").unbind("click").click(function(){
+                var reason = document.getElementById("reason").value;
+                $.ajax({
+                    type: "get",
+                    url: "/wpan_upload/apply/",
+                    timeout: 3000,
+                    data: {
+                        path: path,
+                        reason: reason
+                    },
+                    success: function (data) {
+                        alert(data['result']);
+                        $('#applyModal').modal('hide');
+                    },
+                    error: function (data) {
+                        alert(data);
+                        $('#applyModal').modal('hide');
+                    }
+                });
+            });
+        }
+    </script>
+{% endblock %}
