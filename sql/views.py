@@ -15,8 +15,8 @@ from sql.utils.inception import InceptionDao
 from common.utils.permission import superuser_required
 from sql.utils.jobs import job_info
 
-from .models import Users, SqlWorkflow, QueryPrivileges, SqlGroup, \
-    QueryPrivilegesApply, Config, DataBase, Replication
+from .models import Users, Instance, SqlWorkflow, QueryPrivileges, SqlGroup, \
+    QueryPrivilegesApply, Config, DataBase, Replication, Redis, RedisApply
 from sql.utils.workflow import Workflow
 from sql.utils.sql_review import can_execute, can_timingtask, can_cancel
 from common.utils.const import Const, WorkflowDict
@@ -177,7 +177,8 @@ def sqlquery(request):
 @permission_required('sql.menu_query_export', raise_exception=True)
 def query_export(request):
     # 获取用户关联从库列表
-    listAllClusterName = [slave.instance_name for slave in user_instances(request.user, 'slave')]
+    # listAllClusterName = [slave.instance_name for slave in user_instances(request.user, 'slave')]
+    listAllClusterName = [slave.instance_name for slave in Instance.objects.filter(type='slave')]
     # 获取导出查询审核人
     auditors = list()
     for p in Permission.objects.filter(codename='query_export_review'):
@@ -255,6 +256,22 @@ def database(request):
     # 获取用户关联实例列表
     instances = [ins.instance_name for ins in user_instances(request.user, 'all')]
     return render(request, 'database.html', {'instances': instances})
+
+
+@permission_required('sql.menu_redis', raise_exception=True)
+def redis(request):
+    # 获取用户关联实例列表
+    redis_list = Redis.objects.get_queryset().order_by('hostname')
+    return render(request, 'redis.html', {'redis_list': redis_list, 'db_list': range(0, 16)})
+
+
+@permission_required('sql.menu_redis', raise_exception=True)
+def redis_apply(request):
+    # 超过24H 未审核的申请设置为过期状态
+    one_day_before = (datetime.datetime.now() + datetime.timedelta(days=-1)).strftime("%Y-%m-%d %H:%M:%S")
+    RedisApply.objects.filter(create_time__lte=one_day_before).filter(status=0).update(status=4)
+    redis_list = Redis.objects.get_queryset().order_by('hostname')
+    return render(request, 'redis_apply.html', {'redis_list': redis_list})
 
 
 # 主从复制
@@ -336,6 +353,14 @@ def ip_white(request, instance_id):
 
 def host(request):
     return render(request, "host.html")
+
+
+def wpan_upload(request):
+    return render(request, "wpan_upload.html")
+
+
+def wpan_audit(request):
+    return render(request, "wpan_audit.html")
 
 
 # 工作流审核列表页面

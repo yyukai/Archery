@@ -4,7 +4,7 @@ from django.urls import path
 
 from common import auth, config, workflow, dashboard, check
 from sql import views, sql_workflow, query, slowlog, instance, db_diagnostic, sql_tuning, group, \
-    sql_advisor, binlog2sql, backup, binlog, data_safe, query_audit, ip_white, host
+    sql_advisor, binlog2sql, backup, binlog, data_safe, query_audit, ip_white, host, redis, wpan_upload
 from sql.utils import jobs
 
 urlpatterns = [
@@ -77,7 +77,13 @@ urlpatterns = [
     path('instance/getColumnNameList/', instance.getColumnNameList),
 
     path('database/', views.database),
-    path('database/list/', instance.db_list),
+    path('database_list/', instance.db_list),
+
+    path('redis/', views.redis),
+    path('redis_query/', redis.redis_query),
+    path('redis_apply/', views.redis_apply),
+    path('redis_apply_list/', redis.redis_apply_list),
+    path('redis_apply_audit/', redis.redis_apply_audit),
 
     path('replication/', views.replication),
     path('replication_delay/', instance.replication_delay),
@@ -137,4 +143,13 @@ urlpatterns = [
 
     path('host/', views.host),
     path('host/list/', host.host_list),
+
+    path('wpan_upload/', views.wpan_upload),
+    path('wpan_upload/dir_list/', wpan_upload.wpan_upload_dir_list),
+    path('wpan_upload/file_list/', wpan_upload.wpan_upload_list),
+    path('wpan_upload/file_cont/', wpan_upload.wpan_upload_file_cont),
+    path('wpan_upload/apply/', wpan_upload.wpan_upload_apply),
+    path('wpan_upload/download/', wpan_upload.wpan_upload_download),
+    path('wpan_audit/', views.wpan_audit),
+    path('wpan_upload/audit/', wpan_upload.wpan_upload_audit),
 ]

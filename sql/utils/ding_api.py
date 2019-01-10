@@ -6,7 +6,7 @@ import time
 import re
 import traceback
 from sql.models import Users, Config
-from sql.utils.api import HttpRequests
+from sql.utils.api import HttpRequests, async
 from common.config import SysConfig
 
 # 非研发中心员工，不去获取钉钉ID
@@ -103,6 +103,7 @@ class DingSender(object):
     def __init__(self):
         self.app_id = SysConfig().sys_config.get('ding_agent_id', None)
 
+    @async
     def send_msg(self, ding_user_id, content):
         if self.app_id is None:
             return "No app id."

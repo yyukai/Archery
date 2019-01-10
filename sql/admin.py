@@ -5,7 +5,7 @@ from django.contrib.auth.admin import UserAdmin
 # Register your models here.
 from .models import Users, Instance, SqlWorkflow, Backup, DataMaskingColumns, \
     DataMaskingRules, AliyunAccessKey, AliyunRdsConfig, SqlGroup, GroupRelations, ParamTemp, ParamHistory, Host, \
-    DataBase, Replication
+    DataBase, Replication, Redis
 
 
 # 用户管理
@@ -49,7 +49,7 @@ class GroupRelationsAdmin(admin.ModelAdmin):
 # 实例管理
 @admin.register(Instance)
 class InstanceAdmin(admin.ModelAdmin):
-    list_display = ('id', 'instance_name', 'db_type', 'type', 'host', 'port', 'user', 'create_time')
+    list_display = ('id', 'instance_name', 'db_type', 'type', 'host', 'port', 'user', 'password', 'osn', 'create_time')
     search_fields = ['instance_name', 'host', 'port', 'user']
     list_filter = ('db_type', 'type',)
 
@@ -121,5 +121,10 @@ class HostAdmin(admin.ModelAdmin):
 
 @admin.register(DataBase)
 class DatabaseAdmin(admin.ModelAdmin):
-    list_display = ("host", "ip", "port", "instance_name", "db_name", "db_application", "db_person",
+    list_display = ("host", "ip", "port", "instance_name", "db_name", "app_type", "db_application", "db_person",
                     "create_time", "update_time")
+
+
+@admin.register(Redis)
+class RedisAdmin(admin.ModelAdmin):
+    list_display = ("hostname", "ip", "port", "password", "comment", "create_time")

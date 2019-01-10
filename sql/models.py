@@ -69,6 +69,7 @@ class Instance(models.Model):
     port = models.IntegerField('端口', default=3306)
     user = models.CharField('用户名', max_length=100)
     password = models.CharField('密码', max_length=300)
+    osn = models.CharField('oracle service name', max_length=50, null=True, blank=True)
     bin_path = models.CharField('Bin文件安装路径', max_length=50, null=True, blank=True)
     conf_path = models.CharField('配置文件路径', max_length=50, null=True, blank=True)
     data_path = models.CharField('数据目录', max_length=50, null=True, blank=True)
@@ -325,6 +326,26 @@ class QueryExport(models.Model):
         verbose_name_plural = u'导出查询表'
 
 
+class WPanHistory(models.Model):
+    """
+    用户将文件外传到微贷云盘的记录表
+    """
+    apply = models.ForeignKey(Users, on_delete=models.CASCADE, related_name='my_apply')
+    auditor = models.ForeignKey(Users, null=True, blank=True, on_delete=models.SET_NULL, related_name='my_auditor')
+    file_path = models.CharField('文件路径', max_length=255, default='')
+    reason = models.CharField('文件外传理由', max_length=255, default='')
+    error_msg = models.CharField('外传错误信息', max_length=255, default='')
+    audit_msg = models.CharField('审核人审核理由', max_length=255, default='')
+    status = models.IntegerField('状态', choices=((0, '待审核'), (1, '审核通过'), (2, '审核不通过'), (3, '申请已过期')))
+    create_time = models.DateTimeField('创建时间', auto_now_add=True)
+
+    class Meta:
+        managed = True
+        db_table = 'wpan_history'
+        verbose_name = u'文件外传微贷云盘记录表'
+        verbose_name_plural = u'文件外传微贷云盘记录表'
+
+
 # 脱敏字段配置
 class DataMaskingColumns(models.Model):
     column_id = models.AutoField('字段id', primary_key=True)
@@ -423,6 +444,9 @@ class Permission(models.Model):
             ('menu_host', '菜单 主机管理'),
             ('menu_document', '菜单 相关文档'),
             ('menu_themis', '菜单 数据库审核'),
+            ('menu_redis', '菜单 Redis'),
+            ('menu_wpan_upload', '菜单 上传微贷云盘'),
+            ('wpan_upload_audit', '上传微贷云盘审核'),
             ('sql_submit', '提交SQL上线工单'),
             ('sql_review', '审核SQL上线工单'),
             ('sql_execute', '执行SQL上线工单'),
@@ -437,6 +461,8 @@ class Permission(models.Model):
             ('database_edit', '编辑数据库'),
             ('param_view', '查看数据库参数'),
             ('param_edit', '编辑数据库参数'),
+            ('redis_view', '查看Redis'),
+            ('redis_edit', '审核Redis操作'),
             ('instance_user', '实例用户查看'),
             ('instance_user_edit', '实例用户编辑'),
             ('query_audit', '查询审计'),
@@ -494,7 +520,7 @@ class Backup(models.Model):
     check_man = models.CharField(max_length=15, default='DBA')
     bk_start_time = models.DateTimeField(blank=True, null=True)
     bk_end_time = models.DateTimeField(blank=True, null=True, db_index=True)
-    create_time = models.DateTimeField(blank=True, null=True)
+    create_time = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         managed = True
@@ -571,6 +597,7 @@ class DataBase(models.Model):
     port = models.CharField('MySQL端口', max_length=6)
     instance_name = models.CharField('实例名', max_length=50)
     db_name = models.CharField('数据库名', max_length=50, unique=True)
+    app_type = models.CharField('业务分类', max_length=15, null=True, blank=True)
     db_application = models.CharField('用途', max_length=50)
     db_person = models.CharField('DB负责人', max_length=50)
     create_time = models.DateTimeField('创建时间', auto_now=True)
@@ -581,6 +608,43 @@ class DataBase(models.Model):
         db_table = 'sql_database'
         verbose_name = u'数据库表'
         verbose_name_plural = u'数据库表'
+
+
+class Redis(models.Model):
+    hostname = models.CharField('主机，IP或域名', max_length=100)
+    ip = models.CharField('IP地址', max_length=15)
+    port = models.PositiveSmallIntegerField('Redis端口')
+    password = models.CharField('密码', max_length=50, null=True, blank=True)
+    comment = models.CharField(max_length=50)
+    create_time = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-create_time']
+        db_table = 'sql_redis'
+        verbose_name = u'Redis表'
+        verbose_name_plural = u'Redis表'
+
+
+class RedisApply(models.Model):
+    """
+    status: 0待审核，1审核通过，执行完毕，2审核拒绝，3主动放弃，4申请已过期
+    """
+    redis = models.ForeignKey(Redis, on_delete=models.CASCADE)
+    db = models.PositiveSmallIntegerField(default=0)
+    command = models.CharField(max_length=50, null=True, blank=True)
+    applicant = models.ForeignKey(Users, on_delete=models.CASCADE, related_name="applicant")
+    auditor = models.ForeignKey(Users, on_delete=models.CASCADE, related_name="auditor", null=True, blank=True)
+    audit_msg = models.CharField(max_length=50, null=True, blank=True)
+    comment = models.CharField(max_length=50, null=True, blank=True)
+    status = models.PositiveSmallIntegerField(default=0)
+    result = models.TextField(null=True, blank=True)
+    create_time = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-create_time']
+        db_table = 'sql_redis_apply'
+        verbose_name = u'Redis更变申请记录表'
+        verbose_name_plural = u'Redis更变申请记录表'
 
 
 # SlowQueryHistory

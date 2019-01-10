@@ -13,10 +13,10 @@ from common.utils.extend_json_encoder import ExtendJSONEncoder
 @csrf_exempt
 @permission_required('sql.menu_host', raise_exception=True)
 def host_list(request):
-    type = request.POST.get('type', '')
+    host_type = request.POST.get('type', '')
     search = request.POST.get('search', '')
-    if type:
-        obj_list = Host.objects.filter(type=type)
+    if host_type:
+        obj_list = Host.objects.filter(type=host_type)
     else:
         obj_list = Host.objects.get_queryset()
     if search:
