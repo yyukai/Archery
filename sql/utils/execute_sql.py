@@ -24,11 +24,14 @@ import logging
 
 logger = logging.getLogger('default')
 
+
 def execute(workflow_id):
     """为延时或异步任务准备的execute, 传入工单ID即可"""
     workflow_detail = SqlWorkflow.objects.get(id=workflow_id)
     execute_engine = get_engine(workflow=workflow_detail)
     return execute_engine.execute()
+
+
 def execute_callback(task):
     """异步任务的回调, 将结果填入数据库等等
     使用django-q的hook, 传入参数为整个task
@@ -65,6 +68,7 @@ def execute_callback(task):
 
     # 发送消息
     send_msg(workflow)
+
 
 # SQL工单跳过inception执行
 def execute_skipinc_call_back(workflow_id, instance_name, db_name, sql_content, url):
@@ -285,3 +289,9 @@ def send_msg(workflow_detail):
             logger.debug('发送DDL通知，消息audit_id={}'.format(audit_id))
             logger.debug('消息标题:{}\n通知对象：{}\n消息内容：{}'.format(msg_title, msg_to, msg_content))
             mail_sender.send_email(msg_title, msg_content, msg_to)
+    if sys_config.get('ding_to_person'):
+        # 单独发送钉钉通知给申请人
+        from sql.utils.ding_api import DingSender
+        ding_sender = DingSender()
+        ding_user_id = Users.objects.get(username=workflow_detail.engineer).ding_user_id
+        ding_sender.send_msg(ding_user_id, msg_title + '\n' + msg_content)
