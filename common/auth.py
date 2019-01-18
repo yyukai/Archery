@@ -1,105 +1,120 @@
 import datetime
+import logging
+import traceback
 
 import simplejson as json
-from django.conf import settings
 from django.contrib.auth import authenticate, login, logout
-from django.contrib.auth.hashers import make_password
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError
 from django.contrib.auth.models import Group
 from django.http import HttpResponse, HttpResponseRedirect
-from django.shortcuts import render
 from django.urls import reverse
 
 from common.config import SysConfig
-from sql.utils.ding_api import set_ding_user_id
-from sql.models import Users
-from sql.views import logger
-from sql.sql_workflow import login_failure_counter, logger
+from sql.models import Users, ResourceGroup, ResourceGroupRelations
+
+logger = logging.getLogger('default')
 
 
-def loginAuthenticate(username, password):
-    """登录认证，包含一个登录失败计数器，5分钟内连续失败5次的账号，会被锁定5分钟"""
-    sys_config = SysConfig().sys_config
-    if sys_config.get('lock_cnt_threshold'):
-        lockCntThreshold = int(sys_config.get('lock_cnt_threshold'))
-    else:
-        lockCntThreshold = 5
-    if sys_config.get('lock_time_threshold'):
-        lockTimeThreshold = int(sys_config.get('lock_time_threshold'))
-    else:
-        lockTimeThreshold = 300
-
-    # 服务端二次验证参数
-    if username == "" or password == "" or username is None or password is None:
-        result = {'status': 2, 'msg': '登录用户名或密码为空，请重新输入!', 'data': ''}
-    elif username in login_failure_counter and login_failure_counter[username]["cnt"] >= lockCntThreshold and (
-            datetime.datetime.now() - login_failure_counter[username][
-        "last_failure_time"]).seconds <= lockTimeThreshold:
-        result = {'status': 3, 'msg': '登录失败超过5次，该账号已被锁定5分钟!', 'data': ''}
-    else:
-        # 登录
-        user = authenticate(username=username, password=password)
-        # 登录成功
-        if user:
-            # 从钉钉获取该用户的userid，用于给他发消息
-            if sys_config.get("ding_to_person") is True and username not in ['admin', 'wdadmin']:
-                print(username, '-----------------------------')
-                set_ding_user_id(username)
-
-            # 如果登录失败计数器中存在该用户名，则清除之
-            if username in login_failure_counter:
-                login_failure_counter.pop(username)
-            result = {'status': 0, 'msg': 'ok', 'data': user}
-        # 登录失败
-        else:
-            if username not in login_failure_counter:
-                # 第一次登录失败，登录失败计数器中不存在该用户，则创建一个该用户的计数器
-                login_failure_counter[username] = {"cnt": 1, "last_failure_time": datetime.datetime.now()}
-            else:
-                if (datetime.datetime.now() - login_failure_counter[username][
-                    "last_failure_time"]).seconds <= lockTimeThreshold:
-                    login_failure_counter[username]["cnt"] += 1
-                else:
-                    # 上一次登录失败时间早于5分钟前，则重新计数。以达到超过5分钟自动解锁的目的。
-                    login_failure_counter[username]["cnt"] = 1
-                login_failure_counter[username]["last_failure_time"] = datetime.datetime.now()
-            result = {'status': 1, 'msg': '用户名或密码错误，请重新输入！', 'data': ''}
-    return result
-
-
-# ajax接口，登录页面调用，用来验证用户名密码
-def authenticateEntry(request):
-    """接收http请求，然后把请求中的用户名密码传给loginAuthenticate去验证"""
-    username = request.POST.get('username')
-    password = request.POST.get('password')
-
-    result = loginAuthenticate(username, password)
-    if result['status'] == 0:
-        # 开启LDAP的认证通过后更新用户密码
-        if settings.ENABLE_LDAP:
-            try:
-                Users.objects.get(username=username)
-            except Exception:
-                insert_info = Users()
-                insert_info.password = make_password(password)
-                insert_info.save()
-            else:
-                replace_info = Users.objects.get(username=username)
-                replace_info.password = make_password(password)
-                replace_info.save()
-        # 添加到默认组
-        default_auth_group = SysConfig().sys_config.get('default_auth_group', '')
+def init_user(user):
+    default_auth_group = SysConfig().get('default_auth_group', '')
+    if default_auth_group:
         try:
-            user = Users.objects.get(username=username)
             group = Group.objects.get(name=default_auth_group)
             user.groups.add(group)
         except Exception:
-            logger.error('无name={}的权限组，无法默认添加'.format(default_auth_group))
+            logger.error(traceback.format_exc())
+            logger.error('无name为{}的权限组，无法默认关联，请到系统设置进行配置'.format(default_auth_group))
+    # 添加到默认资源组
+    default_resource_group = SysConfig().get('default_resource_group', '')
+    if default_resource_group:
+        try:
+            new_relation = ResourceGroupRelations(
+                object_type=0,
+                object_id=user.id,
+                object_name=str(user),
+                group_id=ResourceGroup.objects.get(group_name=default_resource_group).group_id,
+                group_name=default_resource_group)
+            new_relation.save()
+        except Exception:
+            logger.error(traceback.format_exc())
+            logger.error('无name为{}的资源组，无法默认关联，请到系统设置进行配置'.format(default_resource_group))
 
-        # 调用了django内置登录方法，防止管理后台二次登录
+
+class ArcherAuth(object):
+    def __init__(self, request):
+        self.request = request
+
+    def challenge(self, username=None, password=None):
+        # 仅验证密码, 验证成功返回 user 对象, 清空计数器
         user = authenticate(username=username, password=password)
+        # 登录成功
         if user:
-            login(request, user)
+            # 如果登录成功, 登录失败次数重置为0
+            user.failed_login_count = 0
+            user.save()
+            return user
 
+    def authenticate(self):
+        username = self.request.POST.get('username')
+        password = self.request.POST.get('password')
+        # 验证时候在加锁时间内
+        now = datetime.datetime.now()
+        try:
+            user = Users.objects.get(username=username)
+        except Users.DoesNotExist:
+            authenticated_user = self.challenge(username=username, password=password)
+            if authenticated_user:
+                # ldap 首次登录逻辑
+                init_user(authenticated_user)
+                login(self.request, authenticated_user)
+                return {'status': 0, 'msg': 'ok', 'data': authenticated_user}
+            else:
+                return {'status': 1, 'msg': '用户名或密码错误，请重新输入！', 'data': ''}
+
+        except:
+            logger.error('验证用户密码时报错')
+            logger.error(traceback.format_exc())
+            return {'status': 1, 'msg': '服务器错误{}'.format(traceback.format_exc()), 'data': ''}
+        # 已存在用户, 验证是否在锁期间
+        # 读取配置文件
+        sys_config = SysConfig()
+        if sys_config.get('lock_cnt_threshold'):
+            lock_count = int(sys_config.get('lock_cnt_threshold'))
+        else:
+            lock_count = 5
+        if sys_config.get('lock_time_threshold'):
+            lock_time = int(sys_config.get('lock_time_threshold'))
+        else:
+            lock_time = 60 * 5
+        # 验证是否在锁, 分了几个if 防止代码太长
+        if user.failed_login_count and user.last_login_failed_at:
+            if user.failed_login_count >= lock_count:
+                now = datetime.datetime.now()
+                if user.last_login_failed_at + datetime.timedelta(seconds=lock_time) > now:
+                    return {'status': 3, 'msg': '登录失败超过限制，该账号已被锁定!请等候大约{}秒再试'.format(lock_time), 'data': ''}
+                else:
+                    # 如果锁已超时, 重置失败次数
+                    user.failed_login_count = 0
+                    user.save()
+        authenticated_user = self.challenge(username=username, password=password)
+        if authenticated_user:
+            if not authenticated_user.last_login:
+                init_user(authenticated_user)
+            login(self.request, authenticated_user)
+            return {'status': 0, 'msg': 'ok', 'data': authenticated_user}
+        user.failed_login_count += 1
+        user.last_login_failed_at = datetime.datetime.now()
+        user.save()
+        return {'status': 1, 'msg': '用户名或密码错误，请重新输入！', 'data': ''}
+
+
+# ajax接口，登录页面调用，用来验证用户名密码
+def authenticate_entry(request):
+    """接收http请求，然后把请求中的用户名密码传给ArcherAuth去验证"""
+    new_auth = ArcherAuth(request)
+    result = new_auth.authenticate()
+    if result['status'] == 0:
         result = {'status': 0, 'msg': 'ok', 'data': None}
 
     return HttpResponse(json.dumps(result), content_type='application/json')
@@ -107,37 +122,40 @@ def authenticateEntry(request):
 
 # 注册用户
 def sign_up(request):
+    sign_up_enabled = SysConfig().get('sign_up_enabled', False)
+    if not sign_up_enabled:
+        result = {'status': 1, 'msg': '注册未启用,请联系管理员开启', 'data': None}
+        return HttpResponse(json.dumps(result), content_type='application/json')
     username = request.POST.get('username')
     password = request.POST.get('password')
     password2 = request.POST.get('password2')
     display = request.POST.get('display')
     email = request.POST.get('email')
+    result = {'status': 0, 'msg': 'ok', 'data': None}
 
-    if username is None or password is None:
-        context = {'errMsg': '用户名和密码不能为空'}
-        return render(request, 'error.html', context)
-    if len(Users.objects.filter(username=username)) > 0:
-        context = {'errMsg': '用户名已存在'}
-        return render(request, 'error.html', context)
-    if password != password2:
-        context = {'errMsg': '两次输入密码不一致'}
-        return render(request, 'error.html', context)
-
-    # 添加用户并且添加到默认组
-    Users.objects.create_user(username=username,
-                              password=password,
-                              display=display,
-                              email=email,
-                              is_active=1,
-                              is_staff=1)
-    default_auth_group = SysConfig().sys_config.get('default_auth_group', '')
-    try:
-        user = Users.objects.get(username=username)
-        group = Group.objects.get(name=default_auth_group)
-        user.groups.add(group)
-    except Exception:
-        logger.error('无name={}的权限组，无法默认添加'.format(default_auth_group))
-    return render(request, 'login.html')
+    if not (username and password):
+        result['status'] = 1
+        result['msg'] = '用户名和密码不能为空'
+    elif len(Users.objects.filter(username=username)) > 0:
+        result['status'] = 1
+        result['msg'] = '用户名已存在'
+    elif password != password2:
+        result['status'] = 1
+        result['msg'] = '两次输入密码不一致'
+    else:
+        # 验证密码
+        try:
+            validate_password(password)
+        except ValidationError as msg:
+            result['status'] = 1
+            result['msg'] = str(msg)
+        new_user = Users.objects.create_user(username=username,
+                                             password=password,
+                                             display=display,
+                                             email=email,
+                                             is_active=1)
+        init_user(new_user)
+    return HttpResponse(json.dumps(result), content_type='application/json')
 
 
 # 退出登录
