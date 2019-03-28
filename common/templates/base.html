@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+﻿﻿<!DOCTYPE html>
 <html>
 <head>
     {% load staticfiles %}
@@ -9,7 +9,6 @@
     <meta name="author" content="">
     <title>SQL审核平台</title>
 
-    <link rel="shortcut icon" href="/static/favicon.ico" type="image/x-icon">
     <!-- 引入 Bootstrap -->
     <link href="{% static 'bootstrap-3.3.7-dist/css/bootstrap.min.css' %}" rel="stylesheet">
     <link href="{% static 'metisMenu/css/metisMenu.min.css' %}" rel="stylesheet">
@@ -22,17 +21,6 @@
     {% for jsfile_name in script_list %}
         <script src="{{ host }}/{{ jsfile_name }}.js"></script>
     {% endfor %}
-    <style>
-        .width100 {
-            width: 100% !important;
-        }
-        .width100px {
-            width: 100px !important;
-        }
-        .width150px {
-            width: 150px !important;
-        }
-    </style>
 </head>
 <body>
 
@@ -118,77 +106,12 @@
                                         <a href="/sqlquery/">在线查询</a>
                                     </li>
                                 {% endif %}
-                                {% if perms.sql.menu_query_export %}
-                                    <li>
-                                        <a href="/query_export/">导出查询</a>
-                                    </li>
-                                {% endif %}
                                 {% if perms.sql.menu_queryapplylist %}
                                     <li>
-                                        <a href="/queryapplylist/">查询权限申请</a>
+                                        <a href="/queryapplylist/">权限申请</a>
                                     </li>
                                 {% endif %}
-                            </ul>
-                            <!-- /.nav-second-level -->
-                        </li>
-                    {% endif %}
-                    {% if perms.sql.menu_redis %}
-                        <li>
-                            <a href="#"><i class="fa fa-search fa-fw"></i> Redis查询<span class="fa arrow"></span></a>
-                            <ul class="nav nav-second-level">
-                                {% if perms.sql.redis_view %}
-                                    <li>
-                                        <a href="/redis/">Redis查询</a>
-                                    </li>
-                                    <li>
-                                        <a href="/redis_apply/">Redis审核</a>
-                                    </li>
-                                {% endif %}
-                            </ul>
-                            <!-- /.nav-second-level -->
-                        </li>
-                    {% endif %}
-                    {% if perms.sql.menu_instance %}
-                        <li>
-                            <a href="#"><i class="fa fa-database fa-fw"></i> 实例管理<span class="fa arrow"></span></a>
-                            <ul class="nav nav-second-level">
-                                {% if perms.sql.menu_instance_list %}
-                                    <li>
-                                        <a href="/instance/">实例列表</a>
-                                    </li>
-                                {% endif %}
-                                {% if perms.sql.menu_param %}
-                                    <li>
-                                        <a href="/param/">参数管理</a>
-                                    </li>
-                                {% endif %}
-                                {% if perms.sql.menu_dbdiagnostic %}
-                                    <li>
-                                        <a href="/dbdiagnostic/">会话管理</a>
-                                    </li>
-                                {% endif %}
-                                {% if perms.sql.menu_schemasync %}
-                                    <li>
-                                        <a href="/schemasync/">SchemaSync</a>
-                                    </li>
-                                {% endif %}
-                            </ul>
-                            <!-- /.nav-second-level -->
-                        </li>
-                    {% endif %}
-                    {% if perms.sql.menu_database %}
-                        <li>
-                            <a href="#"><i class="fa fa-database fa-fw"></i> 数据库管理<span class="fa arrow"></span></a>
-                            <ul class="nav nav-second-level">
-                                <li>
-                                    <a href="/database/">数据库列表</a>
-                                </li>
-                                <li>
-                                    <a href="/replication/">主从同步看板</a>
-                                </li>
-                                <li>
-                                    <a href="/replication_echart/">主从同步历史</a>
-                                </li>
+
                             </ul>
                             <!-- /.nav-second-level -->
                         </li>
@@ -202,7 +125,13 @@
                                         <a href="/sqladvisor/">优化工具</a>
                                     </li>
                                 {% endif %}
+                                {% if perms.sql.menu_slowquery %}
+                                    <li>
+                                        <a href="/slowquery/">慢查日志</a>
+                                    </li>
+                                {% endif %}
                             </ul>
+                            <!-- /.nav-second-level -->
                         </li>
                     {% endif %}
                     {% if perms.sql.menu_themis %}
@@ -234,71 +163,30 @@
                             <!-- /.nav-second-level -->
                         </li>
                     {% endif %}
-                    <li>
-                        <a href="#"><i class="fa fa-file fa-fw"></i> 日志管理<span class="fa arrow"></span></a>
-                        <ul class="nav nav-second-level">
-                            {% if perms.sql.menu_slowquery %}
-                                <li>
-                                    <a href="/slowquery/">慢查询日志</a>
-                                </li>
-                            {% endif %}
-                            {% if perms.sql.menu_binlog %}
-                                <li>
-                                    <a href="/binlog/">Binlog日志</a>
-                                </li>
-                            {% endif %}
-                            {% if perms.sql.menu_binlog2sql %}
-                                <li>
-                                    <a href="/binlog2sql/">Binlog2SQL</a>
-                                </li>
-                            {% endif %}
-                        </ul>
-                        <!-- /.nav-second-level -->
-                    </li>
-                    {% if perms.sql.menu_data_safe %}
+                    {% if perms.sql.menu_instance %}
                         <li>
-                            <a href="#"><i class="fa fa-lock fa-fw"></i> 数据安全<span class="fa arrow"></span></a>
+                            <a href="#"><i class="fa fa-database fa-fw"></i> 实例管理<span class="fa arrow"></span></a>
                             <ul class="nav nav-second-level">
-                                {% if perms.sql.query_audit %}
-                                        <li>
-                                            <a href="/query_audit/">查询审计</a>
-                                        </li>
-                                    {% endif %}
-                                {% if perms.sql.masking_field %}
-                                        <li>
-                                            <a href="/masking_field/">脱敏字段</a>
-                                        </li>
-                                    {% endif %}
-                            </ul>
-                            <!-- /.nav-second-level -->
-                        </li>
-                    {% endif %}
-                    {% if perms.sql.menu_wpan_upload %}
-                        <li>
-                            <a href="#"><i class="glyphicon glyphicon-cloud-upload"></i> 上传网盘<span class="fa arrow"></span></a>
-                            <ul class="nav nav-second-level">
-                                <li>
-                                    <a href="/wpan_upload/">我的文件</a>
-                                </li>
-                                <li>
-                                    <a href="/wpan_audit/">我的待审核</a>
-                                </li>
-                            </ul>
-                            <!-- /.nav-second-level -->
-                        </li>
-                    {% endif %}
-                    {% if perms.sql.menu_backup %}
-                        <li>
-                            <a href="/backup/"><i class="fa fa-save fa-fw"></i> 备份管理</a>
-                        </li>
-                    {% endif %}
-                    {% if perms.sql.menu_host %}
-                        <li>
-                            <a href="#"><i class="fa fa-hdd-o fa-fw"></i> 主机管理<span class="fa arrow"></span></a>
-                            <ul class="nav nav-second-level">
-                                <li>
-                                    <a href="/host/">主机列表</a>
-                                </li>
+                                {% if perms.sql.menu_instance_list %}
+                                    <li>
+                                        <a href="/instance/">实例列表</a>
+                                    </li>
+                                {% endif %}
+                                {% if perms.sql.menu_dbdiagnostic %}
+                                    <li>
+                                        <a href="/dbdiagnostic/">会话管理</a>
+                                    </li>
+                                {% endif %}
+                                {% if perms.sql.menu_binlog2sql %}
+                                    <li>
+                                        <a href="/binlog2sql/">Binlog2SQL</a>
+                                    </li>
+                                {% endif %}
+                                {% if perms.sql.menu_schemasync %}
+                                    <li>
+                                        <a href="/schemasync/">SchemaSync</a>
+                                    </li>
+                                {% endif %}
                             </ul>
                             <!-- /.nav-second-level -->
                         </li>
@@ -366,7 +254,6 @@
 </div>
 
 <script src="{% static 'jquery/jquery.min.js' %}"></script>
-<script src="{% static 'jquery/jquery.form.min.js' %}"></script>
 <script src="{% static 'bootstrap-3.3.7-dist/js/bootstrap.min.js' %}"></script>
 <script src="{% static 'metisMenu/js/metisMenu.min.js' %}"></script>
 <script src="{% static 'sb-admin-2/js/sb-admin-2.js' %}"></script>
