@@ -18,6 +18,11 @@
                 </div>
             </div>
             <div class="col-lg-9 animated fadeInRight" id="split-right">
+                <div class="alert alert-info">
+                    <button class="close" data-dismiss="alert"><i class="ace-icon fa fa-times"></i>
+                    </button>
+                    <i>提示：文件名请勿包含繁体及'、"、+、/、?、%、#、&、=等特殊字符。 ^.^</i>
+                </div>
                 <div id="toolbar" class="form-inline">
                     <div class="form-group ">
                         <button id="btn_import" type="button" class="btn btn-default">
@@ -185,7 +190,7 @@
                     field: 'name',
                     formatter: function (value, row, index) {
                         if (row.type === "file") {
-                            return '<a class="btn-xs" onclick="showCont(\'/wpan_upload/file_cont/?path='+row.path+'\')">'+value+'</a>';
+                            return '<a class="btn-xs" onclick="showCont(\'/wpan_upload/file_cont/?path='+row.path.replace(/\+/g, '%2B').replace(/&/g, '%26')+'\')">'+value+'</a>';
                         } else {
                             return value
                         }
@@ -201,8 +206,12 @@
                     field: 'path',
                     formatter: function (value, row, index) {
                         if (row.type === "file") {
-                            var text = '<a type="button" class="btn btn-success" href="/wpan_upload/download/?path=' + value + '" >下载</a>';
-                            text += '<button class="btn btn-warning" onclick="do_apply(\'' +value+ '\')">传至微贷云盘</button>';
+                            {% if perms.sql.wpan_upload_audit %}
+                                var text = '<a type="button" class="btn btn-success" href="/wpan_upload/download/?path=' + value.replace(/\+/g, '%2B').replace(/&/g, '%26') + '" >下载</a>';
+                                text += '<button class="btn btn-warning" onclick="do_apply(\'' +value+ '\')">传至微贷云盘</button>';
+                            {% else %}
+                                var text = '<button class="btn btn-warning" onclick="do_apply(\'' +value+ '\')">传至微贷云盘</button>';
+                            {% endif %}
                             return text
                         }
                     }
@@ -360,27 +369,34 @@
                 $form.ajaxSubmit({success: success});
             }
         });
+        $('#importModal').on('hide.bs.modal', function () {
+            document.location.reload();
+        });
         function do_apply(path) {
             $('#applyModal').modal({});
             $("#modal_btn").unbind("click").click(function(){
                 var reason = document.getElementById("reason").value;
-                $.ajax({
-                    type: "get",
-                    url: "/wpan_upload/apply/",
-                    timeout: 3000,
-                    data: {
-                        path: path,
-                        reason: reason
-                    },
-                    success: function (data) {
-                        alert(data['result']);
-                        $('#applyModal').modal('hide');
-                    },
-                    error: function (data) {
-                        alert(data);
-                        $('#applyModal').modal('hide');
-                    }
-                });
+                if (reason.length <= 3) {
+                    alert("申请理由很重要，请务必认真填写！");
+                } else {
+                    $.ajax({
+                        type: "get",
+                        url: "/wpan_upload/apply/",
+                        timeout: 3000,
+                        data: {
+                            path: path,
+                            reason: reason
+                        },
+                        success: function (data) {
+                            alert(data['result']);
+                            $('#applyModal').modal('hide');
+                        },
+                        error: function (data) {
+                            alert(data);
+                            $('#applyModal').modal('hide');
+                        }
+                    });
+                }
             });
         }
     </script>

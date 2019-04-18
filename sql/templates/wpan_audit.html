@@ -95,7 +95,7 @@
                 pagination: true,                   //是否显示分页（*）
                 sortable: true,                     //是否启用排序
                 sortOrder: "asc",                   //排序方式
-                sidePagination: "client",           //分页方式：client客户端分页，server服务端分页（*）
+                sidePagination: "server",           //分页方式：client客户端分页，server服务端分页（*）
                 pageNumber: 1,                      //初始化加载第一页，默认第一页,并记录
                 pageSize: 14,                       //每页的记录行数（*）
                 pageList: [20, 30, 50, 100],        //可供选择的每页的行数（*）
@@ -112,7 +112,10 @@
                 uniqueId: "id",                     //每一行的唯一标识，一般为主键列
                 showToggle: true,                   //是否显示详细视图和列表视图的切换按钮
                 cardView: false,                    //是否显示详细视图
-                detailView: false,                  //是否显示父子表
+                detailView: true,                  //是否显示父子表
+                detailFormatter: function (index, row) {
+                    return row.error_msg
+                },
                 locale: 'zh-CN',                    //本地化
                 toolbar: "#toolbar",               //指明自定义的toolbar
                 queryParamsType: 'limit',
@@ -120,8 +123,11 @@
                     title: '文件名',
                     field: 'file_name',
                     formatter: function (value, row, index) {
-                        return '<a class="btn-xs" onclick="showCont(\'/wpan_upload/file_cont/?path='+row.file_path+'\')">'+value+'</a>';
+                        return '<a class="btn-xs" onclick="showCont(\'/wpan_upload/file_cont/?path='+row.file_path.replace(/\+/g, '%2B').replace(/&/g, '%26')+'\')">'+value+'</a>';
                     }
+                }, {
+                    title: '文件大小（K）',
+                    field: 'file_size'
                 }, {
                     title: '申请人',
                     field: 'apply'
@@ -135,19 +141,41 @@
                     title: '审核人',
                     field: 'auditor'
                 }, {
+                    title: '审核理由',
+                    field: 'audit_msg',
+                    formatter: function (value, row, index) {
+                        if (value.length > 50) {
+                            return "<span title ='"+value+"'>"+value.substring(0,50)+"...</span>"
+                        }
+                        else {
+                            return value
+                        }
+                    }
+                }, {
                     title: '操作',
                     field: 'id',
                     formatter: function (value, row, index) {
-                        var html = '<a type="button" class="btn btn-success" href="/wpan_upload/download/?path=' + row.file_path + '" >下载</a>';
-                        if (row.status === 0) {
-                            html += '<button class="btn btn-warning" onclick="do_audit(\'' +value+ '\')">待审核</button>';
-                        } else if (row.status === 1) {
-                            html += '<button class="btn btn-warning" onclick="alert(\'' +row.audit_msg+ '\')">已通过</button>';
-                        } else if (row.status === 2) {
-                            html += '<button class="btn btn-warning" onclick="alert(\'' +row.audit_msg+ '\')">已被拒</button>';
-                        } else if (row.status === 3) {
-                            html += '<button class="btn btn-warning" onclick="alert(\'' +row.audit_msg+ '\')">已过期</button>';
-                        }
+                        {% if perms.sql.wpan_upload_audit %}
+                            var html = '<a type="button" class="btn btn-primary" href="/wpan_upload/download/?path=' + row.file_path.replace(/\+/g, '%2B').replace(/&/g, '%26') + '" >下载</a>';
+                            if (row.status === 0) {
+                                html += '<button class="btn btn-warning" onclick="do_audit(\'' +value+ '\')">待审核</button>';
+                            } else if (row.status === 1) {
+                                html += '<button class="btn btn-success" onclick="alert(\'' +row.audit_msg+ '\')">已通过</button>';
+                            } else if (row.status === 2) {
+                                html += '<button class="btn btn-danger" onclick="alert(\'' +row.audit_msg+ '\')">已被拒</button>';
+                            } else if (row.status === 3) {
+                                html += '<button class="btn btn-default" disabled>已过期</button>';
+                            }
+                        {% else %}
+                            var html = '';
+                            if (row.status === 1) {
+                                html += '<button class="btn btn-success" onclick="alert(\'' +row.audit_msg+ '\')">已通过</button>';
+                            } else if (row.status === 2) {
+                                html += '<button class="btn btn-danger" onclick="alert(\'' +row.audit_msg+ '\')">已被拒</button>';
+                            } else if (row.status === 3) {
+                                html += '<button class="btn btn-default" disabled>已过期</button>';
+                            }
+                        {% endif %}
                         return html
                     }
                 }],
@@ -158,6 +186,8 @@
                 },
                 queryParams: function (e) {
                     return {
+                        limit: e.limit,
+                        offset: e.offset,
                         search: e.search
                     }
                 },
@@ -207,19 +237,25 @@
                         is_allow: "no"
                     },
                     success: function (data) {
-                        alert(data['result']);
+                        if (data['code'] == 0) {
+                            alert(data['result']);
+                        } else {
+                            alert(data['errmsg']);
+                        }
                         $('#auditModal').modal('hide');
                         $('#name-list').bootstrapTable('refresh');
                     },
                     error: function (data) {
                         alert(data);
                         $('#auditModal').modal('hide');
+                        get_name_list()
                     }
                 });
             });
 
             $("#modal_btn_yes").unbind("click").click(function(){
                 var audit_msg = document.getElementById("audit_msg").value;
+                $("#modal_btn_yes").attr("disabled", true);
                 $.ajax({
                     type: "post",
                     url: "/wpan_upload/audit/",
@@ -230,13 +266,21 @@
                         is_allow: "yes"
                     },
                     success: function (data) {
-                        alert(data['result']);
+                        if (data['code'] == 0) {
+                            alert(data['result']);
+                        } else {
+                            alert(data['errmsg']);
+                        }
                         $('#auditModal').modal('hide');
                         $('#name-list').bootstrapTable('refresh');
                     },
                     error: function (data) {
                         alert(data);
                         $('#auditModal').modal('hide');
+                    },
+                    complete: function () {
+                        $("#modal_btn_yes").attr("disabled", false);
+                        get_name_list()
                     }
                 });
             });

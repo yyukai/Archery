@@ -8,9 +8,9 @@ import simplejson as json
 from django.contrib.auth.decorators import permission_required
 from django.http import HttpResponse, QueryDict
 from django.db.models import Q
-from django.contrib.auth.models import Permission
+from sql.utils.permission import get_ding_user_id_by_permission
 from sql.utils.ding_api import DingSender
-from .models import Redis, RedisApply
+from .models import Instance, RedisApply
 from common.utils.extend_json_encoder import ExtendJSONEncoder
 
 
@@ -27,19 +27,19 @@ def redis_query(request):
     comment = request.POST.get('comment', '').strip()
     try:
         if redis_id and cmd:
-            ro = Redis.objects.get(id=redis_id)
+            ro = Instance.objects.get(id=redis_id)
             if re.match(r'keys\s+\\*$', cmd, re.I):
                 result = "这个命令太危险！无法执行！"
             elif cmd.split(" ")[0] in safe_cmd:
                 if ro.password:
-                    rs = redis.StrictRedis(host=ro.ip, port=ro.port, password=ro.password, db=int(db))
+                    rs = redis.StrictRedis(host=ro.ip, port=ro.port, password=ro.raw_password, db=int(db))
                 else:
                     rs = redis.StrictRedis(host=ro.ip, port=ro.port, db=int(db))
                 result = rs.execute_command(cmd)
                 result = "None" if result is None else str(result)
             elif request.user.has_perm("sql.redis_edit"):
                 if ro.password:
-                    rs = redis.StrictRedis(host=ro.ip, port=ro.port, password=ro.password, db=int(db))
+                    rs = redis.StrictRedis(host=ro.ip, port=ro.port, password=ro.raw_password, db=int(db))
                 else:
                     rs = redis.StrictRedis(host=ro.ip, port=ro.port, db=int(db))
                 result = rs.execute_command(cmd)
@@ -52,16 +52,16 @@ def redis_query(request):
                                           comment=comment)
                 msg = """Redis 数据更变审核\n实例：{}\nIP：{}\n端口：{}\n执行命令：{}\n申请人：{}""".format(ro.hostname, ro.ip,
                                                                                     ro.port, cmd, request.user.username)
-                for p in Permission.objects.filter(codename='redis_edit'):
-                    for g in p.group_set.all():
-                        for u in g.user_set.all():
-                            DingSender().send_msg(u.ding_user_id, msg)
+                ding_sender = DingSender()
+                ding_user_ids = get_ding_user_id_by_permission('redis_edit')
+                for ding_id in ding_user_ids:
+                    ding_sender.send_msg(ding_id, msg)
 
                 result = "非查询命令需管理员审核！"
             res = {"code": 0, "result": result}
         else:
             res = {"code": 1, "errmsg": "非法调用"}
-    except Redis.DoesNotExist:
+    except Instance.DoesNotExist:
         res = {"code": 1, "errmsg": str('Redis.DoesNotExist')}
     except Exception as e:
         res = {"code": 1, "errmsg": str(e)}
@@ -91,8 +91,8 @@ def redis_apply_list(request):
     res = list()
     for r in obj_list[offset:(offset + limit)]:
         res.append({"id": r.id, "hostname": r.redis.hostname, "db": r.db, "command": r.command,
-                    "applicant": r.applicant.username,
-                    "auditor": r.auditor.username if r.auditor else "", "audit_msg": r.audit_msg,
+                    "applicant": r.applicant.display,
+                    "auditor": r.auditor.display if r.auditor else "", "audit_msg": r.audit_msg,
                     "comment": r.comment, "status": r.status,
                     "result": r.result, "create_time": r.create_time})
     result = {'total': len(obj_list), 'rows': res}
@@ -135,7 +135,7 @@ def redis_apply_audit(request):
                     return HttpResponse("您无权审核！")
                 try:
                     if ro.password:
-                        rs = redis.StrictRedis(host=ro.ip, port=ro.port, password=ro.password, db=ra.db)
+                        rs = redis.StrictRedis(host=ro.ip, port=ro.port, password=ro.raw_password, db=ra.db)
                     else:
                         rs = redis.StrictRedis(host=ro.ip, port=ro.port, db=ra.db)
                     result = rs.execute_command(ra.command)

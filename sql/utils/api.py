@@ -18,18 +18,16 @@ class HttpRequests(object):
         try:
             headers = {"Content-Type": "application/json"}
             resp = requests.post(url, headers=headers, json=params, timeout=self.timeout)
-            status = True if resp.status_code == 200 else False
 
-            return status, str(resp.content, encoding="utf8")
+            return True, str(resp.content, encoding="utf8")
         except Exception as e:
             return False, str(e)
 
     def get(self, url):
         try:
             resp = requests.get(url, timeout=self.timeout)
-            status = True if resp.status_code == 200 else False
 
-            return status, str(resp.content, encoding="utf8")
+            return True, str(resp.content, encoding="utf8")
         except Exception as e:
             return False, str(e)
 

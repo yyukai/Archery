@@ -3,6 +3,14 @@
 {% block content %}
     <!-- 自定义操作按钮-->
     <div id="toolbar" class="form-inline">
+        <div class="form-group bootstrap-select ">
+            <select id="db_name" class="dropdown-menu-right selectpicker " data-live-search="true">
+                <option value="" selected="selected">全部数据库</option>
+                {% for db_name in db_name_list %}
+                    <option value="{{ db_name }}">{{ db_name }}</option>
+                {% endfor %}
+            </select>
+        </div>
         <div class="form-group ">
             <button id="btn_add" type="button" class="btn btn-default"
                     onclick="window.location.href='/admin/sql/datamaskingcolumns/'">
@@ -70,7 +78,8 @@
                         return {
                             limit: params.limit,
                             offset: params.offset,
-                            search: params.search
+                            search: params.search,
+                            db_name: $("#db_name").val()
                         }
                     },
                 columns: [{
@@ -127,6 +136,9 @@
 
         //初始化数据
         $(document).ready(function () {
+            grouplist();
+        });
+        $("#db_name").change(function () {
             grouplist();
         });
     </script>

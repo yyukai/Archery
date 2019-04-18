@@ -4,6 +4,7 @@ import logging
 import simplejson as json
 from django.db.models import Q
 from django.http import HttpResponse
+from django.contrib.auth.decorators import permission_required
 from sql.models import Backup, Instance
 from common.utils.permission import superuser_required
 from common.utils.extend_json_encoder import ExtendJSONEncoder
@@ -11,7 +12,7 @@ from common.utils.extend_json_encoder import ExtendJSONEncoder
 logger = logging.getLogger('default')
 
 
-@superuser_required
+@permission_required('sql.menu_backup', raise_exception=True)
 def backup_list(request):
     search = request.POST.get('search')
     if search is None:
@@ -39,7 +40,7 @@ def backup_list(request):
                         content_type='application/json')
 
 
-@superuser_required
+@permission_required('sql.menu_backup', raise_exception=True)
 def backup_detail_list(request, db_cluster):
     limit = int(request.POST.get('limit'))
     offset = int(request.POST.get('offset'))

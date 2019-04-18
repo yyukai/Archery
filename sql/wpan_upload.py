@@ -7,11 +7,14 @@ import datetime
 import logging
 import simplejson as json
 from wsgiref.util import FileWrapper
+from django.utils.http import urlquote
 from django.db.models import Q
 from django.http import HttpResponse, JsonResponse
 from sql.models import Config, WPanHistory
 from common.utils.extend_json_encoder import ExtendJSONEncoder
 from common.utils.file_api import get_file_content
+from sql.utils.api import async
+from sql.utils.ding_api import DingSender
 from sql.utils.wpan_api import WPan
 
 logger = logging.getLogger('default')
@@ -47,9 +50,9 @@ def wpan_upload_dir_list(request):
             for name in sorted(dir_names):
                 result.append({'id': os.path.join(parent, name), 'name': name + "/", 'parent_id': parent})
     except Config.DoesNotExist:
-        return JsonResponse({"code": 1, "errmsg": "未配置云盘根目录！"}, safe=True)
+        return JsonResponse({"code": -1, "errmsg": "未配置云盘根目录！"}, safe=True)
     except Exception as e:
-        return JsonResponse({"code": 1, "errmsg": "异常：%s" % str(e)}, safe=True)
+        return JsonResponse({"code": -1, "errmsg": "异常：%s" % str(e)}, safe=True)
     return HttpResponse(json.dumps(result, cls=ExtendJSONEncoder, bigint_as_string=True),
                         content_type='application/json')
 
@@ -77,15 +80,17 @@ def wpan_upload_list(request):
                     result.append({"type": "file", "size": size, "mtime": mtime, "name": f, "path": file_path})
                 else:
                     result.append({"type": "dir", "size": "-", "mtime": mtime, "name": f, "path": file_path})
+                result = sorted(result, key=lambda x: x['mtime'], reverse=True)
         except Exception as e:
             print(e)
+
         return HttpResponse(json.dumps(result, cls=ExtendJSONEncoder, bigint_as_string=True),
                             content_type='application/json')
     if request.method == 'POST':
         # 上传文件
         import_files = request.FILES.getlist('files', None)
         if len(import_files) == 0:
-            return JsonResponse({'code': 1, 'errmsg': '上传错误！'})
+            return JsonResponse({'code': -1, 'errmsg': '上传错误！'})
 
         root_path = Config.objects.get(item='wpan_upload_dir')
         parent_dir = os.path.join(root_path.value, request.user.username, datetime.datetime.now().strftime("%Y%m%d"))
@@ -136,7 +141,7 @@ def wpan_upload_apply(request):
         WPanHistory.objects.create(apply=request.user, file_path=file_path, reason=reason, status=0)
         result = {"total": 0, "result": "申请已提交！请等待管理员审核！"}
     else:
-        result = {"total": 1, "result": "该文件不存在！请联系管理员查看详情！"}
+        result = {"total": -1, "errmsg": "该文件不存在！请联系管理员查看详情！"}
     return HttpResponse(json.dumps(result, cls=ExtendJSONEncoder, bigint_as_string=True),
                         content_type='application/json')
 
@@ -144,16 +149,46 @@ def wpan_upload_apply(request):
 def wpan_upload_download(request):
     file_path = request.GET.get("path")
     status, output = file_path_auditor(request.user, file_path)
+    file_name = os.path.basename(file_path)
     if status is False:
         return HttpResponse(output)
     if os.path.isfile(file_path):
         wrapper = FileWrapper(open(file_path, "rb"))
         response = HttpResponse(wrapper, content_type='application/octet-stream')
         response['Content-Length'] = os.path.getsize(file_path)
-        response['Content-Disposition'] = 'attachment; filename="%s"' % file_path.split('/')[-1]
+        response['Content-Disposition'] = 'attachment; filename={}'.format(urlquote(file_name))
         return response
     else:
         return HttpResponse("文件不存在！")
+
+
+@async
+def do_upload_func(apply_id, audit_msg, user):
+    # 推送文件到微贷云盘
+    wa = WPanHistory.objects.get(id=apply_id)
+    wa.auditor = user
+    pan = WPan(file=wa.file_path)
+    ret = pan.upload_file(user.username)
+    if ret["code"] == 0:
+        print("upload_file", ret)
+        file_id = ret["result"]["id"]
+        ret = pan.create_user_share(file_id=file_id, expired=7, user_ding_id=wa.apply.ding_user_id)
+        print("create_user_share", ret)
+        if ret['code'] == 0:
+            share_link = ret['result']['share_link']
+            wa.error_msg = share_link
+            wa.status = 1
+            wa.save(update_fields=['error_msg', 'auditor', 'status'])
+            msg_content = """恭喜：您的外传申请已通过\n审核人：{}\n理由：{}\n下载链接（有效期7天）：{}\n""".format(
+                user.display, audit_msg, share_link)
+            DingSender().send_msg_sync(wa.apply.ding_user_id, msg_content)
+        else:
+            wa.error_msg = json.dumps(ret)
+            wa.save(update_fields=['error_msg', 'auditor'])
+    else:
+        # 传输出错
+        wa.error_msg = json.dumps(json.dumps(ret))
+        wa.save(update_fields=['error_msg', 'auditor'])
 
 
 def wpan_upload_audit(request):
@@ -162,44 +197,72 @@ def wpan_upload_audit(request):
         three_day_ago = datetime.datetime.now() - datetime.timedelta(days=3)
         WPanHistory.objects.filter(status=0, create_time__lte=three_day_ago).update(status=3)
 
+        if request.user.has_perm('sql.wpan_upload_audit'):
+            obj_list = WPanHistory.objects.get_queryset().order_by('-create_time', 'status')
+        else:
+            obj_list = WPanHistory.objects.filter(apply=request.user).order_by('-create_time', 'status')
         search = request.GET.get('search', '')
         if search:
-            obj_list = WPanHistory.objects.filter(Q(apply__username=search) | Q(auditor__username=search) |
-                                                  Q(file_path__contains=search) |
-                                                  Q(reason__contains=search)).distinct().order_by('status', '-create_time')
-        else:
-            obj_list = WPanHistory.objects.get_queryset().order_by('status', '-create_time')
+            obj_list = obj_list.filter(Q(apply__username=search) |
+                                       Q(auditor__username=search) |
+                                       Q(file_path__contains=search) |
+                                       Q(reason__contains=search)).distinct()
+
+        limit = int(request.GET.get('limit'))
+        offset = int(request.GET.get('offset'))
         result = list()
-        for obj in obj_list:
-            result.append({
-                'id': obj.id,
-                'apply': obj.apply.username,
-                'auditor': obj.auditor.username if obj.auditor else "",
-                'file_name': obj.file_path.split('/')[-1],
-                'file_path': obj.file_path,
-                'reason': obj.reason,
-                'error_msg': obj.error_msg,
-                'audit_msg': obj.audit_msg,
-                'status': obj.status,
-                'create_time': obj.create_time
-            })
+        for obj in obj_list[offset:(offset + limit)]:
+            if os.path.isfile(obj.file_path):
+                result.append({
+                    'id': obj.id,
+                    'apply': obj.apply.display,
+                    'auditor': obj.auditor.display if obj.auditor else "",
+                    'file_name': obj.file_path.split('/')[-1],
+                    'file_path': obj.file_path,
+                    'file_size': '%.2f' % (os.path.getsize(obj.file_path) / 1024),
+                    'reason': obj.reason,
+                    'error_msg': obj.error_msg,
+                    'audit_msg': obj.audit_msg,
+                    'status': obj.status,
+                    'create_time': obj.create_time
+                })
+            else:
+                # 文件已经不存在
+                result.append({
+                    'id': obj.id,
+                    'apply': obj.apply.display,
+                    'auditor': obj.auditor.display if obj.auditor else "",
+                    'file_name': "[文件已删] " + obj.file_path.split('/')[-1],
+                    'file_path': obj.file_path,
+                    'file_size': "-",
+                    'reason': obj.reason,
+                    'error_msg': obj.error_msg,
+                    'audit_msg': obj.audit_msg,
+                    'status': obj.status,
+                    'create_time': obj.create_time
+                })
+        result = {"total": obj_list.count(), "rows": result}
+        return HttpResponse(json.dumps(result, cls=ExtendJSONEncoder, bigint_as_string=True),
+                            content_type='application/json')
     if request.method == 'POST':
         apply_id = request.POST.get('apply_id', '')
         audit_msg = request.POST.get('audit_msg', '')
         is_allow = request.POST.get('is_allow', '')
-        wpan_apply = WPanHistory.objects.get(id=apply_id)
-        if is_allow == "no":
-            wpan_apply.audit_msg = audit_msg
-            wpan_apply.status = 2
-            wpan_apply.save(update_fields=['audit_msg', 'status'])
-            result = {"total": 0, "result": "申请已打回！"}
-        else:
-            # 推送文件到微贷云盘
-            pan = WPan(file=wpan_apply.file_path)
-            ret = pan.upload_small_files()
-            file_id = ret['file_id']
-            pan.create_user_share(file_id=file_id, expired='', user_ding_id=request.user.ding_user_id)
-
-            result = {"total": 0, "result": "文件正在推送中，请过一会后检查云盘空间！"}
-    return HttpResponse(json.dumps(result, cls=ExtendJSONEncoder, bigint_as_string=True),
-                        content_type='application/json')
+        try:
+            if is_allow == "no":
+                wpan_apply = WPanHistory.objects.get(id=apply_id)
+                wpan_apply.auditor = request.user
+                wpan_apply.audit_msg = audit_msg
+                wpan_apply.status = 2
+                wpan_apply.save(update_fields=['audit_msg', 'auditor', 'status'])
+                msg_content = """抱歉：您的外传申请已经被打回\n文件：{}\n打回原因：{}\n审核人：{}""".format(
+                    wpan_apply.file_path.split('/')[-1], audit_msg, request.user.display)
+                DingSender().send_msg(wpan_apply.apply.ding_user_id, msg_content)
+                result = {"code": 0, "result": "申请已打回！"}
+            else:
+                do_upload_func(apply_id, audit_msg, request.user)
+                result = {"code": 0, "result": "外传正在执行...结果会通过钉钉发送给申请人！"}
+        except Exception as e:
+            result = {"code": -1, "errmsg": str(e)}
+        return HttpResponse(json.dumps(result, cls=ExtendJSONEncoder, bigint_as_string=True),
+                            content_type='application/json')

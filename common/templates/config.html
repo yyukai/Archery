@@ -105,7 +105,7 @@
                                 <label for="inception_remote_backup_user"
                                        class="col-sm-4 control-label">REMOTE_BACKUP_USER</label>
                                 <div class="col-sm-5">
-                                    <input type="text" autocomplete="new-password" class="form-control"
+                                    <input type="text" class="form-control"
                                            id="inception_remote_backup_user"
                                            key="inception_remote_backup_user"
                                            value="{{ config.inception_remote_backup_user }}"
@@ -116,7 +116,7 @@
                                 <label for="inception_remote_backup_password"
                                        class="col-sm-4 control-label">REMOTE_BACKUP_PASSWORD</label>
                                 <div class="col-sm-5">
-                                    <input type="password" autocomplete="new-password" class="form-control"
+                                    <input type="password" class="form-control"
                                            id="inception_remote_backup_password"
                                            key="inception_remote_backup_password"
                                            value="{{ config.inception_remote_backup_password }}"
@@ -204,7 +204,7 @@
                                             <input id="query_check"
                                                    key="query_check"
                                                    value="{{ config.query_check }}" type="checkbox">
-                                            是否开启Inception检测(表权限和脱敏校验)
+                                            是否开启Inception检测（表权限和脱敏校验）
                                         </label>
                                     </div>
                                 </div>
@@ -218,7 +218,7 @@
                                             <input id="disable_star"
                                                    key="disable_star"
                                                    value="{{ config.disable_star }}" type="checkbox">
-                                            禁止在查询时使用 *
+                                            禁止在查询时使用 *（所有字段）
                                         </label>
                                     </div>
                                 </div>
@@ -235,16 +235,6 @@
                                             是否开启动态脱敏
                                         </label>
                                     </div>
-                                </div>
-                            </div>
-                            <div class="form-group">
-                                <label for="inception_remote_backup_port"
-                                       class="col-sm-4 control-label">MAX_EXECUTION_TIME</label>
-                                <div class="col-sm-5">
-                                    <input type="number" class="form-control" id="max_execution_time"
-                                           key="max_execution_time"
-                                           value="{{ config.max_execution_time }}"
-                                           placeholder="在线查询超时时间阈值，单位秒，默认60">
                                 </div>
                             </div>
                             <div class="form-group">
@@ -298,17 +288,6 @@
                         <button id='check_email' class='btn-sm btn-info'>测试EMAIL连接</button>
                         <hr/>
                         <div class="form-horizontal">
-                            <div class="form-group">
-                                <label for="archery_base_url"
-                                       class="col-sm-4 control-label">ARCHERY_BASE_URL</label>
-                                <div class="col-sm-5">
-                                    <input type="text" class="form-control"
-                                           id="archery_base_url"
-                                           key="archery_base_url"
-                                           value="{{ config.archery_base_url }}"
-                                           placeholder="系统首页地址, 用于钉钉和邮件发送链接使用，http://archery.com">
-                                </div>
-                            </div>
                             <div class="form-group">
                                 <label for="mail"
                                        class="col-sm-4 control-label">MAIL</label>
@@ -393,14 +372,114 @@
                             </div>
                             <div class="form-group">
                                 <label for="ding"
-                                       class="col-sm-4 control-label">DING</label>
+                                       class="col-sm-4 control-label">DING Group</label>
                                 <div class="col-sm-8">
                                     <div class="switch switch-small">
                                         <label>
                                             <input id="ding" key="ding" value="{{ config.ding }}"
-                                                   type="checkbox"> 是否开启钉钉通知
+                                                   type="checkbox"> 是否开启钉钉群消息通知
                                         </label>
                                     </div>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label for="ding_to_person"
+                                       class="col-sm-4 control-label">DING</label>
+                                <div class="col-sm-8">
+                                    <div class="switch switch-small">
+                                        <label>
+                                            <input id="ding_to_person" key="ding_to_person"
+                                                   value="{{ config.ding_to_person }}"
+                                                   type="checkbox"> 是否开启钉钉个人消息通知
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                            <div id="div-ding-config" style="display: none">
+                                <i class="ace-icon fa fa-hand-o-right"></i>
+                                创建钉钉Archer微应用参考：<a
+                                    href="https://g.alicdn.com/dingding/opendoc/docs/_isvguide/tab3.html">钉钉企业接入开发文档</a>
+                                <div class="form-group">
+                                    <label for="ding_agent_id"
+                                           class="col-sm-4 control-label">AgentID</label>
+                                    <div class="col-sm-5">
+                                        <input type="text" class="form-control"
+                                               id="ding_agent_id"
+                                               key="ding_agent_id"
+                                               value="{{ config.ding_agent_id }}"
+                                               placeholder="微应用Archer的ID">
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label for="ding_corp_id"
+                                           class="col-sm-4 control-label">CorpId</label>
+                                    <div class="col-sm-5">
+                                        <input type="text" class="form-control"
+                                               id="ding_corp_id"
+                                               key="ding_corp_id"
+                                               value="{{ config.ding_corp_id }}"
+                                               placeholder="企业在钉钉内的唯一标识">
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label for="ding_corp_secret"
+                                           class="col-sm-4 control-label">CorpSecret</label>
+                                    <div class="col-sm-5">
+                                        <input type="password" class="form-control"
+                                               id="ding_corp_secret"
+                                               key="ding_corp_secret"
+                                               value="{{ config.ding_corp_secret }}"
+                                               placeholder="企业的访问密钥">
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label for="ding_root_dept_id"
+                                           class="col-sm-4 control-label">授权部门ID</label>
+                                    <div class="col-sm-5">
+                                        <input type="text" class="form-control"
+                                               id="ding_root_dept_id"
+                                               key="ding_root_dept_id"
+                                               value="{{ config.ding_root_dept_id }}"
+                                               placeholder="该应用能访问的根部门ID号">
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label for="ding_archer_username"
+                                           class="col-sm-4 control-label">Archer2Ding</label>
+                                    <div class="col-sm-5">
+                                        <input type="text" class="form-control"
+                                               id="ding_archer_username"
+                                               key="ding_archer_username"
+                                               value="{{ config.ding_archer_username }}"
+                                               placeholder="Archer.username对应钉钉里的字段">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <br>
+                        <h4 style="color: darkgrey"><b>临时文件配置</b></h4>
+                        <hr/>
+                        <div class="form-horizontal">
+                            <div class="form-group">
+                                <label for="query_result_dir"
+                                       class="col-sm-4 control-label">导出查询临时目录</label>
+                                <div class="col-sm-5">
+                                    <input type="text" class="form-control"
+                                           id="query_result_dir"
+                                           key="query_result_dir"
+                                           value="{{ config.query_result_dir }}"
+                                           placeholder="存放查询大数据的结果文件">
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label for="wpan_upload_dir"
+                                       class="col-sm-4 control-label">文件外传目录</label>
+                                <div class="col-sm-5">
+                                    <input type="text" class="form-control"
+                                           id="wpan_upload_dir"
+                                           key="wpan_upload_dir"
+                                           value="{{ config.wpan_upload_dir }}"
+                                           placeholder="该目录下文件可推送到微贷云盘">
                                 </div>
                             </div>
                         </div>
@@ -420,17 +499,6 @@
                                 </div>
                             </div>
                             <div class="form-group">
-                                <label for="lock_time_threshold"
-                                       class="col-sm-4 control-label">BINLOG2SQL</label>
-                                <div class="col-sm-5">
-                                    <input type="text" class="form-control"
-                                           id="binlog2sql"
-                                           key="binlog2sql"
-                                           value="{{ config.binlog2sql }}"
-                                           placeholder="binlog2sql调用路径，类似/opt/binlog2sql.py">
-                                </div>
-                            </div>
-                            <div class="form-group">
                                 <label for="default_auth_group"
                                        class="col-sm-4 control-label">DEFAULT_AUTH_GROUP</label>
                                 <div class="col-sm-5">
@@ -438,7 +506,7 @@
                                            id="default_auth_group"
                                            key="default_auth_group"
                                            value="{{ config.default_auth_group }}"
-                                           placeholder="默认权限组名，新用户首次登录自动关联, 老用户请手动配置">
+                                           placeholder="默认权限组名，每次用户登录会自动关联">
                                 </div>
                             </div>
                             <div class="form-group">
@@ -449,7 +517,7 @@
                                            id="default_resource_group"
                                            key="default_resource_group"
                                            value="{{ config.default_resource_group }}"
-                                           placeholder="默认资源组名，新用户首次登录自动关联, 老用户请手动配置">
+                                           placeholder="默认资源组名，每次用户登录会自动关联">
                                 </div>
                             </div>
                             <div class="form-group">
@@ -480,9 +548,20 @@
                                 <div class="col-sm-8">
                                     <div class="switch switch-small">
                                         <label>
-                                            <input id="sign_up_enabled" key="sign_up_enabled"
-                                                   value="{{ config.sign_up_enabled }}"
+                                            <input id="sign_up_enabled" key="sign_up_enabled" value="{{ config.sign_up_enabled }}"
                                                    type="checkbox"> 是否开启注册功能
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label for="archery_base_url"
+                                       class="col-sm-4 control-label">ARCHERY_BASE_URL</label>
+                                <div class="col-sm-8">
+                                    <div class="switch switch-small">
+                                        <label>
+                                            <input id="archery_base_url" key="archery_base_url" value="{{ config.archery_base_url }}"
+                                                   type="checkbox"> 系统首页地址, 用于钉钉和邮件发送链接使用, 如 http://archery.com
                                         </label>
                                     </div>
                                 </div>
@@ -544,11 +623,13 @@
                 $('input[type="checkbox"]').each(function (i) {
                     if ($(this).val() === 'true') {
                         $(this).bootstrapSwitch('state', true);
-                    } else {
+                    }
+                    else {
                         $(this).bootstrapSwitch('state', false);
                     }
                 });
-            } else if ($("#config").val() === '1') {
+            }
+            else if ($("#config").val() === '1') {
                 $("#div-system-config").hide();
                 $("#div-workflow").show();
                 $("#div-workflow-config").show();
@@ -562,15 +643,24 @@
                 $(this).val(true);
                 if ($(this).attr("id") === 'mail') {
                     $("#div-mail-config").show();
-                } else if ($(this).attr("id") === 'auto_review') {
+                }
+                else if ($(this).attr("id") === 'ding_to_person') {
+                    $("#div-ding-config").show();
+                }
+                else if ($(this).attr("id") === 'auto_review') {
                     $("#div-auto-review-config").show();
                 }
-            } else {
+            }
+            else {
                 $(this).val(false);
                 if ($(this).attr("id") === 'mail') {
                     $("#mail_ssl").val(false);
                     $("#div-mail-config").hide();
-                } else if ($(this).attr("id") === 'auto_review') {
+                }
+                else if ($(this).attr("id") === 'ding_to_person') {
+                    $("#div-ding-config").hide();
+                }
+                else if ($(this).attr("id") === 'auto_review') {
                     $("#div-auto-review-config").hide();
                 }
             }
@@ -578,6 +668,18 @@
 
         // 修改系统设置
         $("#saveconfig").click(function () {
+// 当开启钉钉通知到个人时，企业id和secret等必须填写
+            if ($("#ding_to_person").val() == 'true') {
+                var v1 = $("#ding_agent_id").val();
+                var v2 = $("#ding_corp_id").val();
+                var v3 = $("#ding_corp_secret").val();
+                var v4 = $("#ding_root_dept_id").val();
+                var v5 = $("#ding_archer_username").val();
+                if (v1 == "" || v2 == "" || v3 == "" || v4 == "" | v5 == "") {
+                    alert("当开启钉钉通知到个人时，企业id和secret等必须填写!");
+                    return;
+                }
+            }
             var sys_config = $("#div-system-config");
             var configs = [];
             sys_config.find('[key]').each(
@@ -624,7 +726,8 @@
             var auditors = $("#workflow_auditors_text").val();
             if (auditors) {
                 $("#workflow_auditors_text").val(auditors + '->' + auth_group);
-            } else {
+            }
+            else {
                 $("#workflow_auditors_text").val(auth_group)
             }
             $('#group_auditors').selectpicker('render');
@@ -699,7 +802,8 @@
                         alert(errorThrown);
                     }
                 });
-            } else {
+            }
+            else {
                 alert('请选择组、工单类型和审批流程！')
             }
 
@@ -775,7 +879,8 @@
         $(document).ready(function () {
             if (sessionStorage.getItem('config_type')) {
                 $("#config").val(sessionStorage.getItem('config_type')).trigger("change")
-            } else if ($("#config").val()) {
+            }
+            else if ($("#config").val()) {
                 $("#config").trigger("change")
             }
         })

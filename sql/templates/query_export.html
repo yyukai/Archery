@@ -82,7 +82,6 @@
                     </div>
                     <div class="form-group">
                         <input id="btn-format" type="button" class="btn btn-info" value="美化"/>
-                        <input id="btn-explain" type="button" class="btn btn-warning" value="执行计划"/>
                         <input id="btn-sqlquery" type="button" class="btn btn-success" value="SQL查询"/>
                     </div>
                 </div>
@@ -204,8 +203,7 @@
                     field: 'sqllog',
                     formatter: function (value, row, index) {
                         if (value.length > 50) {
-                            var sql = value.substr(0, 50) + '...';
-                            return sql;
+                            return "<span title ='"+value+"'>"+value.substring(0,50)+"...</span>"
                         }
                         else {
                             return value
@@ -224,6 +222,9 @@
                     title: '审核人',
                     field: 'auditor'
                 }, {
+                    title: '审核理由',
+                    field: 'audit_msg'
+                }, {
                     title: '操作',
                     field: 'status',
                     formatter: function (value, row, index) {
@@ -232,7 +233,11 @@
                         } else if (value == 1) {
                             return '<a type="button" class="label label-danger" onclick="get_audit_msg(' + row.id + ')" >执行失败</a>';
                         } else if (value == 2) {
-                            return '<a type="button" class="label label-info" onclick="do_audit(' + row.id + ')" >待审核</a>';
+                            {% if perms.sql.query_export_review %}
+                                return '<a type="button" class="label label-info" onclick="do_audit(' + row.id + ')" >待审核</a>';
+                            {% else %}
+                                return '';
+                            {% endif %}
                         } else if (value == 3) {
                             return '<a type="button" class="label label-success" href="/query_result_export?id=' + row.id + '" >下载</a>';
                         } else if (value == 4) {

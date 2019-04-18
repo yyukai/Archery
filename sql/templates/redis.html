@@ -140,7 +140,7 @@
     <script>
         $(document).ready(function () {
             $("#command").bind("input propertychange", function () {
-                if ($(this).val().search(/^exists|^m?get|^hm?get|^keys|^p?ttl|^smembers|^sismember/i)) {
+                if ($(this).val().trim().search(/^exists|^m?get|^hm?get|^keys|^p?ttl|^smembers|^sismember/i)) {
                     $('#submit').text("提交审核");
                     document.getElementById("cmt").style.display = "block";
                 } else {
@@ -182,7 +182,7 @@
             var command = $('#command').val();
             var comment = $('#comment').val();
             console.log(id, db, command);
-            if (id === null || db === null || command =="") {
+            if (id === null || db === null || command == "") {
                 alert("请检查必填项是否填写！");
                 return
             }
@@ -199,6 +199,9 @@
                     } else {
                         $('#result').val(res.errmsg);
                     }
+                },
+                complete: function () {
+                    $('#submit').attr("disabled", false);
                 }
             });
         }

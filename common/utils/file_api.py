@@ -11,14 +11,20 @@ def escape_filename(file_list):
     :param file_list:
     :return:
     """
+    if '"' in file_list:
+        file_list = file_list.replace('"', '\\\"')
     if "'" in file_list:
-        file_list = file_list.replace("'", "\\'")
+        file_list = file_list.replace("'", "\\\'")
     if " " in file_list:
-        file_list = file_list.replace(" ", "\ ")
+        file_list = file_list.replace(" ", '\\ ')
     if "(" in file_list:
-        file_list = file_list.replace("(", "\(")
+        file_list = file_list.replace("(", '\\(')
     if ")" in file_list:
-        file_list = file_list.replace(")", "\)")
+        file_list = file_list.replace(")", '\\)')
+    if "&" in file_list:
+        file_list = file_list.replace("&", "\\&")
+    if "/" in file_list:
+        file_list = file_list.replace("/", "\\/")
     return file_list
 
 
@@ -34,16 +40,22 @@ def get_file_content(file_name, username, overview=True):
     file_content = ''
     file_name = escape_filename(file_name)
     if re.match(r'text/.*|application/xml', get_file_type(file_name)):
-        if overview:
-            cmd = """if [ `cat {0}|wc -l` -gt 10 ];then
-                        head {0} |enca -L zh_CN.UTF-8 -c;echo "......省略";
-                        tail {0} |enca -L zh_CN.UTF-8 -c;
-                      else
-                        cat {0} |enca -L zh_CN.UTF-8 -c;
-                     fi""".format(file_name)
-            file_content += str(subprocess.getstatusoutput(cmd)[1])
-        else:
-            file_content += str(subprocess.getstatusoutput('cat ' + file_name))
+        cmd = """if [ `cat {0}|wc -l` -gt 10 ];then
+                head {0} |enca -L zh_CN.UTF-8 -c;echo "......省略";
+                tail {0} |enca -L zh_CN.UTF-8 -c;
+              else
+                cat {0} |enca -L zh_CN.UTF-8 -c;
+             fi""".format(file_name)
+        try:
+            if overview:
+                file_content += subprocess.getstatusoutput(cmd)[1]
+            else:
+                file_content += subprocess.getstatusoutput('cat ' + file_name)[1]
+        except UnicodeDecodeError:
+            if overview:
+                file_content += subprocess.getstatusoutput(cmd.encode('GB2312'))[1]
+            else:
+                file_content += subprocess.getstatusoutput('cat ' + file_name.encode('GB2312'))[1]
         print(file_content)
     elif re.match(r'application/vnd.ms-excel', get_file_type(file_name)):
         file_content += '暂时只支持预览文本类型的文件！\n'

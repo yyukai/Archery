@@ -5,7 +5,7 @@ import logging
 from django.contrib.auth.decorators import permission_required
 from django.http import HttpResponse
 from django.db.models import Q
-from sql.utils.group import user_instances
+from sql.utils.resource_group import user_instances
 from sql.models import DataMaskingColumns, DataMaskingRules
 from common.utils.extend_json_encoder import ExtendJSONEncoder
 
@@ -19,15 +19,19 @@ def masking_field_list(request):
     limit = offset + limit
 
     obj_list = user_instances(request.user, 'all')
-    db_name_list = [n.instance_name for n in obj_list]
+    ins_name_list = [n.instance_name for n in obj_list]
 
     rows = list()
+
+    db_name = request.POST.get('db_name', '')
+    if db_name:
+        obj_list = DataMaskingColumns.objects.filter(instance_name__in=ins_name_list).filter(table_schema=db_name)
+    else:
+        obj_list = DataMaskingColumns.objects.filter(instance_name__in=ins_name_list)
     search = request.POST.get('search', '')
     if search:
-        obj_list = DataMaskingColumns.objects.filter(instance_name__in=db_name_list).\
-            filter(Q(table_schema__contains=search) | Q(table_name__contains=search) | Q(column_name__contains=search))
-    else:
-        obj_list = DataMaskingColumns.objects.filter(instance_name__in=db_name_list)
+        obj_list = obj_list.filter(Q(table_schema__contains=search) | Q(table_name__contains=search) |
+                                   Q(column_name__contains=search))
 
     for dmc in obj_list[offset:limit]:
         dmr = DataMaskingRules.objects.filter(rule_type=dmc.rule_type)
@@ -38,6 +42,6 @@ def masking_field_list(request):
                      'ins': dmc.instance_name, 'db': dmc.table_schema, 'tb': dmc.table_name, 'cn': dmc.column_name,
                      'cc': dmc.column_comment, 'rr': rule_regex, 'hg': hide_group, 'rd': rule_desc, 'time': dmc.create_time})
 
-    result = {"total": len(rows), "rows": rows}
+    result = {"total": len(obj_list), "rows": rows}
     return HttpResponse(json.dumps(result, cls=ExtendJSONEncoder, bigint_as_string=True),
                         content_type='application/json')

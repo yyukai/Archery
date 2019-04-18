@@ -18,6 +18,7 @@
 <body style="background-color:#edeff1;">
 <div class="row lsb-login">
     <div class="col-sm-4 mypanalbox">
+        <h2>DataBase Manage system</h2>
         <form class="login-form fade-in-effect" id="login" method="post" role="form">
             {% csrf_token %}
             <div class="form-group is-focused">
@@ -143,8 +144,8 @@
             if (event.keyCode == 13) {
                 $('#btnLogin').addClass('disabled');
                 $('#btnLogin').prop('disabled', true);
-                username = $('#inputUsername').val();
-                password = $('#inputPassword').val();
+                var username = $('#inputUsername').val();
+                var password = $('#inputPassword').val();
                 authenticateUser(username, password);
             }
         });
@@ -153,8 +154,8 @@
     $('#btnLogin').click(function () {
         $('#btnLogin').addClass('disabled');
         $('#btnLogin').prop('disabled', true);
-        username = $('#inputUsername').val();
-        password = $('#inputPassword').val();
+        var username = $('#inputUsername').val();
+        var password = $('#inputPassword').val();
         authenticateUser(username, password);
     });
 

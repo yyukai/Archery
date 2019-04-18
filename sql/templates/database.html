@@ -12,10 +12,15 @@
             </select>
         </div>
         <div class="form-group ">
-            <button id="btn_add" type="button" class="btn btn-default"
-                    onclick="window.location.href='/admin/sql/database/add/'">
-                <span class="glyphicon glyphicon-plus" aria-hidden="true"></span>
-                添加数据库
+            {% if perms.sql.database_edit %}
+                <button id="btn_add" type="button" class="btn btn-default"
+                        onclick="window.location.href='/admin/sql/database/add/'">
+                    <span class="glyphicon glyphicon-plus" aria-hidden="true"></span>
+                    管理员录入
+                </button>
+            {% endif %}
+            <button id="btn_apply" type="button" class="btn btn-default" onclick="$('#applyModal').modal('show');">
+                <span class="glyphicon glyphicon-plus" aria-hidden="true"></span>申请新增数据库
             </button>
         </div>
     </div>
@@ -25,6 +30,55 @@
                style="table-layout:inherit;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
         </table>
     </div>
+
+    <div class="modal fade" id="applyModal">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <button type="button" class="close" data-dismiss="modal"><span
+                            aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>
+                    <h4 class="modal-title">申请新增数据库</h4>
+                </div>
+                <div class="modal-body">
+                    <p hidden id="uperrorMsg" class="text-danger" style="color:red"></p> <!-- for error msg-->
+                    <form id="applyForm" class="form-horizontal  nice-validator n-yellow" novalidate="novalidate">
+                        <div class="form-group">
+                            <label for="db_name" class="col-sm-2 control-label">库名<span class="red-fonts">*</span></label>
+                            <div class="col-sm-8">
+                                <input id="adddb_name" name="db_name" placeholder="请填写数据库"
+                                       type="text" class="form-control" datatype="s2-16" errormsg="格式不正确">
+                            </div>
+                        </div>
+
+                        <div class="hr-line-dashed"></div>
+                        <div class="form-group">
+                            <label for="app_type" class="col-sm-2 control-label">业务线<span class="red-fonts">*</span></label>
+                            <div class="col-sm-8">
+                                <input id="addapp_type" name="app_type" placeholder="请填写业务线"
+                                       type="text" class="form-control" datatype="s2-16" errormsg="格式不正确">
+                            </div>
+                        </div>
+
+                        <div class="hr-line-dashed"></div>
+                        <div class="form-group">
+                            <label for="db_application" class="col-sm-2 control-label">用途<span class="red-fonts">*</span></label>
+                            <div class="col-sm-8">
+                                <input id="adddb_application" name="db_application" placeholder="" class="form-control">
+                            </div>
+                        </div><!---->
+
+                        <div class="form-group">
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-default" data-dismiss="modal">取消</button>
+                                <button type="button" class="btn btn-primary" id="applyBtn">申请新增</button>
+                            </div>
+                        </div> <!--button-->
+                    </form> <!--form-->
+                </div> <!--modal-body-->
+
+            </div><!-- /.modal-content -->
+        </div><!-- /.modal-dialog -->
+    </div><!-- /.modal -->
 {% endblock content %}
 {% block js %}
     {% load staticfiles %}
@@ -38,7 +92,7 @@
             //初始化table
             $('#group-list').bootstrapTable('destroy').bootstrapTable({
                 escape: true,
-                method: 'post',
+                method: 'get',
                 contentType: "application/x-www-form-urlencoded",
                 url: "/database_list/",
                 striped: true,                      //是否显示行间隔色
@@ -76,7 +130,14 @@
                         }
                     },
                 columns: [{
-                    title: 'DataBase',
+                    title: 'IP:端口',
+                    field: 'ip_port',
+                    visible: false
+                },{
+                    title: '实例',
+                    field: 'instance'
+                },{
+                    title: '数据库',
                     field: 'db_name'
                 }, {
                     title: '用途',
@@ -89,8 +150,8 @@
                     field: '',
                     formatter: function (value, row, index) {
                         {% if perms.sql.database_edit %}
-                            return "<button class=\"btn btn-warning btn-xs\" onclick=\"edit_ip_white('"+row.user+"','"+row.host+"')\">修改</button>"
-                            + "<button class=\"btn btn-danger btn-xs\" onclick=\"del_ip_white('" + row.user+"','"+row.host+"')\">删除</button>"
+                            return "<a class=\"btn btn-warning btn-xs\" target=\"_blank\" href=\"/admin/sql/database/"+row.id+"/change/\">修改</a>"
+                            + "<a class=\"btn btn-danger btn-xs\" target=\"_blank\" href=\"/admin/sql/database/"+row.id+"/delete/\">删除</a>"
                         {% endif %}
                     }
                 }],
@@ -114,23 +175,27 @@
         $("#instance_name").change(function () {
             grouplist();
         });
-        function host_init(id) {
-            if (confirm("确定初始化数据库环境吗？")) {
-                $.ajax({
-                    url: "/host/init/",
-                    type: "POST",
-                    data: {'id': id},
-                    success: function (res) {
-                        console.log(res);
-                        if (res.code == 0) {
-                            alert(res);
-                            window.location.reload();
-                        } else {
-                            alert(res);
-                        }
+        $('#applyBtn').unbind("click").click( function() {
+            var data = $('#applyForm').serialize();
+            $.ajax({
+                url: "/database_list/",
+                type: "post",
+                data: data,
+                success: function (res) {
+                    if (res.status == 0) {
+                        $('#applyModal').modal('hide');
+                        grouplist();
+                    } else {
+                        alert(res.msg);
                     }
-                });
-            }
-        }
+                },
+                error: function (res) {
+                    console.log(res);
+                    $('#addModal').modal('hide');
+                    alert(res);
+                }
+            });
+            return false;
+        });
     </script>
 {% endblock %}

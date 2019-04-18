@@ -1,17 +1,14 @@
 # -*- coding: UTF-8 -*- 
 
 from django.urls import path
-from django.views.i18n import JavaScriptCatalog
 
-import sql.query_privileges
-import sql.sql_optimize
 from common import auth, config, workflow, dashboard, check
-from sql import views, sql_workflow, sql_analyze, query, slowlog, instance, db_diagnostic, resource_group, binlog
-from sql.utils import tasks
+from sql import views, sql_workflow, query, slowlog, instance, db_diagnostic, sql_tuning, resource_group, \
+    sql_advisor, binlog2sql, soar, backup, binlog, data_safe, query_audit, ip_white, host, wpan_upload, bg_table
+from sql.utils import jobs
 
 urlpatterns = [
     path('', views.sqlworkflow),
-    path('jsi18n/', JavaScriptCatalog.as_view(), name='javascript-catalog'),
     path('index/', views.sqlworkflow),
     path('login/', views.login, name='login'),
     path('logout/', auth.sign_out),
@@ -21,14 +18,14 @@ urlpatterns = [
     path('editsql/', views.submit_sql),
     path('submitotherinstance/', views.submit_sql),
     path('detail/<int:workflow_id>/', views.detail, name='detail'),
-    path('autoreview/', sql_workflow.submit),
+    path('autoreview/', sql_workflow.autoreview),
     path('passed/', sql_workflow.passed),
     path('execute/', sql_workflow.execute),
-    path('timingtask/', sql_workflow.timing_task),
+    path('timingtask/', sql_workflow.timingtask),
     path('cancel/', sql_workflow.cancel),
     path('rollback/', views.rollback),
-    path('sqlanalyze/', views.sqlanalyze),
     path('sqlquery/', views.sqlquery),
+    path('query_export/', views.query_export),
     path('slowquery/', views.slowquery),
     path('sqladvisor/', views.sqladvisor),
     path('slowquery_advisor/', views.sqladvisor),
@@ -44,23 +41,21 @@ urlpatterns = [
     path('grouprelations/<int:group_id>/', views.groupmgmt),
     path('instance/', views.instance),
     path('instanceuser/<int:instance_id>/', views.instanceuser),
-    path('instanceparam/', views.instance_param),
     path('binlog2sql/', views.binlog2sql),
     path('schemasync/', views.schemasync),
     path('config/', views.config),
 
     path('authenticate/', auth.authenticate_entry),
-    path('sqlworkflow_list/', sql_workflow.sql_workflow_list),
-    path('simplecheck/', sql_workflow.check),
+    path('sqlworkflow_list/', sql_workflow.sqlworkflow_list),
+    path('simplecheck/', sql_workflow.simplecheck),
+    path('getOscPercent/', sql_workflow.get_osc_percent),
     path('getWorkflowStatus/', sql_workflow.get_workflow_status),
-    path('del_sqlcronjob/', tasks.del_schedule),
-
-    path('sql_analyze/generate/', sql_analyze.generate),
-    path('sql_analyze/analyze/', sql_analyze.analyze),
+    path('stopOscProgress/', sql_workflow.stop_osc_progress),
+    path('del_sqlcronjob/', jobs.del_sqlcronjob),
 
     path('workflow/list/', workflow.lists),
     path('workflow/log/', workflow.log),
-    path('config/change/', config.change_config),
+    path('config/change/', config.changeconfig),
 
     path('check/inception/', check.inception),
     path('check/email/', check.email),
@@ -77,35 +72,90 @@ urlpatterns = [
     path('instance/list/', instance.lists),
     path('instance/users/', instance.users),
     path('instance/schemasync/', instance.schemasync),
-    path('instance/instance_resource/', instance.instance_resource),
+    path('instance/getdbNameList/', instance.get_db_name_list),
+    path('instance/getTableNameList/', instance.get_table_name_list),
+    path('instance/getColumnNameList/', instance.get_column_name_list),
     path('instance/describetable/', instance.describe),
 
+    path('database/', views.database),
+    path('database_list/', instance.db_list),
+    path('database_detail/', instance.db_detail),
+
+    path('bg_table/', views.bg_table),
+    path('bg_table_list/', bg_table.bg_table_list),
+
+    # path('redis/', views.redis),
+    # path('redis_query/', redis.redis_query),
+    # path('redis_apply/', views.redis_apply),
+    # path('redis_apply_list/', redis.redis_apply_list),
+    # path('redis_apply_audit/', redis.redis_apply_audit),
+
+    path('replication/', views.replication),
+    path('replication_delay/', instance.replication_delay),
+    path('replication_echart/', views.replication_echart),
+
+    path('param/', views.param),
     path('param/list/', instance.param_list),
     path('param/history/', instance.param_history),
-    path('param/edit/', instance.param_edit),
+    path('param/save/', instance.param_save),
 
     path('query/', query.query),
+    path('add_async_query/', query.add_async_query),
+    path('query_result_export/', query.query_result_export),
+    path('query_export_audit/', query.query_export_audit),
     path('query/querylog/', query.querylog),
-    path('query/explain/', sql.sql_optimize.explain),
-    path('query/applylist/', sql.query_privileges.query_priv_apply_list),
-    path('query/userprivileges/', sql.query_privileges.user_query_priv),
-    path('query/applyforprivileges/', sql.query_privileges.query_priv_apply),
-    path('query/modifyprivileges/', sql.query_privileges.query_priv_modify),
-    path('query/privaudit/', sql.query_privileges.query_priv_audit),
+    path('query/query_export_log/', query.query_export_log),
+    path('query/explain/', query.explain),
+    path('query/applylist/', query.getqueryapplylist),
+    path('query/userprivileges/', query.getuserprivileges),
+    path('query/applyforprivileges/', query.applyforprivileges),
+    path('query/modifyprivileges/', query.modifyqueryprivileges),
+    path('query/privaudit/', query.queryprivaudit),
 
+    path('binlog/', views.binlog),
     path('binlog/list/', binlog.binlog_list),
-    path('binlog/binlog2sql/', binlog.binlog2sql),
-    path('binlog/del_log/', binlog.del_binlog),
+    path('binlog/delete_log/', binlog.delete_log),
+    path('binlog2sql/sql/', binlog2sql.binlog2sql),
+    path('binlog2sql/binlog_list/', binlog2sql.binlog_list),
 
     path('slowquery/review/', slowlog.slowquery_review),
     path('slowquery/review_history/', slowlog.slowquery_review_history),
-    path('slowquery/optimize_sqladvisor/', sql.sql_optimize.optimize_sqladvisor),
-    path('slowquery/optimize_sqltuning/', sql.sql_optimize.optimize_sqltuning),
-    path('slowquery/optimize_soar/', sql.sql_optimize.optimize_soar),
+    path('slowquery/sqladvisor/', sql_advisor.sqladvisor),
+    path('slowquery/sqltuning/', sql_tuning.tuning),
+    path('slowquery/soar/', soar.soar),
 
     path('db_diagnostic/process/', db_diagnostic.process),
     path('db_diagnostic/create_kill_session/', db_diagnostic.create_kill_session),
     path('db_diagnostic/kill_session/', db_diagnostic.kill_session),
     path('db_diagnostic/tablesapce/', db_diagnostic.tablesapce),
     path('db_diagnostic/trxandlocks/', db_diagnostic.trxandlocks),
+
+    path('backup/', views.backup),
+    path('backup/list/', backup.backup_list),
+    path('backup_detail/<db_cluster>/', views.backup_detail),
+    path('backup_detail/list/<db_cluster>/', backup.backup_detail_list),
+
+    path('masking_field/', views.masking_field),
+    path('masking_field/list/', data_safe.masking_field_list),
+
+    path('query_audit/', views.query_audit),
+    path('query_audit/list/', query_audit.query_audit),
+
+    path('ip_white/<int:instance_id>/', views.ip_white),
+    path('ip_white/list/<int:instance_id>', ip_white.ip_white_list),
+    path('ip_white/add/<int:instance_id>', ip_white.ip_white_add),
+    path('ip_white/edit/<int:instance_id>', ip_white.ip_white_add),
+    path('ip_white/delete/<int:instance_id>', ip_white.ip_white_del),
+
+    path('host/', views.host),
+    path('host/list/', host.host_list),
+
+    path('wpan_upload/', views.wpan_upload),
+    path('wpan_upload/dir_list/', wpan_upload.wpan_upload_dir_list),
+    path('wpan_upload/file_list/', wpan_upload.wpan_upload_list),
+    path('wpan_upload/file_cont/', wpan_upload.wpan_upload_file_cont),
+    path('wpan_upload/apply/', wpan_upload.wpan_upload_apply),
+    path('wpan_upload/download/', wpan_upload.wpan_upload_download),
+    path('wpan_audit/', views.wpan_audit),
+    path('wpan_upload/audit/', wpan_upload.wpan_upload_audit),
 ]
