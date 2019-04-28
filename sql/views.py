@@ -1,20 +1,21 @@
 # -*- coding: UTF-8 -*-
 import traceback
-
+import datetime
 import simplejson as json
 
 from django.contrib.auth.decorators import permission_required
-from django.contrib.auth.models import Group
+from django.contrib.auth.models import Group, Permission
 from django.shortcuts import render, get_object_or_404
 from django.http import HttpResponseRedirect
+from django.db.models import Q
 from django.urls import reverse
 
-from common.config import SysConfig
 from sql.engines import get_engine
 from common.utils.permission import superuser_required
 from sql.engines.models import ReviewResult, ReviewSet
 from sql.utils.tasks import task_info
 
+from .models import Instance, DataBase, Replication, QueryAudit, BGTable
 from .models import Users, SqlWorkflow, QueryPrivileges, ResourceGroup, \
     QueryPrivilegesApply, Config, SQL_WORKFLOW_CHOICES
 from sql.utils.workflow_audit import Audit
@@ -27,13 +28,8 @@ import logging
 logger = logging.getLogger('default')
 
 
-def index(request):
-    index_path_url = SysConfig().get('index_path_url', 'sqlworkflow')
-    return HttpResponseRedirect(f"/{index_path_url.strip('/')}/")
-
-
+# 登录页面
 def login(request):
-    """登录页面"""
     if request.user and request.user.is_authenticated:
         return HttpResponseRedirect('/')
     return render(request, 'login.html')
@@ -180,6 +176,20 @@ def sqlquery(request):
     return render(request, 'sqlquery.html', context)
 
 
+# SQL导出查询（大数据异步查询）
+@permission_required('sql.menu_query_export', raise_exception=True)
+def query_export(request):
+    # 获取用户关联从库列表
+    instances = Instance.objects.filter(type='slave')
+    # 获取导出查询审核人
+    auditors = list()
+    for p in Permission.objects.filter(codename='query_export_review'):
+        for g in p.group_set.all():
+            auditors.extend(g.user_set.all())
+    context = {'instances': instances, 'auditors': auditors}
+    return render(request, 'query_export.html', context)
+
+
 # SQL慢日志页面
 @permission_required('sql.menu_slowquery', raise_exception=True)
 def slowquery(request):
@@ -254,6 +264,121 @@ def dbdiagnostic(request):
     return render(request, 'dbdiagnostic.html', context)
 
 
+@permission_required('sql.menu_database', raise_exception=True)
+def database(request):
+    # 获取用户关联实例列表
+    instances = [ins.instance_name for ins in user_instances(request.user, 'all')]
+    return render(request, 'database.html', {'instances': instances})
+
+
+@permission_required('sql.menu_database', raise_exception=True)
+def bg_table(request):
+    # 获取用户关联实例列表
+    db_list = list(set([bgt['db_name'] for bgt in BGTable.objects.values('db_name')]))
+    db_list.sort()
+    return render(request, 'bg_table.html', {'db_list': db_list})
+
+#
+# @permission_required('sql.menu_redis', raise_exception=True)
+# def redis(request):
+#     # 获取用户关联实例列表
+#     redis_list = Instance.objects.filter(db_type='redis').order_by('hostname')
+#     return render(request, 'redis.html', {'redis_list': redis_list, 'db_list': range(0, 16)})
+#
+#
+# @permission_required('sql.menu_redis', raise_exception=True)
+# def redis_apply(request):
+#     # 超过24H 未审核的申请设置为过期状态
+#     one_day_before = (datetime.datetime.now() + datetime.timedelta(days=-1)).strftime("%Y-%m-%d %H:%M:%S")
+#     RedisApply.objects.filter(create_time__lte=one_day_before).filter(status=0).update(status=4)
+#     redis_list = Instance.objects.filter(db_type='redis').order_by('hostname')
+#     return render(request, 'redis_apply.html', {'redis_list': redis_list})
+
+
+# 主从复制
+@permission_required('sql.menu_instance', raise_exception=True)
+def replication(request):
+    ins_names = [ins.instance_name for ins in user_instances(request.user, 'master', 'mysql')]
+    replication_info = list()
+    for rep in Replication.objects.filter(Q(master__in=ins_names)|Q(slave__in=ins_names))[:10]:
+        if rep.delay > 600:
+            replication_info.append({"red": rep.created.strftime("%Y-%m-%d %H:%M:%S") + " " + rep.master + " -> " + rep.slave + " 延迟：" + str(rep.delay)})
+        elif rep.delay > 300:
+            replication_info.append({"yellow": rep.created.strftime("%Y-%m-%d %H:%M:%S") + " " + rep.master + " -> " + rep.slave + " 延迟：" + str(rep.delay)})
+        else:
+            replication_info.append({"green": rep.created.strftime("%Y-%m-%d %H:%M:%S") + " " + rep.master + " -> " + rep.slave + " 延迟：" + str(rep.delay)})
+    return render(request, 'replication.html', locals())
+
+
+@permission_required('sql.menu_instance', raise_exception=True)
+def replication_echart(request):
+    from pyecharts import Page, Line
+    instances = [instance.instance_name for instance in user_instances(request.user, 'all')]
+    begin_date = (datetime.datetime.now() - datetime.timedelta(minutes=+29))
+    ins_name = request.GET.get('name', '')
+    dt_s = request.GET.get('stime', begin_date)
+    dt_e = request.GET.get('etime', datetime.datetime.now())
+
+    attr = dict()
+    if ins_name:
+        for rep in Replication.objects.filter(Q(master=ins_name)|Q(slave=ins_name)).filter(created__range=[dt_s, dt_e]):
+            if rep.master + "--" + rep.slave in attr:
+                attr[rep.master + "--" + rep.slave].append([rep.delay, rep.created])
+            else:
+                attr[rep.master + "--" + rep.slave] = [[rep.delay, rep.created]]
+    else:
+        for rep in Replication.objects.filter(created__range=[dt_s, dt_e]):
+            if rep.master + "--" + rep.slave in attr:
+                attr[rep.master + "--" + rep.slave].append([rep.delay, rep.created])
+            else:
+                attr[rep.master + "--" + rep.slave] = [[rep.delay, rep.created]]
+    page = Page()
+    for k, v in attr.items():
+        time_attr, value_attr = list(), list()
+        for vv in v:
+            value_attr.append(vv[0])
+            time_attr.append(vv[1])
+        line1 = Line("%s -> %s 同步延迟统计" % (k.split("--")[0], k.split("--")[1]), width="100%")
+        line1.add("Seconds_Behind_Master", time_attr, value_attr, is_stack=False, legend_selectedmode='single', mark_point=["average"])
+        page.add(line1)
+    myechart = page.render_embed()  # 渲染配置
+    host = 'https://pyecharts.github.io/assets/js'  # js文件源地址
+    script_list = page.get_js_dependencies()  # 获取依赖的js文件名称（只获取当前视图需要的js）
+    return render(request, "replication_echart.html", {"myechart": myechart, "host": host, "script_list": script_list, "instances": instances})
+
+
+def masking_field(request):
+    obj_list = user_instances(request.user, 'all')
+    ins_name_list = [n.instance_name for n in obj_list]
+    db_name_list = [db.db_name for db in DataBase.objects.filter(instance_name__in=ins_name_list)]
+    return render(request, 'masking_field.html', locals())
+
+
+def query_audit(request):
+    obj_list = user_instances(request.user, 'all')
+    ins_name_list = [n.instance_name for n in obj_list]
+    db_name_list = [db.db_name for db in DataBase.objects.filter(instance_name__in=ins_name_list)]
+    qa_user_list = QueryAudit.objects.values('db_user').distinct().order_by('db_user')
+    db_user_list = [u['db_user'] for u in qa_user_list]
+    return render(request, 'query_audit.html', locals())
+
+
+def ip_white(request, instance_id):
+    return render(request, "ip_white.html", {'instance_id': instance_id})
+
+
+def host(request):
+    return render(request, "host.html")
+
+
+def wpan_upload(request):
+    return render(request, "wpan_upload.html")
+
+
+def wpan_audit(request):
+    return render(request, "wpan_audit.html")
+
+
 # 工作流审核列表页面
 def workflows(request):
     return render(request, "workflow.html")
@@ -292,6 +417,22 @@ def config(request):
 @superuser_required
 def group(request):
     return render(request, 'group.html')
+
+
+@permission_required('sql.menu_binlog', raise_exception=True)
+def binlog(request):
+    instances = [instance.instance_name for instance in user_instances(request.user, 'all', 'mysql')]
+    return render(request, 'binlog.html', {'instances': instances})
+
+
+@permission_required('sql.menu_backup', raise_exception=True)
+def backup(request):
+    return render(request, 'backup.html')
+
+
+@permission_required('sql.menu_backup', raise_exception=True)
+def backup_detail(request, db_cluster):
+    return render(request, 'backup_detail.html', {'db_cluster': db_cluster})
 
 
 # 资源组组关系管理页面

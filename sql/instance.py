@@ -1,17 +1,24 @@
 # -*- coding: UTF-8 -*-
 import os
 import time
+import datetime
 
 import simplejson as json
 from django.conf import settings
+from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth.decorators import permission_required
-from django.http import HttpResponse
+
+from django.db.models import Q
+from django.http import HttpResponse, QueryDict
 
 from common.config import SysConfig
 from common.utils.extend_json_encoder import ExtendJSONEncoder
+from sql.utils.permission import get_ding_user_id_by_permission
+from sql.utils.ding_api import DingSender
+from sql.utils.resource_group import user_instances
 from sql.engines import get_engine
 from sql.plugins.schemasync import SchemaSync
-from .models import Instance, ParamTemplate, ParamHistory
+from .models import Instance, ParamTemplate, ParamHistory, DataBase, Replication
 
 
 # 获取实例列表
@@ -132,7 +139,7 @@ def param_history(request):
         phs = ParamHistory.objects.filter(variable_name__contains=search)
     count = phs.count()
     phs = phs[offset:limit].values("instance__instance_name", "variable_name", "old_var", "new_var",
-                                   "user_display", "update_time")
+                                   "user_display", "create_time")
     # QuerySet 序列化
     rows = [row for row in phs]
 
@@ -304,15 +311,10 @@ def instance_resource(request):
                 resource = query_engine.get_all_columns_by_tb(db_name=db_name, tb_name=tb_name)
         else:
             raise TypeError('不支持的资源类型或者参数不完整！')
+        result['data'] = resource
     except Exception as msg:
         result['status'] = 1
         result['msg'] = str(msg)
-    else:
-        if resource.error:
-            result['status'] = 1
-            result['msg'] = resource.error
-        else:
-            result['data'] = resource.rows
     return HttpResponse(json.dumps(result), content_type='application/json')
 
 
@@ -339,3 +341,158 @@ def describe(request):
         result['status'] = 1
         result['msg'] = str(msg)
     return HttpResponse(json.dumps(result), content_type='application/json')
+
+
+@permission_required('sql.menu_database', raise_exception=True)
+def db_list(request):
+    res = {}
+    if request.method == 'GET':
+        instance_name = request.GET.get('instance_name', '')
+        search = request.GET.get('search', '')
+        try:
+            if instance_name:
+                obj_list = DataBase.objects.filter(instance_name=instance_name).filter(Q(db_name__contains=search) |
+                                                                                       Q(db_application__contains=search) |
+                                                                                       Q(db_person__contains=search))
+            else:
+                obj_list = DataBase.objects.filter(Q(db_name__contains=search) |
+                                                   Q(db_application__contains=search) |
+                                                   Q(db_person__contains=search))
+            res = list()
+            for obj in obj_list:
+                res.append({
+                    'id': obj.id,
+                    'ip_port': '{}:{}'.format(obj.ip, obj.port),
+                    'instance': obj.instance_name,
+                    'db_name': obj.db_name,
+                    'db_application': obj.db_application,
+                    'db_person': obj.db_person,
+                })
+        except Instance.DoesNotExist:
+            res = {'status': 1, 'msg': 'Instance.DoesNotExist'}
+        except Exception as e:
+            res = {'status': 1, 'msg': str(e)}
+    if request.method == 'POST':
+        db_name = request.POST.get('db_name', '')
+        app_type = request.POST.get('app_type', '')
+        db_application = request.POST.get('db_application', '')
+        db_person = request.user.display
+        try:
+            db = DataBase.objects.create(db_name=db_name, app_type=app_type, db_application=db_application,
+                                         db_person=db_person)
+            res = {'status': 0, 'msg': 'ok'}
+            msg = '申请新增数据库：\n数据库：{}\n业务：{}\n用途：{}\n申请人：{}\n地址：{}\n请您尽快补全或删除该数据库信息！'.format(db_name,
+                    app_type, db_application, db_person, "http://dbms.weidai.com.cn/admin/sql/database/%s/change/" % db.id)
+            ding_sender = DingSender()
+            ding_user_ids = get_ding_user_id_by_permission('database_edit')
+            for ding_id in ding_user_ids:
+                ding_sender.send_msg(ding_id, msg)
+        except Exception as e:
+            res = {'status': 1, 'msg': str(e)}
+    return HttpResponse(json.dumps(res, cls=ExtendJSONEncoder, bigint_as_string=True),
+                        content_type='application/json')
+
+
+@permission_required('sql.menu_database', raise_exception=True)
+def db_detail(request):
+    instance_name = request.POST.get('instance_name', '')
+    search = request.POST.get('search', '')
+    try:
+        if instance_name:
+            obj_list = DataBase.objects.filter(instance_name=instance_name).filter(Q(db_name__contains=search) |
+                                                                                   Q(db_application__contains=search) |
+                                                                                   Q(db_person__contains=search))
+        else:
+            obj_list = DataBase.objects.filter(Q(db_name__contains=search) |
+                                               Q(db_application__contains=search) |
+                                               Q(db_person__contains=search))
+        res = list()
+        for obj in obj_list:
+            res.append({
+                'id': obj.id,
+                'host': obj.host,
+                'ip_port': '{}:{}'.format(obj.ip, obj.port),
+                'instance': obj.instance_name,
+                'db_name': obj.db_name,
+                'db_application': obj.db_application,
+                'db_person': obj.db_person,
+            })
+    except Instance.DoesNotExist:
+        print('Instance.DoesNotExist')
+        res = {'status': 1, 'msg': 'Instance.DoesNotExist'}
+    except Exception as e:
+        print(e)
+        res = {'status': 1, 'msg': str(e)}
+    return HttpResponse(json.dumps(res, cls=ExtendJSONEncoder, bigint_as_string=True),
+                        content_type='application/json')
+
+
+@csrf_exempt
+@permission_required('sql.menu_instance', raise_exception=True)
+def replication_delay(request):
+    """
+        instance_info = [
+            [ins1_id, ins1_ip, ins1],
+            [ins2_id, ins2_ip, ins2],
+            ......
+            [ins6_id, ins6_ip, ins6]
+        ]
+        delay_info = {
+            ins1_id: [[ins2, 0], [ins3, 0]],
+            ins5_id: [[ins6, 0]]
+        }
+        :param request:
+        :return:
+        """
+    masters = list()
+    delay_info = {}
+    all_instances = list()
+    for ins in user_instances(request.user, type='all', db_type='mysql'):
+        all_instances.append([str(ins.id), ins.host + ":" + str(ins.port), ins.instance_name])
+    hour = datetime.datetime.now() - datetime.timedelta(hours=1)
+    ins_name = request.GET.get('name', '')
+    if ins_name:
+        for ins in Instance.objects.filter(instance_name=ins_name):
+            masters.append([str(ins.id), ins.host + ":" + str(ins.port), ins.instance_name])
+    else:
+        for ins in user_instances(request.user, type='master', db_type='mysql'):
+            masters.append([str(ins.id), ins.host + ":" + str(ins.port), ins.instance_name])
+
+    for ins in user_instances(request.user, type='all', db_type='mysql'):
+        all_instances.append([str(ins.id), ins.host + ":" + str(ins.port), ins.instance_name])
+        slave_ins_info = list()
+        for slave in Instance.objects.filter(parent=ins, type='slave'):
+            rep = Replication.objects.filter(master=ins.instance_name, slave=slave.instance_name, created__gte=hour)
+            slave_ins_info.append([str(slave.id), rep[0].delay if rep else 'NaN'])
+        delay_info[str(ins.id)] = slave_ins_info
+    res = {'instance_info': all_instances, 'masters': masters, 'delay_info': delay_info}
+    return HttpResponse(json.dumps(res, cls=ExtendJSONEncoder, bigint_as_string=True),
+                        content_type='application/json')
+
+
+@permission_required('sql.menu_binlog', raise_exception=True)
+def binlog_list(request):
+    """
+    获取binlog列表
+    :param request:
+    :return:
+    """
+    instance_name = request.POST.get('instance_name')
+    try:
+        instance = Instance.objects.get(instance_name=instance_name)
+    except Instance.DoesNotExist:
+        result = {'status': 1, 'msg': '实例不存在', 'data': []}
+        return HttpResponse(json.dumps(result), content_type='application/json')
+    query_engine = get_engine(instance=instance)
+    binlog = query_engine.query('information_schema', 'show binary logs;')
+    column_list = binlog.column_list
+    rows = []
+    for row in binlog.rows:
+        row_info = {}
+        for row_index, row_item in enumerate(row):
+            row_info[column_list[row_index]] = row_item
+        rows.append(row_info)
+
+    result = {'status': 0, 'msg': 'ok', 'data': rows}
+    return HttpResponse(json.dumps(result, cls=ExtendJSONEncoder, bigint_as_string=True),
+                        content_type='application/json')

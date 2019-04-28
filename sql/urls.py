@@ -3,16 +3,17 @@
 from django.urls import path
 from django.views.i18n import JavaScriptCatalog
 
-import sql.query_privileges
 import sql.sql_optimize
 from common import auth, config, workflow, dashboard, check
+from sql import backup, data_safe, query_audit, ip_white, host, wpan_upload, bg_table
 from sql import views, sql_workflow, sql_analyze, query, slowlog, instance, db_diagnostic, resource_group, binlog
 from sql.utils import tasks
 
+
 urlpatterns = [
-    path('', views.index),
+    path('', views.sqlworkflow),
     path('jsi18n/', JavaScriptCatalog.as_view(), name='javascript-catalog'),
-    path('index/', views.index),
+    path('index/', views.sqlworkflow),
     path('login/', views.login, name='login'),
     path('logout/', auth.sign_out),
     path('signup/', auth.sign_up),
@@ -29,6 +30,7 @@ urlpatterns = [
     path('rollback/', views.rollback),
     path('sqlanalyze/', views.sqlanalyze),
     path('sqlquery/', views.sqlquery),
+    path('query_export/', views.query_export),
     path('slowquery/', views.slowquery),
     path('sqladvisor/', views.sqladvisor),
     path('slowquery_advisor/', views.sqladvisor),
@@ -63,7 +65,6 @@ urlpatterns = [
     path('config/change/', config.change_config),
 
     path('check/inception/', check.inception),
-    path('check/go_inception/', check.go_inception),
     path('check/email/', check.email),
     path('check/instance/', check.instance),
 
@@ -80,13 +81,36 @@ urlpatterns = [
     path('instance/schemasync/', instance.schemasync),
     path('instance/instance_resource/', instance.instance_resource),
     path('instance/describetable/', instance.describe),
+    path('instance/binlog/', instance.binlog_list),
+
+    path('database/', views.database),
+    path('database_list/', instance.db_list),
+    path('database_detail/', instance.db_detail),
+
+    path('bg_table/', views.bg_table),
+    path('bg_table_list/', bg_table.bg_table_list),
+
+    # path('redis/', views.redis),
+    # path('redis_query/', redis.redis_query),
+    # path('redis_apply/', views.redis_apply),
+    # path('redis_apply_list/', redis.redis_apply_list),
+    # path('redis_apply_audit/', redis.redis_apply_audit),
+
+    path('replication/', views.replication),
+    path('replication_delay/', instance.replication_delay),
+    path('replication_echart/', views.replication_echart),
 
     path('param/list/', instance.param_list),
     path('param/history/', instance.param_history),
     path('param/edit/', instance.param_edit),
 
     path('query/', query.query),
+    path('add_async_query/', query.add_async_query),
+    path('query_result_export/', query.query_result_export),
+    path('query_export_audit/', query.query_export_audit),
+    path('query_export_cancel/', query.query_export_cancel),
     path('query/querylog/', query.querylog),
+    path('query/query_export_log/', query.query_export_log),
     path('query/explain/', sql.sql_optimize.explain),
     path('query/applylist/', sql.query_privileges.query_priv_apply_list),
     path('query/userprivileges/', sql.query_privileges.user_query_priv),
@@ -94,9 +118,10 @@ urlpatterns = [
     path('query/modifyprivileges/', sql.query_privileges.query_priv_modify),
     path('query/privaudit/', sql.query_privileges.query_priv_audit),
 
+    path('binlog/', views.binlog),
     path('binlog/list/', binlog.binlog_list),
-    path('binlog/binlog2sql/', binlog.binlog2sql),
     path('binlog/del_log/', binlog.del_binlog),
+    path('binlog/binlog2sql/', binlog.binlog2sql),
 
     path('slowquery/review/', slowlog.slowquery_review),
     path('slowquery/review_history/', slowlog.slowquery_review_history),
@@ -109,4 +134,34 @@ urlpatterns = [
     path('db_diagnostic/kill_session/', db_diagnostic.kill_session),
     path('db_diagnostic/tablesapce/', db_diagnostic.tablesapce),
     path('db_diagnostic/trxandlocks/', db_diagnostic.trxandlocks),
+
+    path('backup/', views.backup),
+    path('backup/list/', backup.backup_list),
+    path('backup_detail/<db_cluster>/', views.backup_detail),
+    path('backup_detail/list/<db_cluster>/', backup.backup_detail_list),
+
+    path('masking_field/', views.masking_field),
+    path('masking_field/list/', data_safe.masking_field_list),
+
+    path('query_audit/', views.query_audit),
+    path('query_audit/list/', query_audit.query_audit),
+
+    path('ip_white/<int:instance_id>/', views.ip_white),
+    path('ip_white/list/<int:instance_id>', ip_white.ip_white_list),
+    path('ip_white/add/<int:instance_id>', ip_white.ip_white_add),
+    path('ip_white/edit/<int:instance_id>', ip_white.ip_white_add),
+    path('ip_white/delete/<int:instance_id>', ip_white.ip_white_del),
+
+    path('host/', views.host),
+    path('host/list/', host.host_list),
+
+    path('wpan_upload/', views.wpan_upload),
+    path('wpan_upload/dir_list/', wpan_upload.wpan_upload_dir_list),
+    path('wpan_upload/file_list/', wpan_upload.wpan_upload_list),
+    path('wpan_upload/file_cont/', wpan_upload.wpan_upload_file_cont),
+    path('wpan_upload/apply/', wpan_upload.wpan_upload_apply),
+    path('wpan_upload/download/', wpan_upload.wpan_upload_download),
+    path('wpan_audit/', views.wpan_audit),
+    path('wpan_upload/audit/', wpan_upload.wpan_upload_audit),
+    path('wpan_upload/cancel/', wpan_upload.wpan_upload_cancel),
 ]

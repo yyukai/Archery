@@ -11,12 +11,14 @@
 
     <link rel="shortcut icon" href="/static/favicon.ico" type="image/x-icon">
     <!-- 引入 Bootstrap -->
-    <link href="{% static 'bootstrap-3.3.7-dist/css/bootstrap.min.css' %}" rel="stylesheet">
+    <link href="{% static 'bootstrap/css/bootstrap.min.css' %}" rel="stylesheet">
     <link href="{% static 'metisMenu/css/metisMenu.min.css' %}" rel="stylesheet">
     <link href="{% static 'sb-admin-2/css/sb-admin-2.css' %}" rel="stylesheet">
     <link href="{% static 'font-awesome/css/font-awesome.min.css' %}" rel="stylesheet">
-    <link href="{% static 'dist/css/bootstrap-select.css' %}" rel="stylesheet">
+    <link href="{% static 'bootstrap-select/css/bootstrap-select.min.css' %}" rel="stylesheet">
     <link href="{% static 'bootstrap-table/css/bootstrap-table.min.css' %}" rel="stylesheet">
+    <!-- django i18n -->
+    <script type="text/javascript" src="{% url 'sql:javascript-catalog' %}"></script>
     {% for jsfile_name in script_list %}
         <script src="{{ host }}/{{ jsfile_name }}.js"></script>
     {% endfor %}
@@ -89,9 +91,22 @@
                             <a href="/dashboard/"><i class="fa fa-dashboard fa-fw"></i> Dashboard</a>
                         </li>
                     {% endif %}
-                    {% if perms.sql.menu_sqlworkflow %}
+                    {% if perms.sql.menu_sqlcheck %}
                         <li>
-                            <a href="/sqlworkflow/"><i class="fa fa-cloud-upload fa-fw"></i> SQL上线</a>
+                            <a href="#"><i class="fa fa-check fa-fw"></i> SQL审核<span class="fa arrow"></span></a>
+                            <ul class="nav nav-second-level">
+                                {% if perms.sql.menu_sqlworkflow %}
+                                    <li>
+                                        <a href="/sqlworkflow/">SQL上线</a>
+                                    </li>
+                                {% endif %}
+                                {% if perms.sql.menu_sqlanalyze %}
+                                    <li>
+                                        <a href="/sqlanalyze/">SQL分析</a>
+                                    </li>
+                                {% endif %}
+                            </ul>
+                            <!-- /.nav-second-level -->
                         </li>
                     {% endif %}
                     {% if perms.sql.menu_query %}
@@ -110,7 +125,7 @@
                                 {% endif %}
                                 {% if perms.sql.menu_queryapplylist %}
                                     <li>
-                                        <a href="/queryapplylist/">查询权限申请</a>
+                                        <a href="/queryapplylist/">权限申请</a>
                                     </li>
                                 {% endif %}
                             </ul>
@@ -121,14 +136,14 @@
                         <li>
                             <a href="#"><i class="fa fa-database fa-fw"></i> 实例管理<span class="fa arrow"></span></a>
                             <ul class="nav nav-second-level">
-                                {% if perms.sql.menu_instance %}
+                                {% if perms.sql.instance_list %}
                                     <li>
                                         <a href="/instance/">实例列表</a>
                                     </li>
                                 {% endif %}
                                 {% if perms.sql.menu_param %}
                                     <li>
-                                        <a href="/param/">参数管理</a>
+                                        <a href="/instanceparam/">参数管理</a>
                                     </li>
                                 {% endif %}
                                 {% if perms.sql.menu_dbdiagnostic %}
@@ -336,17 +351,18 @@
         </div>
     </div>
     <!-- /#page-wrapper -->
-
 </div>
 
 <script src="{% static 'jquery/jquery.min.js' %}"></script>
 <script src="{% static 'jquery/jquery.form.min.js' %}"></script>
-<script src="{% static 'bootstrap-3.3.7-dist/js/bootstrap.min.js' %}"></script>
+<script src="{% static 'bootstrap/js/bootstrap.min.js' %}"></script>
 <script src="{% static 'metisMenu/js/metisMenu.min.js' %}"></script>
 <script src="{% static 'sb-admin-2/js/sb-admin-2.js' %}"></script>
-<script src="{% static 'dist/js/bootstrap-select.js' %}"></script>
+<script src="{% static 'bootstrap-select/js/bootstrap-select.min.js' %}"></script>
+<script src="{% static 'bootstrap-select/js/i18n/defaults-zh_CN.min.js' %}"></script>
 <script src="{% static 'bootstrap-table/js/bootstrap-table.min.js' %}"></script>
 <script src="{% static 'bootstrap-table/js/bootstrap-table-zh-CN.min.js' %}"></script>
+<script src="{% static 'sql-formatter/sql-formatter.min.js' %}"></script>
 <script src="{% static 'dist/js/formatter.js' %}"></script>
 
 </body>

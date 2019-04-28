@@ -7,6 +7,8 @@ import datetime
 import logging
 import simplejson as json
 from wsgiref.util import FileWrapper
+from django.views.decorators.csrf import csrf_exempt
+from django.contrib.auth.decorators import permission_required
 from django.utils.http import urlquote
 from django.db.models import Q
 from django.http import HttpResponse, JsonResponse
@@ -31,6 +33,7 @@ def file_path_auditor(user, file_path):
     return True, ""
 
 
+@permission_required('sql.menu_wpan_upload', raise_exception=True)
 def wpan_upload_dir_list(request):
     result = list()
     try:
@@ -57,6 +60,7 @@ def wpan_upload_dir_list(request):
                         content_type='application/json')
 
 
+@permission_required('sql.menu_wpan_upload', raise_exception=True)
 def wpan_upload_list(request):
     if request.method == 'GET':
         result = list()
@@ -119,6 +123,7 @@ def wpan_upload_list(request):
                             content_type='application/json')
 
 
+@permission_required('sql.wpan_upload_audit', raise_exception=True)
 def wpan_upload_file_cont(request):
     file_path = request.GET.get('path')
     stat, output = file_path_auditor(request.user, file_path)
@@ -131,6 +136,7 @@ def wpan_upload_file_cont(request):
     return HttpResponse(file_content.replace('\n', '</br>'))
 
 
+@permission_required('sql.menu_wpan_upload', raise_exception=True)
 def wpan_upload_apply(request):
     file_path = request.GET.get('path')
     reason = request.GET.get('reason')
@@ -146,6 +152,7 @@ def wpan_upload_apply(request):
                         content_type='application/json')
 
 
+@permission_required('sql.wpan_upload_audit', raise_exception=True)
 def wpan_upload_download(request):
     file_path = request.GET.get("path")
     status, output = file_path_auditor(request.user, file_path)
@@ -191,6 +198,7 @@ def do_upload_func(apply_id, audit_msg, user):
         wa.save(update_fields=['error_msg', 'auditor'])
 
 
+@permission_required('sql.menu_wpan_upload', raise_exception=True)
 def wpan_upload_audit(request):
     if request.method == 'GET':
         # 72小时前的申请，视为已过期申请
@@ -266,3 +274,15 @@ def wpan_upload_audit(request):
             result = {"code": -1, "errmsg": str(e)}
         return HttpResponse(json.dumps(result, cls=ExtendJSONEncoder, bigint_as_string=True),
                             content_type='application/json')
+
+
+@csrf_exempt
+@permission_required('sql.menu_wpan_upload', raise_exception=True)
+def wpan_upload_cancel(request):
+    apply_id = request.POST.get("id")
+    if WPanHistory.objects.filter(id=apply_id).exists():
+        WPanHistory.objects.filter(id=apply_id).update(status=4)
+        msg = "取消成功！"
+    else:
+        msg = "未找到该申请！"
+    return HttpResponse(msg)

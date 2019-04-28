@@ -3,35 +3,27 @@ from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
 
 # Register your models here.
-from .models import Users, Instance, SqlWorkflow, QueryLog, DataMaskingColumns, DataMaskingRules, \
-    AliyunAccessKey, AliyunRdsConfig, ResourceGroup, ResourceGroupRelations, QueryPrivileges, \
-    WorkflowAudit, WorkflowLog, Backup, ParamTemp, ParamHistory, Host, \
-    DataBase, Replication, BGTable
+from .models import Users, Instance, SqlWorkflow, SqlWorkflowContent, QueryLog, DataMaskingColumns, DataMaskingRules, \
+    AliyunAccessKey, AliyunRdsConfig, ResourceGroup, ResourceGroupRelations, QueryPrivilegesApply, QueryPrivileges, \
+    WorkflowAudit, WorkflowLog, ParamTemplate, ParamHistory, Backup, Host, DataBase, Replication, BGTable
 
 
 # 用户管理
 @admin.register(Users)
 class UsersAdmin(UserAdmin):
-    def __init__(self, *args, **kwargs):
-        super(UserAdmin, self).__init__(*args, **kwargs)
-        self.list_display = ('id', 'ding_user_id', 'username', 'display', 'email', 'is_superuser', 'is_staff', 'is_active')
-        self.search_fields = ('id', 'username', 'display', 'email')
-
-    def changelist_view(self, request, extra_context=None):
-        # 这个方法在源码的admin/options.py文件的ModelAdmin这个类中定义，我们要重新定义它，以达到不同权限的用户，返回的表单内容不同
-        if request.user.is_superuser:
-            # 此字段定义UserChangeForm表单中的具体显示内容，并可以分类显示
-            self.fieldsets = (
-                ('认证信息', {'fields': ('username', 'password')}),
-                ('个人信息', {'fields': ('ding_user_id', 'display', 'email')}),
-                ('权限信息', {'fields': ('is_superuser', 'is_active', 'is_staff', 'groups', 'user_permissions')}),
-                ('其他信息', {'fields': ('last_login', 'date_joined')}),
-            )
-            # 此字段定义UserCreationForm表单中的具体显示内容
-            self.add_fieldsets = (
-                (None, {'fields': ('username', 'display', 'email', 'password1', 'password2'), }),
-            )
-        return super(UserAdmin, self).changelist_view(request, extra_context)
+    list_display = ('id', 'ding_user_id', 'username', 'display', 'email', 'is_superuser', 'is_staff', 'is_active')
+    search_fields = ('id', 'username', 'display', 'email')
+    list_display_links = ('id', 'username',)
+    ordering = ('id',)
+    # 编辑页显示内容
+    fieldsets = (
+        (('认证信息',), {'fields': ('username', 'password')}),
+        (('个人信息',), {'fields': ('ding_user_id', 'display', 'email')}),
+        (('权限信息',), {'fields': ('is_superuser', 'is_active', 'is_staff', 'groups', 'user_permissions')}),
+        (('其他信息',), {'fields': ('last_login', 'date_joined')}),
+    )
+    # 添加页显示内容
+    add_fieldsets = (None, {'fields': ('username', 'display', 'email', 'password1', 'password2'), }),
 
 
 # 资源组管理
@@ -47,12 +39,23 @@ class ResourceGroupRelationsAdmin(admin.ModelAdmin):
     list_display = ('object_type', 'object_id', 'object_name', 'group_id', 'group_name', 'create_time')
 
 
+# 阿里云实例配置
+class AliRdsConfigInline(admin.TabularInline):
+    model = AliyunRdsConfig
+
+
 # 实例管理
 @admin.register(Instance)
 class InstanceAdmin(admin.ModelAdmin):
     list_display = ('id', 'instance_name', 'db_type', 'type', 'host', 'port', 'user', 'password', 'osn', 'create_time')
     search_fields = ['instance_name', 'host', 'port', 'user']
     list_filter = ('db_type', 'type',)
+    inlines = [AliRdsConfigInline]
+
+
+# SQL工单内容
+class SqlWorkflowContentInline(admin.TabularInline):
+    model = SqlWorkflowContent
 
 
 @admin.register(Replication)
@@ -64,9 +67,11 @@ class ReplicationAdmin(admin.ModelAdmin):
 @admin.register(SqlWorkflow)
 class SqlWorkflowAdmin(admin.ModelAdmin):
     list_display = (
-        'id', 'workflow_name', 'group_name', 'instance_name', 'engineer_display', 'create_time', 'status', 'is_backup')
-    search_fields = ['id', 'workflow_name', 'engineer_display', 'sql_content']
-    list_filter = ('group_name', 'instance_name', 'status', 'sql_syntax',)
+        'id', 'workflow_name', 'group_name', 'instance', 'engineer_display', 'create_time', 'status', 'is_backup')
+    search_fields = ['id', 'workflow_name', 'engineer_display', 'sqlworkflowcontent__sql_content']
+    list_filter = ('group_name', 'instance__instance_name', 'status', 'syntax_type',)
+    list_display_links = ('id', 'workflow_name',)
+    inlines = [SqlWorkflowContentInline]
 
 
 # SQL查询日志
@@ -78,23 +83,31 @@ class QueryLogAdmin(admin.ModelAdmin):
     list_filter = ('instance_name', 'db_name', 'user_display', 'priv_check', 'hit_rule', 'masking',)
 
 
-# 查询权限记录
+# 查询权限列表
 @admin.register(QueryPrivileges)
 class QueryPrivilegesAdmin(admin.ModelAdmin):
-    list_display = (
-        'user_display', 'instance_name', 'db_name', 'table_name', 'valid_date', 'limit_num', 'create_time')
-    search_fields = ['user_display', 'instance_name']
-    list_filter = ('user_display', 'instance_name', 'db_name', 'table_name',)
+    list_display = ('privilege_id', 'user_display', 'instance', 'db_name', 'table_name',
+                    'valid_date', 'limit_num', 'create_time')
+    search_fields = ['user_display', 'instance__instance_name']
+    list_filter = ('user_display', 'instance', 'db_name', 'table_name',)
+
+
+# 查询权限申请记录
+@admin.register(QueryPrivilegesApply)
+class QueryPrivilegesApplyAdmin(admin.ModelAdmin):
+    list_display = ('apply_id', 'user_display', 'group_name', 'instance', 'valid_date', 'limit_num', 'create_time')
+    search_fields = ['user_display', 'instance__instance_name', 'db_list', 'tb_list']
+    list_filter = ('user_display', 'group_name', 'instance')
 
 
 # 脱敏字段页面定义
 @admin.register(DataMaskingColumns)
 class DataMaskingColumnsAdmin(admin.ModelAdmin):
     list_display = (
-        'column_id', 'rule_type', 'active', 'instance_name', 'table_schema', 'table_name', 'column_name',
+        'column_id', 'rule_type', 'active', 'instance', 'table_schema', 'table_name', 'column_name',
         'create_time',)
     search_fields = ['table_name', 'column_name']
-    list_filter = ('rule_type', 'active', 'instance_name')
+    list_filter = ('rule_type', 'active', 'instance__instance_name')
 
 
 # 脱敏规则页面定义
@@ -121,6 +134,22 @@ class WorkflowLogAdmin(admin.ModelAdmin):
     list_filter = ('operation_type_desc', 'operator_display')
 
 
+# 实例参数配置表
+@admin.register(ParamTemplate)
+class ParamTemplateAdmin(admin.ModelAdmin):
+    list_display = ('db_type', 'variable_name', 'default_value', 'editable', 'valid_values')
+    search_fields = ('variable_name',)
+    list_filter = ('db_type', 'editable')
+
+
+# 实例参数修改历史
+@admin.register(ParamHistory)
+class ParamHistoryAdmin(admin.ModelAdmin):
+    list_display = ('instance', 'variable_name', 'old_var', 'new_var', 'user_display', 'create_time')
+    search_fields = ('variable_name',)
+    list_filter = ('instance', 'user_display')
+
+
 # 阿里云的认证信息
 @admin.register(AliyunAccessKey)
 class AliAccessKeyAdmin(admin.ModelAdmin):
@@ -131,8 +160,8 @@ class AliAccessKeyAdmin(admin.ModelAdmin):
 # 阿里云实例配置信息
 @admin.register(AliyunRdsConfig)
 class AliRdsConfigAdmin(admin.ModelAdmin):
-    list_display = ('instance_name', 'rds_dbinstanceid', 'is_enable')
-    search_fields = ['instance_name', 'rds_dbinstanceid']
+    list_display = ('instance', 'rds_dbinstanceid', 'is_enable')
+    search_fields = ['instance__instance_name', 'rds_dbinstanceid']
 
 
 # 备份管理
@@ -140,16 +169,6 @@ class AliRdsConfigAdmin(admin.ModelAdmin):
 class BackupAdmin(admin.ModelAdmin):
     list_display = ("bk_ip", "db_cluster", "db_type", "bk_path", "bk_size", "bk_state", "check_man", "bk_start_time",
                     "bk_end_time", "create_time")
-
-
-@admin.register(ParamTemp)
-class ParamTempAdmin(admin.ModelAdmin):
-    list_display = ("db_type", "param", "default_var", "is_reboot", "available_var", "description")
-
-
-@admin.register(ParamHistory)
-class ParamHistoryAdmin(admin.ModelAdmin):
-    list_display = ("instance", "param", "old_var", "new_var", "is_active", "create_time")
 
 
 @admin.register(Host)

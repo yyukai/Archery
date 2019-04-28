@@ -165,15 +165,20 @@
                                 html += '<button class="btn btn-danger" onclick="alert(\'' +row.audit_msg+ '\')">已被拒</button>';
                             } else if (row.status === 3) {
                                 html += '<button class="btn btn-default" disabled>已过期</button>';
+                            } else if (row.status === 4) {
+                                return '用户主动取消';
                             }
                         {% else %}
-                            var html = '';
-                            if (row.status === 1) {
-                                html += '<button class="btn btn-success" onclick="alert(\'' +row.audit_msg+ '\')">已通过</button>';
+                            if (row.status === 0) {
+                                html = '<button class="btn btn-danger" onclick="cancel(\'' +row.id+ '\')">取消上传</button>';
+                            } else if (row.status === 1) {
+                                html = '<button class="btn btn-success" onclick="alert(\'' +row.audit_msg+ '\')">已通过</button>';
                             } else if (row.status === 2) {
-                                html += '<button class="btn btn-danger" onclick="alert(\'' +row.audit_msg+ '\')">已被拒</button>';
+                                html = '<button class="btn btn-danger" onclick="alert(\'' +row.audit_msg+ '\')">已被拒</button>';
                             } else if (row.status === 3) {
-                                html += '<button class="btn btn-default" disabled>已过期</button>';
+                                html = '<button class="btn btn-default" disabled>已过期</button>';
+                            } else if (row.status === 4) {
+                                return '用户主动取消';
                             }
                         {% endif %}
                         return html
@@ -284,6 +289,23 @@
                     }
                 });
             });
+        };
+        function cancel(apply_id) {
+            $.ajax({
+                    type: "post",
+                    url: "/wpan_upload/cancel/",
+                    timeout: 3000,
+                    data: {
+                        id: apply_id
+                    },
+                    success: function (data) {
+                        alert(data);
+                        $('#name-log').bootstrapTable('refresh');
+                    },
+                    error: function (data) {
+                        alert(data);
+                    }
+                });
         };
     </script>
 {% endblock %}
