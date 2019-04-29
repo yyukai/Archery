@@ -18,7 +18,7 @@ logger = logging.getLogger('default')
 
 
 def init_user(user):
-    default_auth_group = SysConfig().sys_config.get('default_auth_group', '')
+    default_auth_group = SysConfig().get('default_auth_group', '')
     if default_auth_group:
         try:
             group = Group.objects.get(name=default_auth_group)
@@ -27,7 +27,7 @@ def init_user(user):
             logger.error(traceback.format_exc())
             logger.error('无name为{}的权限组，无法默认关联，请到系统设置进行配置'.format(default_auth_group))
     # 添加到默认资源组
-    default_resource_group = SysConfig().sys_config.get('default_resource_group', '')
+    default_resource_group = SysConfig().get('default_resource_group', '')
     if default_resource_group:
         try:
             new_relation = ResourceGroupRelations(
@@ -42,7 +42,7 @@ def init_user(user):
             logger.error('无name为{}的资源组，无法默认关联，请到系统设置进行配置'.format(default_resource_group))
 
 
-class ArcherAuth(object):
+class ArcheryAuth(object):
     def __init__(self, request):
         self.request = request
 
@@ -74,7 +74,7 @@ class ArcherAuth(object):
         # 已存在用户, 验证是否在锁期间
         # 读取配置文件
         user = Users.objects.get(username=username)
-        sys_config = SysConfig().sys_config
+        sys_config = SysConfig()
         if sys_config.get('lock_cnt_threshold'):
             lock_count = int(sys_config.get('lock_cnt_threshold'))
         else:
@@ -111,7 +111,7 @@ class ArcherAuth(object):
 # ajax接口，登录页面调用，用来验证用户名密码
 def authenticate_entry(request):
     """接收http请求，然后把请求中的用户名密码传给ArcherAuth去验证"""
-    new_auth = ArcherAuth(request)
+    new_auth = ArcheryAuth(request)
     result = new_auth.authenticate()
     if result['status'] == 0:
         # 从钉钉获取该用户的 dingding_id，用于单独给他发消息
@@ -126,7 +126,7 @@ def authenticate_entry(request):
 # 注册用户
 def sign_up(request):
     sign_up_enabled = SysConfig().get('sign_up_enabled', False)
-    if not sign_up_enabled :
+    if not sign_up_enabled:
         result = {'status': 1, 'msg': '注册未启用,请联系管理员开启', 'data': None}
         return HttpResponse(json.dumps(result), content_type='application/json')
     username = request.POST.get('username')

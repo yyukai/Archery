@@ -150,23 +150,17 @@
                             instance_id: "{{ instance_id }}"
                         }
                     },
-                columns: [{
+                columns: [
+                    {
                         title: 'User@Host',
-                        field: '',
-                        formatter: function (value, row, index) {
-                            return "'" + row.user + "'@'" + row.host + "'"
-                        }
+                        field: 'user'
                     }, {
                         title: 'privileges',
                         field: 'privileges',
                         formatter: function (value, row, index) {
                             var priv = '';
                             for (var i = 0; i < value.length; i++) {
-                                if (value[i].toString().length > 100) {
-                                    priv = priv + value[i].toString().substring(0, 100) + '...;</br>'
-                                } else {
-                                    priv = priv + value[i] + ';</br>'
-                                }
+                                priv = priv + value[i] + ';</br>'
                             }
                             return priv
                         }

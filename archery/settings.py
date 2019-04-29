@@ -109,6 +109,11 @@ AUTH_PASSWORD_VALIDATORS = [
 
 ############### 以下部分需要用户根据自己环境自行修改 ###################
 
+# SESSION 设置
+SESSION_COOKIE_AGE = 60 * 300  # 300分钟
+SESSION_SAVE_EVERY_REQUEST = True
+SESSION_EXPIRE_AT_BROWSER_CLOSE = True  # 关闭浏览器，则COOKIE失效
+
 # 该项目本身的mysql数据库地址
 DATABASES = {
     'default': {
@@ -151,7 +156,8 @@ Q_CLUSTER = {
     'save_limit': 0,
     'queue_limit': 50,
     'label': 'Django Q',
-    'django_redis': 'default'
+    'django_redis': 'default',
+    'sync': False  # 本地调试可以修改为True，使用同步模式
 }
 
 # 缓存配置
@@ -169,7 +175,7 @@ CACHES = {
 ENABLE_LDAP = True
 if ENABLE_LDAP:
     AUTHENTICATION_BACKENDS = (
-        'django_auth_ldap.backend.LDAPBackend',       # 配置为先使用LDAP认证，如通过认证则不再使用后面的认证方式
+        'django_auth_ldap.backend.LDAPBackend',  # 配置为先使用LDAP认证，如通过认证则不再使用后面的认证方式
         'django.contrib.auth.backends.ModelBackend',  # django系统中手动创建的用户也可使用，优先级靠后。注意这2行的顺序
     )
 

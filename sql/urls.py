@@ -13,7 +13,7 @@ from sql.utils import tasks
 urlpatterns = [
     path('', views.sqlworkflow),
     path('jsi18n/', JavaScriptCatalog.as_view(), name='javascript-catalog'),
-    path('index/', views.sqlworkflow),
+    path('index/', views.index),
     path('login/', views.login, name='login'),
     path('logout/', auth.sign_out),
     path('signup/', auth.sign_up),
@@ -65,6 +65,7 @@ urlpatterns = [
     path('config/change/', config.change_config),
 
     path('check/inception/', check.inception),
+    path('check/go_inception/', check.go_inception),
     path('check/email/', check.email),
     path('check/instance/', check.instance),
 
@@ -105,11 +106,11 @@ urlpatterns = [
     path('param/edit/', instance.param_edit),
 
     path('query/', query.query),
+    path('query/querylog/', query.querylog),
     path('add_async_query/', query.add_async_query),
     path('query_result_export/', query.query_result_export),
     path('query_export_audit/', query.query_export_audit),
     path('query_export_cancel/', query.query_export_cancel),
-    path('query/querylog/', query.querylog),
     path('query/query_export_log/', query.query_export_log),
     path('query/explain/', sql.sql_optimize.explain),
     path('query/applylist/', sql.query_privileges.query_priv_apply_list),
@@ -120,8 +121,8 @@ urlpatterns = [
 
     path('binlog/', views.binlog),
     path('binlog/list/', binlog.binlog_list),
-    path('binlog/del_log/', binlog.del_binlog),
     path('binlog/binlog2sql/', binlog.binlog2sql),
+    path('binlog/del_log/', binlog.del_binlog),
 
     path('slowquery/review/', slowlog.slowquery_review),
     path('slowquery/review_history/', slowlog.slowquery_review_history),
