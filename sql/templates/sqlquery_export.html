@@ -685,6 +685,13 @@
                 complete: function () {
                     $('input[type=button]').removeClass('disabled');
                     $('input[type=button]').prop('disabled', false);
+                    var optgroup = $('#instance_name :selected').parent().attr('label');
+                    if (optgroup === "Redis") {
+                        $("#btn-format").attr('disabled',true);
+                        $("#btn-explain").attr('disabled',true);
+                    } else if (optgroup === "MsSQL" || optgroup === "PgSQL" || optgroup === "Oracle") {
+                        $("#btn-explain").attr('disabled',false);
+                    }
                     $('#sql-log').bootstrapTable('refresh');
                 },
                 success: function (data) {
