@@ -289,9 +289,10 @@
                     }
                 });
             });
-        };
+        }
         function cancel(apply_id) {
-            $.ajax({
+            if (confirm("确定取消上传申请吗？")) {
+                $.ajax({
                     type: "post",
                     url: "/wpan_upload/cancel/",
                     timeout: 3000,
@@ -306,6 +307,7 @@
                         alert(data);
                     }
                 });
-        };
+            }
+        }
     </script>
 {% endblock %}

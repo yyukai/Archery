@@ -157,7 +157,7 @@ Q_CLUSTER = {
     'queue_limit': 50,
     'label': 'Django Q',
     'django_redis': 'default',
-    'sync': False  # 本地调试可以修改为True，使用同步模式
+    'sync': False          # 本地调试可以修改为True，使用同步模式
 }
 
 # 缓存配置

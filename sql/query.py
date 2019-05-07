@@ -39,6 +39,7 @@ def query(request):
     instance_name = request.POST.get('instance_name')
     sql_content = request.POST.get('sql_content')
     db_name = request.POST.get('db_name')
+    schema_name = request.POST.get('schema_name')
     limit_num = int(request.POST.get('limit_num', 0))
     user = request.user
 
@@ -51,7 +52,7 @@ def query(request):
         return result
 
     # 服务器端参数验证
-    if None in [sql_content, db_name, instance_name, limit_num]:
+    if None in [sql_content, instance_name, limit_num]:
         result['status'] = 1
         result['msg'] = '页面提交参数可能为空'
         return HttpResponse(json.dumps(result), content_type='application/json')
@@ -74,7 +75,7 @@ def query(request):
         sql_content = query_check_info['filtered_sql']
 
         # 查询权限校验，并且获取limit_num
-        priv_check_info = query_priv_check(user, instance, db_name, sql_content, limit_num)
+        priv_check_info = query_priv_check(user, instance, db_name, schema_name, sql_content, limit_num)
         if priv_check_info['status'] == 0:
             limit_num = priv_check_info['data']['limit_num']
             priv_check = priv_check_info['data']['priv_check']
@@ -90,8 +91,12 @@ def query(request):
 
         # 执行查询语句，timeout=max_execution_time
         max_execution_time = int(config.get('max_execution_time', 60))
-        query_task_id = async_task(query_engine.query, db_name=str(db_name), sql=sql_content, limit_num=limit_num,
-                                   timeout=max_execution_time, cached=60)
+        if instance.db_type == "oracle":
+            query_task_id = async_task(query_engine.query, schema_name=schema_name, sql=sql_content, limit_num=limit_num,
+                                       timeout=max_execution_time, cached=60)
+        else:
+            query_task_id = async_task(query_engine.query, db_name=str(db_name), sql=sql_content, limit_num=limit_num,
+                                       timeout=max_execution_time, cached=60)
         # 等待执行结果，max_execution_time后还没有返回结果代表将会被终止
         query_task = fetch(query_task_id, wait=max_execution_time * 1000, cached=True)
         # 在max_execution_time内执行结束
@@ -113,8 +118,12 @@ def query(request):
             result['msg'] = query_result.error
         # 数据脱敏，仅对查询无错误的结果集进行脱敏，并且按照query_check配置是否返回
         elif config.get('data_masking'):
-            query_masking_task_id = async_task(query_engine.query_masking, db_name=db_name, sql=sql_content,
-                                               resultset=query_result, cached=60)
+            if instance.db_type == "oracle":
+                query_masking_task_id = async_task(query_engine.query_masking, schema_name=schema_name, sql=sql_content,
+                                                   resultset=query_result, cached=60)
+            else:
+                query_masking_task_id = async_task(query_engine.query_masking, db_name=db_name, sql=sql_content,
+                                                   resultset=query_result, cached=60)
             query_masking_task = fetch(query_masking_task_id, wait=60 * 1000, cached=True)
             if query_masking_task.success:
                 masking_result = query_masking_task.result
@@ -232,94 +241,82 @@ def add_async_query(request):
     instance_name = request.POST.get('instance_name')
     sql_content = request.POST.get('sql_content')
     db_name = request.POST.get('db_name')
+    schema_name = request.POST.get('schema_name')
     limit_num = int(request.POST.get('limit_num'))
     auditor = request.POST.get('auditor')
-
-    final_result = {'status': 0, 'msg': 'ok', 'data': {}}
-
-    # 服务器端参数验证
-    if sql_content is None or db_name is None or instance_name is None or limit_num is None:
-        final_result['status'] = 1
-        final_result['msg'] = '页面提交参数可能为空'
-        return HttpResponse(json.dumps(final_result), content_type='application/json')
-
-    sql_content = sql_content.strip()
-    if sql_content[-1] != ";":
-        final_result['status'] = 1
-        final_result['msg'] = 'SQL语句结尾没有以;结尾，请重新修改并提交！'
-        return HttpResponse(json.dumps(final_result), content_type='application/json')
-
-    # 获取用户信息
     user = request.user
 
-    # 过滤注释语句和非查询的语句
-    sql_content = ''.join(
-        map(lambda x: re.compile(r'(^--\s+.*|^/\*.*\*/;\s*$)').sub('', x, count=1),
-            sql_content.splitlines(1))).strip()
-    # 去除空行
-    sql_content = re.sub('[\r\n\f]{2,}', '\n', sql_content)
+    result = {'status': 0, 'msg': 'ok', 'data': {}}
+    try:
+        instance = Instance.objects.get(instance_name=instance_name)
+    except Instance.DoesNotExist:
+        result['status'] = 1
+        result['msg'] = '实例不存在'
+        return result
 
-    sql_list = sql_content.strip().split('\n')
-    for sql in sql_list:
-        if re.match(r"^select|^show|^explain", sql.lower()):
-            break
-        else:
-            final_result['status'] = 1
-            final_result['msg'] = '仅支持^select|^show|^explain语法，请联系管理员！'
-            return HttpResponse(json.dumps(final_result), content_type='application/json')
-
-    # 取出该实例的连接方式,查询只读账号,按照分号截取第一条有效sql执行
-    slave_info = Instance.objects.get(instance_name=instance_name)
-    sql_content = sql_content.strip().split(';')[0]
-
-    # # 查询权限校验
-    # priv_check_info = query_priv_check(user, instance_name, db_name, sql_content, limit_num)
-    #
-    # if priv_check_info['status'] == 0:
-    #     pass
-    # else:
-    #     return HttpResponse(json.dumps(priv_check_info), content_type='application/json')
-
-    # 查询语句的检查、注释去除、切分
-    query_engine = get_engine(instance=slave_info)
-    filter_result = query_engine.query_check(db_name=db_name, sql=sql_content)
-    if filter_result.get('bad_query'):
-        result = {'status': 1, 'msg': filter_result.get('msg')}
+    # 服务器端参数验证
+    if None in [sql_content, instance_name, limit_num]:
+        result['status'] = 1
+        result['msg'] = '页面提交参数可能为空'
         return HttpResponse(json.dumps(result), content_type='application/json')
+
+    config = SysConfig()
+    # 查询前的检查，禁用语句检查，语句切分
+    query_engine = get_engine(instance=instance)
+    query_check_info = query_engine.query_check(db_name=db_name, sql=sql_content)
+    if query_check_info.get('bad_query'):
+        # 引擎内部判断为 bad_query
+        result['status'] = 1
+        result['msg'] = query_check_info.get('msg')
+        return HttpResponse(json.dumps(result), content_type='application/json')
+    if query_check_info.get('has_star') and config.get('disable_star') is True:
+        # 引擎内部判断为有 * 且禁止 * 选项打开
+        result['status'] = 1
+        result['msg'] = query_check_info.get('msg')
+        return HttpResponse(json.dumps(result), content_type='application/json')
+    sql_content = query_check_info['filtered_sql']
+
+    # 查询权限校验，并且获取limit_num
+    priv_check_info = query_priv_check(user, instance, db_name, schema_name, sql_content, limit_num)
+    if priv_check_info['status'] == 0:
+        limit_num = priv_check_info['data']['limit_num']
+        priv_check = priv_check_info['data']['priv_check']
     else:
-        sql_content = filter_result['filtered_sql']
+        result['status'] = 1
+        result['msg'] = priv_check_info['msg']
+        return HttpResponse(json.dumps(result), content_type='application/json')
+    # explain的limit_num设置为0
+    limit_num = 0 if re.match(r"^explain", sql_content.lower()) else limit_num
 
-    if re.match(r"^explain", sql_content.lower()):
-        limit_num = 0
+    # 对查询sql增加limit限制或者改写语句
+    sql_content = query_engine.filter_sql(sql=sql_content, limit_num=limit_num)
 
-    # 对查询sql增加limit限制
-    if re.match(r"^select", sql_content.lower()) and limit_num > 0:
-        if re.search(r"limit\s+(\d+)$", sql_content.lower()) is None:
-            if re.search(r"limit\s+\d+\s*,\s*(\d+)$", sql_content.lower()) is None:
-                sql_content = sql_content + ' limit ' + str(limit_num)
-
-    sql_content = sql_content + ';'
-
-    # 查询语句记录存入数据库
-    query_log = QueryLog.objects.create(username=user.username, user_display=user.display, db_name=db_name,
-                                        instance_name=instance_name, sqllog=sql_content, effect_row=0)
-
+    if instance.db_type == "oracle":
+        query_log = QueryLog.objects.create(username=user.username, user_display=user.display,
+                                            schema_name=schema_name,
+                                            instance_name=instance_name, sqllog=sql_content, effect_row=0,
+                                            priv_check=priv_check)
+    else:
+        query_log = QueryLog.objects.create(username=user.username, user_display=user.display, db_name=db_name,
+                                            instance_name=instance_name, sqllog=sql_content, effect_row=0,
+                                            priv_check=priv_check)
     qe = QueryExport.objects.create(query_log=query_log, auditor=Users.objects.get(username=auditor), status=0)
 
-    do_async_query(request, qe, instance_name, db_name, slave_info.db_type, sql_content, limit_num)
-    final_result['msg'] = '任务提交成功！后台拼命跑数据中... 请耐心等待钉钉或邮件通知！'
-
-    return HttpResponse(json.dumps(final_result, cls=ExtendJSONEncoder, bigint_as_string=True),
+    do_async_query(request, qe, instance_name, db_name, schema_name, sql_content, limit_num)
+    result['msg'] = '任务提交成功！后台拼命跑数据中... 请耐心等待钉钉或邮件通知！'
+    return HttpResponse(json.dumps(result, cls=ExtendJSONEncoder, bigint_as_string=True),
                         content_type='application/json')
 
-
 @async
-def do_async_query(request, query_export, instance_name, db_name, db_type, sql_content, limit_num):
+def do_async_query(request, query_export, instance_name, db_name, schema_name, sql_content, limit_num):
     query_log = query_export.query_log
     instance = Instance.objects.get(instance_name=instance_name)
     query_engine = get_engine(instance=instance)
     t_start = int(time.time())
-    sql_result = query_engine.query(db_name=db_name, sql=sql_content, limit_num=limit_num)
+    if instance.db_type == "oracle":
+        sql_result = query_engine.query(schema_name=schema_name, sql=sql_content, limit_num=limit_num)
+    else:
+        sql_result = query_engine.query(db_name=db_name, sql=sql_content, limit_num=limit_num)
     t_end = int(time.time())
     query_log.cost_time = t_end - t_start
     query_log.effect_row = sql_result.affected_rows
@@ -329,7 +326,12 @@ def do_async_query(request, query_export, instance_name, db_name, db_type, sql_c
         try:
             file_dir = SysConfig().sys_config.get('query_result_dir', BASE_DIR)
             time_suffix = datetime.datetime.now().strftime("%m%d%H%M%S")
-            file_name = '{}-{}-{}-{}'.format(query_export.query_log.username, query_log.instance_name, db_name, time_suffix)
+            if instance.db_type == "oracle":
+                file_name = '{}-{}-{}-{}'.format(query_export.query_log.username, instance_name, schema_name,
+                                                 time_suffix)
+            else:
+                file_name = '{}-{}-{}-{}'.format(query_export.query_log.username, instance_name, db_name,
+                                                 time_suffix)
             template_file = os.path.join(file_dir, file_name)
 
             workbook = xlwt.Workbook(encoding='utf-8')
@@ -339,14 +341,14 @@ def do_async_query(request, query_export, instance_name, db_name, db_type, sql_c
                 sheet.write(0, field, res.column_list[field])
             # 写入数据段信息
             for row in range(1, int(res.affected_rows) + 1):
-                for col in range(0, len(res["column_list"])):
+                for col in range(0, len(res.column_list)):
                     print(type(res.rows[row - 1][col]), res.rows[row - 1][col])
                     value = '' if res.rows[row - 1][col] is None else res.rows[row - 1][col]
                     sheet.write(row, col, value)
             workbook.save(template_file)
         except Exception as e:
-            print(e)
-            query_export.error_msg = str(traceback.print_exc())
+            traceback.print_exc()
+            query_export.error_msg = str(e)
             query_export.save(update_fields=['error_msg'])
             return str(e)
         return template_file
@@ -354,22 +356,19 @@ def do_async_query(request, query_export, instance_name, db_name, db_type, sql_c
     try:
         file_path = ''
         if SysConfig().sys_config.get('data_masking'):
-            if db_type == "mysql":
-                # 仅对查询语句进行脱敏
-                if re.match(r"^select", sql_content.lower()):
-                    try:
-                        masking_result = query_engine.query_masking(db_name, sql_content, sql_result)
-                    except Exception as e:
-                        if SysConfig().sys_config.get('query_check'):
-                            query_export.status = 1
-                            query_export.error_msg = '脱敏数据报错,请联系管理员。报错：%s' % str(e)
-                    else:
-                        if masking_result.status is None or not SysConfig().sys_config.get('query_check'):
-                            file_path = write_result_to_excel(sql_result)
-                            query_export.status = 2
+            try:
+                if instance.db_type == "oracle":
+                    masking_result = query_engine.query_masking(schema_name, sql_content, sql_result)
+                else:
+                    masking_result = query_engine.query_masking(db_name, sql_content, sql_result)
+            except Exception as e:
+                if SysConfig().sys_config.get('query_check'):
+                    query_export.status = 1
+                    query_export.error_msg = '脱敏数据报错,请联系管理员。报错：%s' % str(e)
             else:
-                file_path = write_result_to_excel(sql_result)
-                query_export.status = 2
+                if masking_result.status is None or not SysConfig().sys_config.get('query_check'):
+                    file_path = write_result_to_excel(sql_result)
+                    query_export.status = 2
         else:
             file_path = write_result_to_excel(sql_result)
             query_export.status = 2
@@ -382,9 +381,14 @@ def do_async_query(request, query_export, instance_name, db_name, db_type, sql_c
 
     # 通知审核人审核
     audit_url = "{}://{}/query_export/".format(request.scheme, request.get_host())
-    msg_content = '''导出查询（提取大量数据）下载申请等待您审批：\n发起人：{}\n实例名称：{}\n数据库：{}\n执行的sql查询：{}\n提取条数：{}\n操作时间：{}\n审批地址：{}\n'''.\
-        format(query_log.user_display, query_log.instance_name, query_log.db_name, query_log.sqllog,
-               query_log.effect_row, query_log.create_time, audit_url)
+    if instance.db_type == "oracle":
+        msg_content = '''导出查询（提取大量数据）下载申请等待您审批：\n发起人：{}\n实例名称：{}\n模式：{}\n执行的sql查询：{}\n提取条数：{}\n操作时间：{}\n审批地址：{}\n'''. \
+            format(query_log.user_display, query_log.instance_name, query_log.schema_name, query_log.sqllog,
+                   query_log.effect_row, query_log.create_time, audit_url)
+    else:
+        msg_content = '''导出查询（提取大量数据）下载申请等待您审批：\n发起人：{}\n实例名称：{}\n数据库：{}\n执行的sql查询：{}\n提取条数：{}\n操作时间：{}\n审批地址：{}\n'''.\
+            format(query_log.user_display, query_log.instance_name, query_log.db_name, query_log.sqllog,
+                   query_log.effect_row, query_log.create_time, audit_url)
     from sql.utils.ding_api import DingSender
     DingSender().send_msg(query_export.auditor.ding_user_id, msg_content)
 

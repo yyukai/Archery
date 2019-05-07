@@ -193,7 +193,7 @@ def query_export(request):
         for g in p.group_set.all():
             auditors.extend(g.user_set.all())
     context = {'instances': instances, 'auditors': auditors}
-    return render(request, 'query_export.html', context)
+    return render(request, 'sqlquery_export.html', context)
 
 
 # SQL慢日志页面
