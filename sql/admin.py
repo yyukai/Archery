@@ -59,12 +59,7 @@ class SqlWorkflowContentInline(admin.TabularInline):
     model = SqlWorkflowContent
 
 
-@admin.register(Replication)
-class ReplicationAdmin(admin.ModelAdmin):
-    list_display = ('id', 'master', 'slave', 'delay', 'created')
-
-
-# 工单管理
+# SQL工单
 @admin.register(SqlWorkflow)
 class SqlWorkflowAdmin(admin.ModelAdmin):
     list_display = (
@@ -163,6 +158,11 @@ class AliAccessKeyAdmin(admin.ModelAdmin):
 class AliRdsConfigAdmin(admin.ModelAdmin):
     list_display = ('instance', 'rds_dbinstanceid', 'is_enable')
     search_fields = ['instance__instance_name', 'rds_dbinstanceid']
+
+
+@admin.register(Replication)
+class ReplicationAdmin(admin.ModelAdmin):
+    list_display = ('id', 'master', 'slave', 'delay', 'created')
 
 
 # 备份管理

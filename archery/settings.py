@@ -31,6 +31,7 @@ INSTALLED_APPS = (
     'django_q',
     'sql',
     'themis',
+    'common',
 )
 
 MIDDLEWARE = (
@@ -157,7 +158,7 @@ Q_CLUSTER = {
     'queue_limit': 50,
     'label': 'Django Q',
     'django_redis': 'default',
-    'sync': False          # 本地调试可以修改为True，使用同步模式
+    'sync': False  # 本地调试可以修改为True，使用同步模式
 }
 
 # 缓存配置
@@ -221,23 +222,29 @@ LOGGING = {
         }
     },
     'loggers': {
-        'default': {  # default日志，存放于log中
-            'handlers': ['default'],
+        'default': {  # default日志
+            'handlers': ['console', 'default'],
+            'level': 'DEBUG'
+        },
+        'django-q': {  # django_q模块相关日志
+            'handlers': ['console', 'default'],
             'level': 'DEBUG',
+            'propagate': False
         },
         'django_auth_ldap': {  # django_auth_ldap模块相关日志
-            'handlers': ['default'],
+            'handlers': ['console', 'default'],
             'level': 'DEBUG',
+            'propagate': False
         },
-        # 'django.db': {  # 打印SQL语句到console，方便开发
-        #     'handlers': ['console'],
+        # 'django.db': {  # 打印SQL语句，方便开发
+        #     'handlers': ['console', 'default'],
         #     'level': 'DEBUG',
-        #     'propagate': True,
+        #     'propagate': False
         # },
-        'django.request': {  # 打印请求错误堆栈信息到console，方便开发
-            'handlers': ['console'],
+        'django.request': {  # 打印请求错误堆栈信息，方便开发
+            'handlers': ['console', 'default'],
             'level': 'DEBUG',
-            'propagate': True,
+            'propagate': False
         },
     }
 }
