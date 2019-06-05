@@ -1,0 +1,426 @@
+{% extends "base.html" %}
+
+{% block content %}
+    <div class="table-responsive">
+        <table id="record-list" data-toggle="table" class="table table-striped table-hover"
+               style="table-layout:inherit;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+        </table>
+    </div>
+    <div class="modal fade" id="updateModal">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <button type="button" class="close" data-dismiss="modal"><span
+                            aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>
+                    <h4 class="modal-title">说明：只支持修改审核图片</h4>
+                </div>
+                <div class="modal-body">
+                    <form id="upForm" class="form-horizontal  nice-validator n-yellow"
+                          method="post" enctype="multipart/form-data" novalidate="novalidate">
+                        <div class="form-group">
+                            <label for="LoanId" class="col-sm-2 control-label">订单编号<span class="red-fonts">*</span></label>
+                            <div class="col-sm-8">
+                                <input id="LoanId" name="loan_id" readonly class="form-control">
+                            </div>
+                        </div><!--域-->
+
+                        <div class="hr-line-dashed"></div>
+                        <div class="form-group">
+                            <label for="SSaleId" class="col-sm-2 control-label">订单原业务员账号<span class="red-fonts">*</span></label>
+                            <div class="col-sm-8">
+                                <input id="SSaleId" name="s_sale_id" readonly class="form-control">
+                            </div>
+                        </div>
+
+                        <div class="hr-line-dashed"></div>
+                        <div class="form-group">
+                            <label for="SSaleName" class="col-sm-2 control-label">订单原业务员<span class="red-fonts">*</span></label>
+                            <div class="col-sm-8">
+                                <input id="SSaleName" name="s_sale_name" readonly class="form-control">
+                            </div>
+                        </div>
+
+                        <div class="hr-line-dashed"></div>
+                        <div class="form-group">
+                            <label for="TSaleId" class="col-sm-2 control-label">修正业务员账号<span class="red-fonts">*</span></label>
+                            <div class="col-sm-8">
+                                <input id="TSaleId" name="t_sale_id" readonly class="form-control">
+                            </div>
+                        </div>
+
+                        <div class="hr-line-dashed"></div>
+                        <div class="form-group">
+                            <label for="TSaleName" class="col-sm-2 control-label">修正业务员姓名<span class="red-fonts">*</span></label>
+                            <div class="col-sm-8">
+                                <input id="TSaleName" name="t_sale_name" readonly class="form-control">
+                            </div>
+                        </div>
+
+                        <div class="hr-line-dashed"></div>
+                        <div class="form-group">
+                            <label for="TEmpId" class="col-sm-2 control-label">修正业务员工号<span class="red-fonts">*</span></label>
+                            <div class="col-sm-8">
+                                <input id="TEmpId" name="t_emp_id" readonly class="form-control">
+                            </div>
+                        </div>
+
+                        <div class="hr-line-dashed"></div>
+                        <div class="form-group">
+                            <label for="TSaleUid" class="col-sm-2 control-label">修正业务员袋鼠账号<span class="red-fonts">*</span></label>
+                            <div class="col-sm-8">
+                                <input id="TSaleUid" name="t_sale_uid" readonly class="form-control">
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="upload_file" class="col-sm-4 control-label">图片：</label>
+                            <div class="col-sm-7">
+                                <input id="upload_file" name="files" type="file" multiple>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-default" data-dismiss="modal">取消</button>
+                                <button type="button" class="btn btn-primary" id="updateBtn">确认</button>
+                            </div>
+                        </div> <!--button-->
+                    </form> <!--form-->
+                </div> <!--modal-body-->
+
+            </div><!-- /.modal-content -->
+        </div><!-- /.modal-dialog -->
+    </div><!-- /.modal -->
+
+    <div class="modal fade" id="showModal">
+        <div class="modal-dialog" style="width: 60%">
+            <div class="modal-content">
+                <div class="modal-body">
+                    <div class="container-fluid">
+                        <div class="row-fluid">
+                            <div class="span12">
+                                <div class="carousel slide" id="carousel-164309">
+                                    <ol class="carousel-indicators" id="indicators">
+                                        <!-- 待填充 -->
+                                    </ol>
+                                    <div class="carousel-inner" id="inner">
+                                        <!-- 待填充 -->
+                                    </div>
+                                    <a data-slide="prev" href="#carousel-164309" class="left carousel-control">‹</a>
+                                    <a data-slide="next" href="#carousel-164309" class="right carousel-control">›</a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div> <!--modal-body-->
+            </div><!-- /.modal-content -->
+        </div><!-- /.modal-dialog -->
+    </div><!-- /.modal -->
+
+    <div class="modal fade" id="auditModal" tabindex="-1" role="dialog" aria-labelledby="myModalLabel" aria-hidden="true">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span
+                            aria-hidden="true">&times;</span></button>
+                    <h4 class="modal-title" id="myModalLabel">订单所属业务员变更申请审批</h4>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <input type="text" class="form-control" id="audit_msg" placeholder="简单说明审批理由"
+                        datatype="s2-50" errormsg="请认真填写！">
+                    </div>
+
+                    <p class="text-info">警告：请谨慎审核！</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-default" data-dismiss="modal">取消</button>
+                    <button type="button" class="btn btn-danger" id="modal_btn_no">拒绝</button>
+                    <button type="button" class="btn btn-success" id="modal_btn_yes">同意</button>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock content %}
+
+{% block js %}
+    {% load staticfiles %}
+    <script src="{% static 'bootstrap-table/js/bootstrap-table-export.min.js' %}"></script>
+    <script src="{% static 'bootstrap-table/js/tableExport.min.js' %}"></script>
+    <script>
+        function get_record_list() {
+            $('#record-list').bootstrapTable('destroy').bootstrapTable({
+                escape: true,
+                method: 'get',
+                contentType: "application/x-www-form-urlencoded",
+                url: "/tools/loan_update_audit/list/",
+                striped: true,                      //是否显示行间隔色
+                cache: false,                       //是否使用缓存，默认为true，所以一般情况下需要设置一下这个属性（*）
+                pagination: true,                   //是否显示分页（*）
+                sortable: true,                     //是否启用排序
+                sortOrder: "asc",                   //排序方式
+                sidePagination: "server",           //分页方式：client客户端分页，server服务端分页（*）
+                pageNumber: 1,                      //初始化加载第一页，默认第一页,并记录
+                pageSize: 14,                       //每页的记录行数（*）
+                pageList: [20, 30, 50, 100],        //可供选择的每页的行数（*）
+                showExport: true,                   //是否显示导出按钮
+                exportOptions: {
+                    fileName: 'files'                //文件名称设置
+                },
+                search: true,                       //是否显示表格搜索
+                strictSearch: false,                //是否全匹配搜索
+                showColumns: true,                  //是否显示所有的列（选择显示的列）
+                showRefresh: true,                  //是否显示刷新按钮
+                minimumCountColumns: 2,             //最少允许的列数
+                clickToSelect: true,                //是否启用点击选中行
+                uniqueId: "id",                     //每一行的唯一标识，一般为主键列
+                showToggle: true,                   //是否显示详细视图和列表视图的切换按钮
+                cardView: false,                    //是否显示详细视图
+                detailView: false,                   //是否显示父子表
+                detailFormatter: function (index, row) {
+                    return row.audit_msg
+                },
+                locale: 'zh-CN',                     //本地化
+                toolbar: "#process-toolbar",         //指明自定义的toolbar
+                queryParamsType: 'limit',
+                //请求服务数据时所传参数
+                queryParams: function (e) {
+                    return {
+                        limit: e.limit,
+                        offset: e.offset,
+                        search: e.search
+                    }
+                },
+                columns: [{
+                    title: '订单编号',
+                    field: 'loan_id'
+                }, {
+                    title: '原业务员账号',
+                    field: 's_sale_id'
+                }, {
+                    title: '原业务员',
+                    field: 's_sale_name'
+                }, {
+                    title: '修正业务员账号',
+                    field: 't_sale_id'
+                }, {
+                    title: '修正业务员姓名',
+                    field: 't_sale_name'
+                }, {
+                    title: '修正业务员工号',
+                    field: 't_emp_id'
+                }, {
+                    title: '修正业务员袋鼠账号',
+                    field: 't_sale_uid'
+                }, {
+                    title: '申请人',
+                    field: 'applicant__display'
+                }, {
+                    title: '申请时间',
+                    field: 'create_time'
+                }, {
+                    title: '审核人',
+                    field: 'auditor__display'
+                }, {
+                    title: '审核理由',
+                    field: 'audit_msg',
+                    formatter: function (value, row, index) {
+                        if (value.length > 50) {
+                            return "<span title ='"+value+"'>"+value.substring(0,50)+"...</span>"
+                        } else {
+                            return value
+                        }
+                    }
+                }, {
+                    title: '操作',
+                    field: 'id',
+                    formatter: function (value, row, index) {
+                        var html = '<button class="btn btn-primary btn-xs" onclick="pic_view(\'' +value+ '\')">图片预览</button>';
+                        {% if perms.sql.tools_loan_update_audit %}
+                            if (row.status === 0) {
+                                html += '<button class="btn btn-warning btn-xs" onclick="audit(\'' +value+ '\')">待审核</button>';
+                            } else if (row.status === 1) {
+                                html += '<button class="btn btn-success btn-xs" onclick="alert(\'' +row.audit_msg+ '\')">已通过</button>';
+                            } else if (row.status === 2) {
+                                html += '<button class="btn btn-danger btn-xs" onclick="alert(\'' +row.audit_msg+ '\')">已被拒</button>';
+                            } else if (row.status === 3) {
+                                html += '<button class="btn btn-default" disabled>该申请已过期</button>';
+                            } else if (row.status === 4) {
+                                return '用户主动取消';
+                            }
+                            return html;
+                        {% else %}
+                            var tmp = encodeURI(JSON.stringify(row));
+                            html += '<button class="btn btn-primary btn-xs" onclick="update(\'' +tmp+ '\')">我要修改</button>';
+                            if (row.status === 0) {
+                                html += '<button class="btn btn-danger btn-xs" onclick="cancel(\'' +value+ '\')">我要取消</button>';
+                            } else if (row.status === 1) {
+                                html = '<button class="btn btn-success btn-xs" onclick="alert(\'' +row.audit_msg+ '\')">已通过</button>';
+                            } else if (row.status === 2) {
+                                html = '<button class="btn btn-danger btn-xs" onclick="alert(\'' +row.audit_msg+ '\')">已被拒</button>';
+                            } else if (row.status === 3) {
+                                html = '<button class="btn btn-default" disabled>该申请已过期</button>';
+                            } else if (row.status === 4) {
+                                return '用户主动取消';
+                            }
+                            return html;
+                        {% endif %}
+                    }
+                }],
+                onLoadSuccess: function () {
+                },
+                onLoadError: function () {
+                    alert("数据加载失败！请检查接口返回信息和错误日志！");
+                },
+                onSearch: function (e) {
+                    //传搜索参数给服务器
+                    return {
+                        search: e.search
+                    }
+                },
+                responseHandler: function (res) {
+                    //在ajax获取到数据，渲染表格之前，修改数据源
+                    return res;
+                }
+            });
+        }
+
+        //如果已选择实例，进入页面自动填充，并且重置激活id
+        $(document).ready(function () {
+            get_record_list();
+        });
+        function update(rowStr) {
+            var obj = JSON.parse(decodeURI(rowStr));
+            $('#updateModal').on('shown.bs.modal', function () {
+                $('#LoanId').val(obj.loan_id);
+                $('#SSaleId').val(obj.s_sale_id);
+                $('#SSaleName').val(obj.s_sale_name);
+                $('#TSaleId').val(obj.t_sale_id);
+                $('#TSaleName').val(obj.t_sale_name);
+                $('#TEmpId').val(obj.t_emp_id);
+                $('#TSaleUid').val(obj.t_sale_uid);
+            });
+            $('#updateModal').modal('show');
+
+            $("#updateBtn").unbind("click").click(function(){
+                if ($('#upload_file').val() === "") {
+                    alert("请提交图片供DBA核对确认！");
+                    return
+                }
+                $("#updateBtn").attr("disabled", true);
+                var formData = new FormData($('#upForm')[0]);
+                $.ajax({
+                    type: "post",
+                    url: "/tools/loan_update/edit/",
+                    timeout: 3000,
+                    processData: false,
+                    contentType: false,
+                    data: formData,
+                    success: function (data) {
+                        $('#upload_file').empty();
+                        if (data['code'] == 0) {
+                            alert(data['result']);
+                        } else {
+                            alert(data['errmsg']);
+                        }
+                        $('#updateModal').modal('hide');
+                        $('#record-list').bootstrapTable('refresh');
+                    },
+                    error: function (data) {
+                        alert(data);
+                    },
+                    complete: function () {
+                        $("#updateBtn").attr("disabled", false);
+                    }
+                });
+            });
+        }
+        function pic_view(apply_id) {
+            $.ajax({
+                type: "get",
+                url: "/tools/loan_update/pic_list/",
+                timeout: 3000,
+                data: {
+                    id: apply_id
+                },
+                success: function (data) {
+                    if (data['code'] == 0) {
+                        // console.log(data['result'], typeof(data['result']));
+                        $('#indicators').empty();
+                        $('#inner').empty();
+                        for (var i = 0; i < data['result'].length; i++) {
+                            console.log(data['result'][i]["name"], data['result'][i]["uri"]);
+                            if (i ===0) {
+                                $('#indicators').append('<li data-slide-to="'+i+'" data-target="#carousel-164309" class="active"></li>');
+                                $('#inner').append('<div class="item active">' +
+                                            '<img alt="" src="'+data['result'][i]["uri"]+'"/>' +
+                                            '<div class="carousel-caption">' +
+                                                '<h4>' + data['result'][i]["name"] + '</h4>' +
+                                            '</div>' +
+                                          '</div>');
+                            } else {
+                                $('#indicators').append('<li data-slide-to="'+i+'" data-target="#carousel-164309"></li>');
+                                $('#inner').append('<div class="item">' +
+                                            '<img alt="" src="'+data['result'][i]["uri"]+'"/>' +
+                                            '<div class="carousel-caption">' +
+                                                '<h4>' + data['result'][i]["name"] + '</h4>' +
+                                            '</div>' +
+                                          '</div>');
+                            }
+                        }
+                        $('#showModal').modal('show');
+                    } else {
+                        alert(data['errmsg']);
+                    }
+                },
+                error: function (data) {
+                    alert(data);
+                }
+            });
+        }
+        function do_audit(apply_id, action, audit_msg) {
+            $.ajax({
+                type: "post",
+                url: "/tools/loan_update/audit/",
+                timeout: 3000,
+                data: {
+                    id: apply_id,
+                    audit_msg: audit_msg,
+                    action: action
+                },
+                success: function (data) {
+                    if (data['code'] == 0) {
+                        alert(data['result']);
+                    } else {
+                        alert(data['errmsg']);
+                    }
+                    $('#auditModal').modal('hide');
+                    $('#record-list').bootstrapTable('refresh');
+                },
+                error: function (data) {
+                    alert(data);
+                    $('#auditModal').modal('hide');
+                }
+            });
+        }
+        function audit(apply_id) {
+            $('#auditModal').modal({});
+            $("#modal_btn_no").unbind("click").click(function(){
+                var audit_msg = document.getElementById("audit_msg").value;
+                do_audit(apply_id, "reject", audit_msg)
+            });
+
+            $("#modal_btn_yes").unbind("click").click(function(){
+                var audit_msg = document.getElementById("audit_msg").value;
+                $("#modal_btn_yes").attr("disabled", true);
+                do_audit(apply_id, "pass", audit_msg)
+            });
+        }
+        function cancel(apply_id) {
+            if (confirm("确定取消上传申请吗？")) {
+                do_audit(apply_id, "cancel", "")
+            }
+        }
+    </script>
+{% endblock %}
+

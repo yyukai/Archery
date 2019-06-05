@@ -174,12 +174,16 @@ def do_upload_func(apply_id, audit_msg, user):
     # 推送文件到微贷云盘
     wa = WPanHistory.objects.get(id=apply_id)
     wa.auditor = user
+    print(1, datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
     pan = WPan(file=wa.file_path)
+    print(2, datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
     ret = pan.upload_file(user.username)
+    print(3, datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+    print("upload_file", ret)
     if ret["code"] == 0:
-        print("upload_file", ret)
         file_id = ret["result"]["id"]
         ret = pan.create_user_share(file_id=file_id, expired=7, user_ding_id=wa.apply.ding_user_id)
+        print(4, datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
         print("create_user_share", ret)
         if ret['code'] == 0:
             share_link = ret['result']['share_link']

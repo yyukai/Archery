@@ -22,7 +22,7 @@
                     <div class="form-group">
                         <label class="col-sm-2 control-label" id="showTitle"></label>
                         <div class="col-sm-4">
-                            <button type="button" id="save" class="btn btn-primary" onclick="savePlaybook();"
+                            <button type="button" id="save" class="btn btn-primary" onclick=""
                                     style="display: none;">
                                 提交保存
                             </button>
@@ -133,7 +133,15 @@
                     field: 'apply'
                 }, {
                     title: '理由',
-                    field: 'reason'
+                    field: 'reason',
+                    formatter: function (value, row, index) {
+                        if (value.length > 50) {
+                            return "<span title ='"+value+"'>"+value.substring(0,50)+"...</span>"
+                        }
+                        else {
+                            return value
+                        }
+                    }
                 }, {
                     title: '申请时间',
                     field: 'create_time'

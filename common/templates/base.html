@@ -292,6 +292,26 @@
                             <!-- /.nav-second-level -->
                         </li>
                     {% endif %}
+                    {% if perms.sql.menu_tools %}
+                        <li>
+                            <a href="#"><i class="fa fa-gamepad fa-fw"></i> 高效小功能<span class="fa arrow"></span></a>
+                            <ul class="nav nav-second-level">
+                                <li>
+                                    <a href="#">订单所属业务员更改 <span class="fa arrow"></span></a>
+                                    <ul class="nav nav-third-level collapse">
+                                        <li>
+                                            <a href="/tools/loan_update/">更改申请</a>
+                                        </li>
+                                        <li>
+                                            <a href="/tools/loan_update_audit/">更改审核</a>
+                                        </li>
+                                    </ul>
+                                    <!-- /.nav-third-level -->
+                                </li>
+                            </ul>
+                            <!-- /.nav-second-level -->
+                        </li>
+                    {% endif %}
                     {% if perms.sql.menu_system %}
                         <li>
                             <a href="#"><i class="fa fa-cogs fa-fw"></i> 系统管理<span class="fa arrow"></span></a>

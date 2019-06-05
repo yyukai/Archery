@@ -6,7 +6,8 @@ from django.views.i18n import JavaScriptCatalog
 import sql.sql_optimize
 from common import auth, config, workflow, dashboard, check
 from sql import backup, data_safe, query_audit, ip_white, host, wpan_upload, bg_table
-from sql import views, sql_workflow, sql_analyze, query, slowlog, instance, db_diagnostic, resource_group, binlog
+from sql import views, sql_workflow, sql_analyze, query, slowlog, instance, db_diagnostic, resource_group, binlog, \
+    tools
 from sql.utils import tasks
 
 
@@ -165,4 +166,13 @@ urlpatterns = [
     path('wpan_audit/', views.wpan_audit),
     path('wpan_upload/audit/', wpan_upload.wpan_upload_audit),
     path('wpan_upload/cancel/', wpan_upload.wpan_upload_cancel),
+
+    path('tools/loan_update/', tools.tools_loan_update),
+    path('tools/loan_update/search/', tools.loan_update_search),
+    path('tools/loan_update/apply/', tools.loan_update_apply),
+    path('tools/loan_update_audit/', tools.tools_loan_update_audit),
+    path('tools/loan_update_audit/list/', tools.loan_update_audit_list),
+    path('tools/loan_update/edit/', tools.loan_update_audit),
+    path('tools/loan_update/pic_list/', tools.loan_update_pic_list),
+    path('tools/loan_update/audit/', tools.loan_update_audit),
 ]

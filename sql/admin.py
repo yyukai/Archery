@@ -5,7 +5,8 @@ from django.contrib.auth.admin import UserAdmin
 # Register your models here.
 from .models import Users, Instance, SqlWorkflow, SqlWorkflowContent, QueryLog, DataMaskingColumns, DataMaskingRules, \
     AliyunAccessKey, AliyunRdsConfig, ResourceGroup, ResourceGroupRelations, QueryPrivilegesApply, QueryPrivileges, \
-    WorkflowAudit, WorkflowLog, ParamTemplate, ParamHistory, Backup, Host, DataBase, Replication, BGTable
+    WorkflowAudit, WorkflowLog, ParamTemplate, ParamHistory, Backup, Host, DataBase, Replication, BGTable, \
+    ToolsLoanUpdate
 
 
 # 用户管理
@@ -186,3 +187,11 @@ class DatabaseAdmin(admin.ModelAdmin):
 @admin.register(BGTable)
 class BGTableAdmin(admin.ModelAdmin):
     list_display = ("db_name", "table_name", "create_time")
+    search_fields = ('db_name', 'table_name',)
+
+
+@admin.register(ToolsLoanUpdate)
+class ToolsLoanUpdateAdmin(admin.ModelAdmin):
+    list_display = ("loan_id", "s_sale_id", "s_sale_name", "t_sale_id", "t_sale_name", "t_emp_id", "t_sale_uid",
+                    "t_pic_name", "applicant", "auditor", "audit_msg", "status", "create_time")
+    search_fields = ('loan_id', 't_sale_id', 't_sale_name', 'applicant', 'auditor',)

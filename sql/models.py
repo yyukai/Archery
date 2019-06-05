@@ -414,7 +414,7 @@ class WPanHistory(models.Model):
     auditor = models.ForeignKey(Users, null=True, blank=True, on_delete=models.SET_NULL, related_name='upload_auditor')
     file_path = models.CharField('文件路径', max_length=255, default='')
     reason = models.CharField('文件外传理由', max_length=255, default='')
-    error_msg = models.CharField('外传错误信息', max_length=255, default='')
+    error_msg = models.TextField('外传错误信息', default='')
     audit_msg = models.CharField('审核人审核理由', max_length=255, default='')
     status = models.IntegerField('状态', choices=((0, '待审核'), (1, '审核通过'), (2, '审核不通过'),
                                                 (3, '申请已过期'), (4, '用户主动取消')))
@@ -615,7 +615,10 @@ class Permission(models.Model):
             ('menu_system', '菜单 系统管理'),
             ('menu_document', '菜单 相关文档'),
             ('menu_themis', '菜单 themis'),
+            ('menu_tools', '菜单 高效小功能'),
             ('menu_wpan_upload', '菜单 上传微贷云盘'),
+            ('tools_loan_update', '订单所属业务员更改'),
+            ('tools_loan_update_audit', '订单所属业务员更改审核'),
             ('wpan_upload_audit', '上传微贷云盘审核'),
             ('sql_submit', '提交SQL上线工单'),
             ('sql_review', '审核SQL上线工单'),
@@ -750,6 +753,32 @@ class BGTable(models.Model):
         db_table = 'sql_bg_table'
         verbose_name = u'大数据抽取表'
         verbose_name_plural = u'大数据抽取表'
+
+
+class ToolsLoanUpdate(models.Model):
+    loan_id = models.CharField('订单编号', max_length=64)
+    s_sale_id = models.CharField('原业务员账号', max_length=64)
+    s_sale_name = models.CharField('原业务员姓名', max_length=64, blank=True, null=True)
+    t_sale_id = models.CharField('修正业务员账号', max_length=64)
+    t_sale_name = models.CharField('修正业务员姓名', max_length=64, blank=True, null=True)
+    t_emp_id = models.CharField('修正业务员工号', max_length=64, blank=True, null=True)
+    t_sale_uid = models.CharField('袋鼠uid', max_length=64, blank=True, null=True)
+    t_pic_name = models.CharField('领导审批图片', max_length=255, default="")
+    applicant = models.ForeignKey(Users, null=True, blank=True, on_delete=models.SET_NULL,
+                                  related_name='loan_update_apply')
+    auditor = models.ForeignKey(Users, null=True, blank=True, on_delete=models.SET_NULL,
+                                related_name='loan_update_auditor')
+    audit_msg = models.CharField('审核理由', max_length=64, default="")
+    status = models.SmallIntegerField('状态', choices=((0, '待审核'), (1, '审核通过'), (2, '审核不通过'),
+                                                (3, '申请已过期'), (4, '用户主动取消')), default=0)
+    update_time = models.DateTimeField('更新时间', auto_now=True)
+    create_time = models.DateTimeField('创建时间', auto_now_add=True)
+
+    class Meta:
+        ordering = ("-update_time",)
+        db_table = 't_loan_update'
+        verbose_name = u'工具：订单修改'
+        verbose_name_plural = u'工具：订单修改'
 
 
 # SlowQueryHistory

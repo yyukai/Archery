@@ -53,7 +53,7 @@ class WPan(object):
             }
             ret = requests.post(url, headers=headers, files=m, data=data)
             result = ret.json()
-            print("000000", result)
+            print('wpan upload: ', datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), result)
             # {'code': 8, 'data': {'id': 194724, 'fileSize': '10KB', 'fileSpecificType': 4, 'ifSupportPreview': False}, 'success': False}
             if result['code'] == 0:
                 return {"code": 0, "result": {"id": result['data']}}
@@ -84,8 +84,11 @@ class WPan(object):
             ret = requests.post(url, headers=self.headers, data=data_json)
             print("11111", ret.text)
             result = ret.json()
+            # {"code":0,"data":{"fileSize":"38.2M","fileSpecificType":4,"ifSupportPreview":false},"success":true}
+            # 8 代表网盘中已存在md5相同的文件，所以不需要再上传了，会直接返回 id
+            # {"code":8,"data":{"id":194575,"fileSize":"30.6M","fileSpecificType":4,"ifSupportPreview":false},"success":false}
             if result['code'] == 0 or result['code'] == 8:
-                return {"code": 0, "result": {"id": result['data']['id']}}
+                return result
             else:
                 return {"code": -1, "errmsg": json.dumps(result)}
         except Exception as e:
@@ -103,6 +106,7 @@ class WPan(object):
         md5file.close()
 
         try:
+            result = {"code": -1, "errmsg": ""}
             fo = open(self.file, 'rb')
             for chunk in range(1, chunks + 1):
                 cs = (chunk - 1) * chunk_size
@@ -126,9 +130,9 @@ class WPan(object):
                 ret = requests.post(url, headers=headers, files=m, data=data)
                 print("222222", ret.text)
                 result = ret.json()
-                if result['code'] != 0 and result['code'] != 8:
-                    return {"code": -1, "errmsg": json.dumps(result)}
-            return {"code": 0, "result": "complete."}
+                # {"code":0,"success":true}
+                # {"code":0,"data":194578,"success":true}
+            return result
         except Exception as e:
             print('大文件上传接口调用出错!', traceback.print_exc())
             return {"code": -1, "errmsg": str(e)}
@@ -137,15 +141,15 @@ class WPan(object):
         if self.file_size > 31457280:
             # 文件大于30M，则使用大文件上传接口
             res = self.before_upload_big_file(username)
-            # {"code":8,"data":{"id":194575,"fileSize":"30.6M","fileSpecificType":4,"ifSupportPreview":false},"success":false}
-            info = self.upload_big_file(username)
-            # {"code":0,"data":194578,"success":true}
-            if info['code'] == -1:
-                return info
+            if res["code"] == 0:
+                info = self.upload_big_file(username)
+                if info['code'] == 0:
+                    res = {"code": 0, "result": {"id": info["data"]}}
+            elif res["code"] == 8:
+                res = {"code": 0, "result": {"id": res["data"]["id"]}}
         else:
             # 调用小文件上传接口
             res = self.upload_small_files(username)
-            # {'code': 0, 'result': 194582}
         return res
 
     # 文件下载统计
