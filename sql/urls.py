@@ -7,7 +7,7 @@ import sql.query_privileges
 import sql.sql_optimize
 from common import auth, config, workflow, dashboard, check
 from sql import views, sql_workflow, sql_analyze, query, slowlog, instance, db_diagnostic, resource_group, binlog, \
-    backup, data_safe, query_audit, ip_white, host, wpan_upload, bg_table, tools
+    backup, data_safe, query_audit, ip_white, host, database, data_dictionary, wpan_upload, bg_table, tools
 from sql.utils import tasks
 
 urlpatterns = [
@@ -83,11 +83,14 @@ urlpatterns = [
     path('instance/schemasync/', instance.schemasync),
     path('instance/instance_resource/', instance.instance_resource),
     path('instance/describetable/', instance.describe),
-    path('instance/binlog/', binlog.binlog_list),
 
     path('database/', views.database),
-    path('database_list/', instance.db_list),
-    path('database_detail/', instance.db_detail),
+    path('database_list/', database.db_list),
+    path('database_detail/', database.db_detail),
+
+    path('data_dictionary/', views.data_dictionary),
+    path('data_dictionary/table_list/', data_dictionary.table_list),
+    path('data_dictionary/table_info/', data_dictionary.table_info),
 
     path('bg_table/', views.bg_table),
     path('bg_table_list/', bg_table.bg_table_list),
@@ -99,8 +102,8 @@ urlpatterns = [
     # path('redis_apply_audit/', redis.redis_apply_audit),
 
     path('replication/', views.replication),
-    path('replication_delay/', instance.replication_delay),
     path('replication_echart/', views.replication_echart),
+    path('replication_delay/', database.replication_delay),
 
     path('param/list/', instance.param_list),
     path('param/history/', instance.param_history),
@@ -121,7 +124,8 @@ urlpatterns = [
     path('query/privaudit/', sql.query_privileges.query_priv_audit),
 
     path('binlog/', views.binlog),
-    path('binlog/list/', binlog.binlog_list_total),
+    path('binlog/list/', binlog.binlog_list),
+    path('binlog/list_total/', binlog.binlog_list_total),
     path('binlog/binlog2sql/', binlog.binlog2sql),
     path('binlog/del_log/', binlog.del_binlog),
 

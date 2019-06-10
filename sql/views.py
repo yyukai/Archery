@@ -302,6 +302,12 @@ def database(request):
     return render(request, 'database.html', {'instances': instances})
 
 
+@permission_required('sql.menu_data_dictionary', raise_exception=True)
+def data_dictionary(request):
+    ins_name_list = [n.instance_name for n in user_instances(request.user, type='slave', db_type='mysql')]
+    return render(request, 'data_dictionary.html', locals())
+
+
 @permission_required('sql.menu_database', raise_exception=True)
 def bg_table(request):
     # 获取用户关联实例列表
@@ -344,7 +350,7 @@ def replication(request):
 @permission_required('sql.menu_instance', raise_exception=True)
 def replication_echart(request):
     from pyecharts import Page, Line
-    instances = [instance.instance_name for instance in user_instances(request.user, 'all')]
+    instances = [ins.instance_name for ins in user_instances(request.user, 'all')]
     begin_date = (datetime.datetime.now() - datetime.timedelta(minutes=+29))
     ins_name = request.GET.get('name', '')
     dt_s = request.GET.get('stime', begin_date)
@@ -379,16 +385,15 @@ def replication_echart(request):
 
 
 def masking_field(request):
-    obj_list = user_instances(request.user, 'all')
-    ins_name_list = [n.instance_name for n in obj_list]
-    db_name_list = [db.db_name for db in DataBase.objects.filter(instance_name__in=ins_name_list)]
+    ins_list = user_instances(request.user, 'all')
+    db_name_list = [db.db_name for db in DataBase.objects.filter(instance__in=ins_list)]
     return render(request, 'masking_field.html', locals())
 
 
 def query_audit(request):
-    obj_list = user_instances(request.user, 'all')
-    ins_name_list = [n.instance_name for n in obj_list]
-    db_name_list = [db.db_name for db in DataBase.objects.filter(instance_name__in=ins_name_list)]
+    ins_list = user_instances(request.user, 'all')
+    ins_name_list = [n.instance_name for n in ins_list]
+    db_name_list = [db.db_name for db in DataBase.objects.filter(instance__in=ins_list)]
     qa_user_list = QueryAudit.objects.values('db_user').distinct().order_by('db_user')
     db_user_list = [u['db_user'] for u in qa_user_list]
     return render(request, 'query_audit.html', locals())

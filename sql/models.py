@@ -636,7 +636,7 @@ class Permission(models.Model):
             ('menu_data_safe', '菜单 数据安全'),
             ('menu_host', '菜单 主机管理'),
             ('menu_param', '菜单 参数配置'),
-            ('menu_instance_list', '菜单 实例列表'),
+            ('menu_data_dictionary', '菜单 数据字典'),
             ('menu_system', '菜单 系统管理'),
             ('menu_document', '菜单 相关文档'),
             ('menu_themis', '菜单 themis'),
@@ -767,6 +767,7 @@ class DataBase(models.Model):
     host = models.ForeignKey(Host, on_delete=models.CASCADE, null=True, blank=True)
     ip = models.CharField('IP地址', max_length=15, null=True, blank=True)
     port = models.CharField('MySQL端口', max_length=6, null=True, blank=True)
+    instance = models.ForeignKey(Instance, on_delete=models.CASCADE, null=True, blank=True)
     instance_name = models.CharField('实例名', max_length=50, null=True, blank=True)
     db_name = models.CharField('数据库名', max_length=50, unique=True)
     app_type = models.CharField('业务分类', max_length=50, null=True, blank=True)

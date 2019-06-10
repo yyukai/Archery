@@ -23,7 +23,7 @@ from common.config import SysConfig
 from common.utils.extend_json_encoder import ExtendJSONEncoder
 from sql.query_privileges import query_priv_check
 from .models import QueryLog, Instance, QueryExport, Users
-from sql.utils.api import BASE_DIR, async
+from sql.utils.api import BASE_DIR, async_func
 from sql.engines import get_engine, ResultSet
 
 logger = logging.getLogger('default')
@@ -299,7 +299,7 @@ def add_async_query(request):
                         content_type='application/json')
 
 
-@async
+@async_func
 def do_async_query(request, query_export, instance_name, db_name, schema_name, sql_content, limit_num):
     query_log = query_export.query_log
     instance = Instance.objects.get(instance_name=instance_name)

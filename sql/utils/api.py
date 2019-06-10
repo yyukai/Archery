@@ -42,7 +42,7 @@ class DateEncoder(json.JSONEncoder):
             return json.JSONEncoder.default(self, obj)
 
 
-def async(func):
+def async_func(func):
     def wrapper(*args, **kwargs):
         thr = threading.Thread(target=func, args=args, kwargs=kwargs)
         thr.start()

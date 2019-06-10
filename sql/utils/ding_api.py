@@ -7,7 +7,7 @@ import re
 import traceback
 import redis
 from sql.models import Users, Config
-from sql.utils.api import HttpRequests, async
+from sql.utils.api import HttpRequests, async_func
 from common.config import SysConfig
 
 # 是否每次登陆都要去钉钉获取一下 user_id。因为钉钉里的 user_id 是固定的，所以没必要配置成 True。
@@ -72,7 +72,7 @@ def get_ding_user_id(username):
         traceback.print_exc()
 
 
-@async
+@async_func
 def get_ding_user_id1(username):
     """
     本公司使用工号（username）登陆archer，并且工号对应钉钉系统中字段 "jobnumber"。
@@ -161,7 +161,7 @@ class DingSender(object):
     def __init__(self):
         self.app_id = SysConfig().sys_config.get('ding_agent_id', None)
 
-    @async
+    @async_func
     def send_msg(self, ding_user_id, content):
         if self.app_id is None:
             return "No app id."

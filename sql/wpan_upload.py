@@ -15,7 +15,7 @@ from django.http import HttpResponse, JsonResponse
 from sql.models import Config, WPanHistory
 from common.utils.extend_json_encoder import ExtendJSONEncoder
 from common.utils.file_api import get_file_content
-from sql.utils.api import async
+from sql.utils.api import async_func
 from sql.utils.ding_api import DingSender
 from sql.utils.wpan_api import WPan
 
@@ -169,7 +169,7 @@ def wpan_upload_download(request):
         return HttpResponse("文件不存在！")
 
 
-@async
+@async_func
 def do_upload_func(apply_id, audit_msg, user):
     # 推送文件到微贷云盘
     wa = WPanHistory.objects.get(id=apply_id)
