@@ -3,13 +3,12 @@
 from django.urls import path
 from django.views.i18n import JavaScriptCatalog
 
+import sql.query_privileges
 import sql.sql_optimize
 from common import auth, config, workflow, dashboard, check
-from sql import backup, data_safe, query_audit, ip_white, host, wpan_upload, bg_table
 from sql import views, sql_workflow, sql_analyze, query, slowlog, instance, db_diagnostic, resource_group, binlog, \
-    tools
+    backup, data_safe, query_audit, ip_white, host, wpan_upload, bg_table, tools
 from sql.utils import tasks
-
 
 urlpatterns = [
     path('', views.sqlworkflow),
@@ -57,6 +56,7 @@ urlpatterns = [
     path('simplecheck/', sql_workflow.check),
     path('getWorkflowStatus/', sql_workflow.get_workflow_status),
     path('del_sqlcronjob/', tasks.del_schedule),
+    path('inception/osc_control/', sql_workflow.osc_control),
 
     path('sql_analyze/generate/', sql_analyze.generate),
     path('sql_analyze/analyze/', sql_analyze.analyze),
@@ -83,7 +83,7 @@ urlpatterns = [
     path('instance/schemasync/', instance.schemasync),
     path('instance/instance_resource/', instance.instance_resource),
     path('instance/describetable/', instance.describe),
-    path('instance/binlog/', instance.binlog_list),
+    path('instance/binlog/', binlog.binlog_list),
 
     path('database/', views.database),
     path('database_list/', instance.db_list),
@@ -121,7 +121,7 @@ urlpatterns = [
     path('query/privaudit/', sql.query_privileges.query_priv_audit),
 
     path('binlog/', views.binlog),
-    path('binlog/list/', binlog.binlog_list),
+    path('binlog/list/', binlog.binlog_list_total),
     path('binlog/binlog2sql/', binlog.binlog2sql),
     path('binlog/del_log/', binlog.del_binlog),
 

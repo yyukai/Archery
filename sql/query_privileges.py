@@ -26,89 +26,83 @@ from sql.models import QueryPrivilegesApply, QueryPrivileges, Instance, Resource
 from sql.notify import notify_for_audit
 from sql.utils.resource_group import user_groups, user_instances
 from sql.utils.workflow_audit import Audit
+from sql.utils.sql_utils import extract_tables
 
 logger = logging.getLogger('default')
 
 __author__ = 'hhyo'
 
 
-def query_priv_check(user, instance, db_name, schema_name, sql_content, limit_num):
+def query_priv_check(user, instance, db_name, sql_content, limit_num):
     """
     查询权限校验
     :param user:
     :param instance:
     :param db_name:
-    :param schema_name:
     :param sql_content:
     :param limit_num:
     :return:
     """
     result = {'status': 0, 'msg': 'ok', 'data': {'priv_check': True, 'limit_num': 0}}
-    # 管理员不做权限校验，仅获取limit值信息
-    if user.is_superuser:
+    # 如果有can_query_all_instance, 视为管理员, 仅获取limit值信息
+    # superuser 拥有全部权限, 不需做特别修改
+    if user.has_perm('sql.query_all_instances'):
         priv_limit = int(SysConfig().get('admin_query_limit', 5000))
         result['data']['limit_num'] = min(priv_limit, limit_num) if limit_num else priv_limit
         return result
 
-    # mysql可以校验到表级权限
-    if instance.db_type == 'mysql':
-        try:
-            # 首先使用inception的语法树打印获取查询涉及的的表
-            table_ref = _table_ref(f"{sql_content.rstrip(';')};", instance, db_name)
-            # 循环验证权限，可能存在性能问题，但一次查询涉及的库表数量有限，可忽略
-            for table in table_ref:
-                # 既无库权限也无表权限
-                if not _db_priv(user, instance, table['db']) and not _tb_priv(user=user, instance=instance, db_name=db_name, tb_name=table['table']):
-                    result['status'] = 1
-                    result['msg'] = f"你无{db_name}.{table['table']}表的查询权限！请先到查询权限管理进行申请"
-                    return result
-        except Exception as msg:
-            # 获取表数据报错，仅校验当前库权限
+    try:
+        # 尝试使用Inception校验表权限
+        table_ref = _table_ref(f"{sql_content.rstrip(';')};", instance, db_name)
+        # 循环验证权限，可能存在性能问题，但一次查询涉及的库表数量有限，可忽略
+        for table in table_ref:
+            # 既无库权限也无表权限
+            if not _db_priv(user, instance, table['db']) and not _tb_priv(user, instance, db_name, table['table']):
+                result['status'] = 1
+                result['msg'] = f"你无{db_name}.{table['table']}表的查询权限！请先到查询权限管理进行申请"
+                return result
+        # 获取查询涉及库/表权限的最小limit限制，和前端传参作对比，取最小值
+        # 循环获取，可能存在性能问题，但一次查询涉及的库表数量有限，可忽略
+        for table in table_ref:
+            priv_limit = _priv_limit(user, instance, db_name=table['db'], tb_name=table['table'])
+            limit_num = min(priv_limit, limit_num) if limit_num else priv_limit
+        result['data']['limit_num'] = limit_num
+    except Exception as msg:
+        # 表权限校验失败再次校验库权限
+        # 先获取查询语句涉及的库
+        if instance.db_type in ['redis', 'mssql']:
+            dbs = [db_name]
+        else:
+            dbs = [i['schema'].strip('`') for i in extract_tables(sql_content) if i['schema'] is not None]
+            dbs.append(db_name)
+        # 库去重
+        dbs = list(set(dbs))
+        # 排序
+        dbs.sort()
+        # 校验库权限，无库权限直接返回
+        for db_name in dbs:
             if not _db_priv(user, instance, db_name):
                 result['status'] = 1
                 result['msg'] = f"你无{db_name}数据库的查询权限！请先到查询权限管理进行申请"
                 return result
-            # 开启query_check，禁止执行，直接抛出异常
+        # 有所有库权限则获取最小limit值
+        for db_name in dbs:
+            priv_limit = _priv_limit(user, instance, db_name=db_name)
+            limit_num = min(priv_limit, limit_num) if limit_num else priv_limit
+        result['data']['limit_num'] = limit_num
+
+        # 实例为mysql的，需要判断query_check状态
+        if instance.db_type == 'mysql':
+            # 开启query_check，则禁止执行
             if SysConfig().get('query_check'):
                 result['status'] = 1
                 result['msg'] = f"无法校验查询语句权限，请检查语法是否正确或联系管理员，错误信息：{msg}"
                 return result
-            # 关闭query_check，忽略错误继续执行，标记权限校验为跳过
+            # 关闭query_check，标记权限校验为跳过，可继续执行
             else:
-                # 获取查询库的最小limit限制，和前端传参作对比，取最小值
-                priv_limit = _priv_limit(user, instance, db_name=db_name)
-                result['data']['limit_num'] = min(priv_limit, limit_num) if limit_num else priv_limit
                 result['data']['priv_check'] = False
-                return result
-        else:
-            # 获取查询涉及库/表权限的最小limit限制，和前端传参作对比，取最小值
-            # 循环获取，可能存在性能问题，但一次查询涉及的库表数量有限，可忽略
-            for table in table_ref:
-                priv_limit = _priv_limit(user, instance, db_name=table['db'], tb_name=table['table'])
-                limit_num = min(priv_limit, limit_num) if limit_num else priv_limit
-            result['data']['limit_num'] = limit_num
-            return result
-    elif instance.db_type == 'oracle':
-        if not _schema_priv(user, instance, schema_name):
-            result['status'] = 1
-            result['msg'] = f"你无{schema_name}模式的查询权限！请先到查询权限管理进行申请"
-            return result
-        else:
-            priv_limit = _priv_limit(user, instance, schema_name=schema_name)
-            result['data']['limit_num'] = min(priv_limit, limit_num) if limit_num else priv_limit
-            return result
-    # 其他数据库仅校验到库权限
-    else:
-        # 无库权限直接返回
-        if not _db_priv(user, instance, db_name):
-            result['status'] = 1
-            result['msg'] = f"你无{db_name}数据库的查询权限！请先到查询权限管理进行申请"
-            return result
-        # 有库权限则获取对应limit值
-        else:
-            priv_limit = _priv_limit(user, instance, db_name=db_name)
-            result['data']['limit_num'] = min(priv_limit, limit_num) if limit_num else priv_limit
-            return result
+
+    return result
 
 
 @permission_required('sql.menu_queryapplylist', raise_exception=True)
@@ -143,8 +137,8 @@ def query_priv_apply_list(request):
 
     count = query_privs.count()
     lists = query_privs.order_by('-apply_id')[offset:limit].values(
-        'apply_id', 'title', 'instance__instance_name', 'db_list', 'schema_list', 'priv_type', 'table_list',
-         'limit_num', 'valid_date', 'user_display', 'status', 'create_time', 'group_name'
+        'apply_id', 'title', 'instance__instance_name', 'db_list', 'priv_type', 'table_list', 'limit_num', 'valid_date',
+        'user_display', 'status', 'create_time', 'group_name'
     )
 
     # QuerySet 序列化
@@ -170,8 +164,6 @@ def query_priv_apply(request):
     priv_type = request.POST.get('priv_type')
     db_name = request.POST.get('db_name')
     db_list = request.POST.getlist('db_list[]')
-    schema_name = request.POST.get('schema_name')
-    schema_list = request.POST.getlist('schema_list[]')
     table_list = request.POST.getlist('table_list[]')
     valid_date = request.POST.get('valid_date')
     limit_num = request.POST.get('limit_num')
@@ -187,20 +179,16 @@ def query_priv_apply(request):
             result['msg'] = '请填写完整'
             return HttpResponse(json.dumps(result), content_type='application/json')
     elif int(priv_type) == 2:
-        if not (title and instance_name and (db_name or schema_name) and valid_date and table_list and limit_num):
-            result['status'] = 1
-            result['msg'] = '请填写完整'
-            return HttpResponse(json.dumps(result), content_type='application/json')
-    elif int(priv_type) == 3:
-        if not (title and instance_name and schema_list and valid_date and limit_num):
+        if not (title and instance_name and db_name and valid_date and table_list and limit_num):
             result['status'] = 1
             result['msg'] = '请填写完整'
             return HttpResponse(json.dumps(result), content_type='application/json')
     try:
-        user_instances(request.user, type='slave', db_type='all').get(instance_name=instance_name)
+        user_instances(request.user, type='all', db_type='all').get(instance_name=instance_name)
     except Instance.DoesNotExist:
-        context = {'errMsg': '你所在组未关联该实例！'}
-        return render(request, 'error.html', context)
+        result['status'] = 1
+        result['msg'] = '你所在组未关联该实例！'
+        return HttpResponse(json.dumps(result), content_type='application/json')
 
     # 库权限
     ins = Instance.objects.get(instance_name=instance_name)
@@ -214,39 +202,18 @@ def query_priv_apply(request):
 
     # 表权限
     elif int(priv_type) == 2:
-        if ins.db_type == "oracle":
-            # 先检查是否拥有模式权限
-            if _schema_priv(user, ins, schema_name):
+        # 先检查是否拥有库权限
+        if _db_priv(user, ins, db_name):
+            result['status'] = 1
+            result['msg'] = f'你已拥有{instance_name}实例{db_name}库的全部权限，不能重复申请'
+            return HttpResponse(json.dumps(result), content_type='application/json')
+        # 检查申请账号是否已拥有该表的查询权限
+        for tb_name in table_list:
+            if _tb_priv(user, ins, db_name, tb_name):
                 result['status'] = 1
-                result['msg'] = f'你已拥有{instance_name}实例{schema_name}模式的全部权限，不能重复申请'
+                result['msg'] = f'你已拥有{instance_name}实例{db_name}.{tb_name}表的查询权限，不能重复申请'
                 return HttpResponse(json.dumps(result), content_type='application/json')
-            # 检查申请账号是否已拥有该表的查询权限
-            for tb_name in table_list:
-                if _tb_priv(user=user, instance=ins, schema_name=schema_name, tb_name=tb_name):
-                    result['status'] = 1
-                    result['msg'] = f'你已拥有{instance_name}实例{schema_name}.{tb_name}表的查询权限，不能重复申请'
-                    return HttpResponse(json.dumps(result), content_type='application/json')
-        else:
-            # 先检查是否拥有库权限
-            if _db_priv(user, ins, db_name):
-                result['status'] = 1
-                result['msg'] = f'你已拥有{instance_name}实例{db_name}库的全部权限，不能重复申请'
-                return HttpResponse(json.dumps(result), content_type='application/json')
-            # 检查申请账号是否已拥有该表的查询权限
-            for tb_name in table_list:
-                if _tb_priv(user=user, instance=ins, db_name=db_name, tb_name=tb_name):
-                    result['status'] = 1
-                    result['msg'] = f'你已拥有{instance_name}实例{db_name}.{tb_name}表的查询权限，不能重复申请'
-                    return HttpResponse(json.dumps(result), content_type='application/json')
 
-    # 模式权限
-    elif int(priv_type) == 3:
-        # 检查是否已拥有该模式的查询权限
-        for schema_name in schema_list:
-            if _schema_priv(user, ins, schema_name):
-                result['status'] = 1
-                result['msg'] = f'你已拥有{instance_name}实例{schema_name}模式的全部权限，不能重复申请'
-                return HttpResponse(json.dumps(result), content_type='application/json')
     # 使用事务保持数据一致性
     try:
         with transaction.atomic():
@@ -266,14 +233,10 @@ def query_priv_apply(request):
             )
             if int(priv_type) == 1:
                 applyinfo.db_list = ','.join(db_list)
+                applyinfo.table_list = ''
             elif int(priv_type) == 2:
-                if ins.db_type == "oracle":
-                    applyinfo.schema_list = schema_name
-                else:
-                    applyinfo.db_list = db_name
+                applyinfo.db_list = db_name
                 applyinfo.table_list = ','.join(table_list)
-            elif int(priv_type) == 3:
-                applyinfo.schema_list = ','.join(schema_list)
             applyinfo.save()
             apply_id = applyinfo.apply_id
 
@@ -434,6 +397,8 @@ def _table_ref(sql_content, instance, db_name):
     :param db_name:
     :return:
     """
+    if instance.db_type != 'mysql':
+        raise RuntimeError('Inception Error: 仅支持MySQL实例')
     inception_engine = InceptionEngine()
     query_tree = inception_engine.query_print(instance=instance, db_name=db_name, sql=sql_content)
     table_ref = query_tree.get('table_ref', [])
@@ -454,6 +419,7 @@ def _db_priv(user, instance, db_name):
     :param instance: 实例对象
     :param db_name: 库名
     :return: 权限存在则返回对应权限的limit_num，否则返回False
+    TODO 返回统一为 int 类型, 不存在返回0 (虽然其实在python中 0==False)
     """
     # 获取用户库权限
     user_privileges = QueryPrivileges.objects.filter(user_name=user.username, instance=instance, db_name=str(db_name),
@@ -467,50 +433,19 @@ def _db_priv(user, instance, db_name):
     return False
 
 
-def _schema_priv(user, instance, schema):
-    """
-    检测用户是否拥有指定库权限
-    :param user: 用户对象
-    :param instance: 实例对象
-    :param schema: 模式名
-    :return: 权限存在则返回对应权限的limit_num，否则返回False
-    """
-    # 获取用户库权限
-    user_privileges = QueryPrivileges.objects.filter(user_name=user.username, instance=instance,
-                                                     schema_name=str(schema),
-                                                     valid_date__gte=datetime.datetime.now(), is_deleted=0,
-                                                     priv_type=3)
-    if user.is_superuser:
-        return int(SysConfig().get('admin_query_limit', 5000))
-    else:
-        if user_privileges.exists():
-            return user_privileges.first().limit_num
-    return False
-
-
-def _tb_priv(user, instance, db_name=None, schema_name=None, tb_name=None):
+def _tb_priv(user, instance, db_name, tb_name):
     """
     检测用户是否拥有指定表权限
     :param user: 用户对象
     :param instance: 实例对象
     :param db_name: 库名
-    :param schema_name:
     :param tb_name: 表名
     :return: 权限存在则返回对应权限的limit_num，否则返回False
     """
     # 获取用户表权限
-    if instance.db_type == "oracle":
-        user_privileges = QueryPrivileges.objects.filter(user_name=user.username, instance=instance,
-                                                         schema_name=str(schema_name),
-                                                         table_name=str(tb_name),
-                                                         valid_date__gte=datetime.datetime.now(),
-                                                         is_deleted=0, priv_type=3)
-    else:
-        user_privileges = QueryPrivileges.objects.filter(user_name=user.username, instance=instance,
-                                                         db_name=str(db_name),
-                                                         table_name=str(tb_name),
-                                                         valid_date__gte=datetime.datetime.now(),
-                                                         is_deleted=0, priv_type=2)
+    user_privileges = QueryPrivileges.objects.filter(user_name=user.username, instance=instance, db_name=str(db_name),
+                                                     table_name=str(tb_name), valid_date__gte=datetime.datetime.now(),
+                                                     is_deleted=0, priv_type=2)
     if user.is_superuser:
         return int(SysConfig().get('admin_query_limit', 5000))
     else:
@@ -519,21 +454,17 @@ def _tb_priv(user, instance, db_name=None, schema_name=None, tb_name=None):
     return False
 
 
-def _priv_limit(user, instance, db_name=None, schema_name=None, tb_name=None):
+def _priv_limit(user, instance, db_name, tb_name=None):
     """
     获取用户拥有的查询权限的最小limit限制，用于返回结果集限制
     :param db_name:
-    :param schema_name:
     :param tb_name: 可为空，为空时返回库权限
     :return:
     """
     # 获取库表权限limit值
-    if instance.db_type == "oracle":
-        db_limit_num = _schema_priv(user, instance, schema_name)
-    else:
-        db_limit_num = _db_priv(user, instance, db_name)
+    db_limit_num = _db_priv(user, instance, db_name)
     if tb_name:
-        tb_limit_num = _tb_priv(user, instance=instance, db_name=db_name, tb_name=tb_name)
+        tb_limit_num = _tb_priv(user, instance, db_name, tb_name)
     else:
         tb_limit_num = None
     # 返回最小值
@@ -572,14 +503,13 @@ def _query_apply_audit_call_back(apply_id, workflow_status):
                 table_name=apply_queryset.table_list, valid_date=apply_queryset.valid_date,
                 limit_num=apply_queryset.limit_num, priv_type=apply_queryset.priv_type) for db_name in
                 apply_queryset.db_list.split(',')]
-        # 表，模式权限
-        elif apply_queryset.priv_type in [2, 3]:
+        # 表权限
+        elif apply_queryset.priv_type == 2:
             insert_list = [QueryPrivileges(
                 user_name=apply_queryset.user_name,
                 user_display=apply_queryset.user_display,
                 instance=apply_queryset.instance,
                 db_name=apply_queryset.db_list,
-                schema_name=apply_queryset.schema_list,
                 table_name=table_name, valid_date=apply_queryset.valid_date,
                 limit_num=apply_queryset.limit_num, priv_type=apply_queryset.priv_type) for table_name in
                 apply_queryset.table_list.split(',')]

@@ -1,8 +1,8 @@
 # -*- coding: UTF-8 -*-
 import logging
 import re
+import traceback
 import pymysql
-from django.db import connection, OperationalError
 
 from common.config import SysConfig
 from sql.utils.sql_utils import get_syntax_type
@@ -15,6 +15,9 @@ logger = logging.getLogger('default')
 class GoInceptionEngine(EngineBase):
     def get_connection(self, db_name=None):
         if self.conn:
+            return self.conn
+        if hasattr(self, 'instance'):
+            self.conn = pymysql.connect(host=self.host, port=self.port, charset='utf8mb4')
             return self.conn
         archer_config = SysConfig()
         go_inception_host = archer_config.get('go_inception_host')
@@ -29,8 +32,8 @@ class GoInceptionEngine(EngineBase):
         check_result.rows = []
         inception_sql = f"""/*--user={instance.user};--password={instance.raw_password};--host={instance.host};--port={instance.port};--check=1;*/
                             inception_magic_start;
-                            use {db_name};
-                            {sql}
+                            use `{db_name}`;
+                            {sql.rstrip(';')};
                             inception_magic_commit;"""
         inception_result = self.query(sql=inception_sql)
         check_result.syntax_type = 2  # TODO 工单类型 0、其他 1、DDL，2、DML 仅适用于MySQL，待调整
@@ -40,8 +43,10 @@ class GoInceptionEngine(EngineBase):
                 check_result.warning_count += 1
             elif r[2] == 2:  # 错误
                 check_result.error_count += 1
-            if get_syntax_type(r[5]) == 'DDL':
-                check_result.syntax_type = 1
+            # 没有找出DDL语句的才继续执行此判断
+            if check_result.syntax_type == 2:
+                if get_syntax_type(r[5]) == 'DDL':
+                    check_result.syntax_type = 1
         check_result.column_list = inception_result.column_list
         check_result.checked = True
         return check_result
@@ -58,30 +63,17 @@ class GoInceptionEngine(EngineBase):
         # 提交inception执行
         sql_execute = f"""/*--user={instance.user};--password={instance.raw_password};--host={instance.host};--port={instance.port};--execute=1;--ignore-warnings=1;{str_backup};*/
                             inception_magic_start;
-                            use {workflow.db_name};
-                            {workflow.sqlworkflowcontent.sql_content}
+                            use `{workflow.db_name}`;
+                            {workflow.sqlworkflowcontent.sql_content.rstrip(';')};
                             inception_magic_commit;"""
         inception_result = self.query(sql=sql_execute)
         # 把结果转换为ReviewSet
         for r in inception_result.rows:
             execute_result.rows += [ReviewResult(inception_result=r)]
 
-        # 执行结果更新到工单的execute_result
-        workflow.sqlworkflowcontent.execute_result = execute_result.json()
-        try:
-            workflow.sqlworkflowcontent.save()
-            workflow.save()
-        # 防止执行超时
-        except OperationalError:
-            connection.close()
-            workflow.sqlworkflowcontent.save()
-            workflow.save()
-
         # 如果发现任何一个行执行结果里有errLevel为1或2，并且状态列没有包含Execute Successfully，则最终执行结果为有异常.
-        execute_result.status = "workflow_finish"
         for r in execute_result.rows:
             if r.errlevel in (1, 2) and not re.search(r"Execute Successfully", r.stagestatus):
-                execute_result.status = "workflow_exception"
                 execute_result.error = "Line {0} has error/warning: {1}".format(r.id, r.errormessage)
                 break
         return execute_result
@@ -90,7 +82,8 @@ class GoInceptionEngine(EngineBase):
         """返回 ResultSet """
         result_set = ResultSet(full_sql=sql)
         conn = self.get_connection()
-        with conn.cursor() as cursor:
+        try:
+            cursor = conn.cursor()
             effect_row = cursor.execute(sql)
             if int(limit_num) > 0:
                 rows = cursor.fetchmany(size=int(limit_num))
@@ -101,9 +94,35 @@ class GoInceptionEngine(EngineBase):
             result_set.column_list = [i[0] for i in fields] if fields else []
             result_set.rows = rows
             result_set.affected_rows = effect_row
+        except Exception as e:
+            logger.error(f'goInception语句执行报错，语句：{sql}，错误信息{traceback.format_exc()}')
+            result_set.error = str(e)
         if close_conn:
             self.close()
         return result_set
+
+    def get_variables(self, variables=None):
+        """获取实例参数"""
+        if variables:
+            sql = f"inception get variables like '{variables[0]}';"
+        else:
+            sql = "inception get variables;"
+        return self.query(sql=sql)
+
+    def set_variable(self, variable_name, variable_value):
+        """修改实例参数值"""
+        sql = f"""inception set {variable_name}={variable_value};"""
+        return self.query(sql=sql)
+
+    def osc_control(self, **kwargs):
+        """控制osc执行，获取进度、终止、暂停、恢复等"""
+        sqlsha1 = kwargs.get('sqlsha1')
+        command = kwargs.get('command')
+        if command == 'get':
+            sql = f"inception get osc_percent '{sqlsha1}';"
+        else:
+            sql = f"inception {command} osc '{sqlsha1}';"
+        return self.query(sql=sql)
 
     def close(self):
         if self.conn:

@@ -10,11 +10,13 @@ from django.test import Client, TestCase, TransactionTestCase
 
 import sql.query_privileges
 from common.config import SysConfig
+from common.utils.const import WorkflowDict
 from sql.binlog import binlog2sql_file
 from sql.engines.models import ResultSet
+from sql.notify import notify_for_audit, notify_for_execute, notify_for_binlog2sql
 from sql.utils.execute_sql import execute_callback
 from sql.models import Instance, QueryPrivilegesApply, QueryPrivileges, SqlWorkflow, SqlWorkflowContent, QueryLog, \
-    ResourceGroup, ResourceGroupRelations, ParamTemplate
+    ResourceGroup, ResourceGroupRelations, ParamTemplate, WorkflowAudit
 
 User = get_user_model()
 
@@ -33,7 +35,7 @@ class TestSignUp(TestCase):
         Group.objects.create(id=1, name='默认组')
 
     def tearDown(self):
-        SysConfig().replace(json.dumps({}))
+        SysConfig().purge()
 
     def test_sing_up_not_username(self):
         """
@@ -51,6 +53,17 @@ class TestSignUp(TestCase):
         response = self.client.post('/signup/', data={'username': 'test'})
         data = json.loads(response.content)
         content = {'status': 1, 'msg': '用户名和密码不能为空', 'data': None}
+        self.assertEqual(data, content)
+
+    def test_sing_up_not_display(self):
+        """
+        中文名不能为空
+        """
+        response = self.client.post('/signup/', data={'username': 'test', 'password': '123456test',
+                                                      'password2': '123456test', 'display': '',
+                                                      'email': '123@123.com'})
+        data = json.loads(response.content)
+        content = {'status': 1, 'msg': '请填写中文名', 'data': None}
         self.assertEqual(data, content)
 
     def test_sing_up_2password(self):
@@ -73,9 +86,19 @@ class TestSignUp(TestCase):
         content = {'status': 1, 'msg': '用户名已存在', 'data': None}
         self.assertEqual(data, content)
 
-    def test_sing_up(self):
+    def test_sing_up_invalid(self):
         """
-        注册成功
+        密码无效
+        """
+        self.client.post('/signup/',
+                         data={'username': 'test', 'password': '123456',
+                               'password2': '123456test', 'display': 'test', 'email': '123@123.com'})
+        with self.assertRaises(User.DoesNotExist):
+            User.objects.get(username='test')
+
+    def test_sing_up_valid(self):
+        """
+        正常注册
         """
         self.client.post('/signup/',
                          data={'username': 'test', 'password': '123456test',
@@ -109,6 +132,9 @@ class TestQueryPrivilegesCheck(TestCase):
 
     def setUp(self):
         self.superuser = User.objects.create(username='super', is_superuser=True)
+        self.user_can_query_all = User.objects.create(username='normaluser')
+        query_all_instance_perm = Permission.objects.get(codename='query_all_instances')
+        self.user_can_query_all.user_permissions.add(query_all_instance_perm)
         self.user = User.objects.create(username='user')
         # 使用 travis.ci 时实例和测试service保持一致
         self.slave = Instance.objects.create(instance_name='test_instance', type='slave', db_type='mysql',
@@ -252,6 +278,11 @@ class TestQueryPrivilegesCheck(TestCase):
                                                   sql_content="select * from archery.sql_users;",
                                                   limit_num=100)
         self.assertDictEqual(r, {'status': 0, 'msg': 'ok', 'data': {'priv_check': True, 'limit_num': 100}})
+        r = sql.query_privileges.query_priv_check(user=self.user_can_query_all,
+                                                  instance=self.slave, db_name=self.db_name,
+                                                  sql_content="select * from archery.sql_users;",
+                                                  limit_num=100)
+        self.assertDictEqual(r, {'status': 0, 'msg': 'ok', 'data': {'priv_check': True, 'limit_num': 100}})
 
     @patch('sql.query_privileges._table_ref', return_value=[{'db': 'archery', 'table': 'sql_users'}])
     @patch('sql.query_privileges._tb_priv', return_value=False)
@@ -311,7 +342,7 @@ class TestQueryPrivilegesCheck(TestCase):
                                                   sql_content="select * from archery.sql_users;",
                                                   limit_num=100)
         self.assertDictEqual(r, {'status': 1,
-                                 'msg': "你无test_archery数据库的查询权限！请先到查询权限管理进行申请",
+                                 'msg': "你无archery数据库的查询权限！请先到查询权限管理进行申请",
                                  'data': {'priv_check': True, 'limit_num': 0}})
 
     @patch('sql.query_privileges._table_ref', return_value=RuntimeError())
@@ -330,7 +361,7 @@ class TestQueryPrivilegesCheck(TestCase):
                                                   limit_num=100)
         self.assertDictEqual(r, {'status': 1,
                                  'msg': "无法校验查询语句权限，请检查语法是否正确或联系管理员，错误信息：'RuntimeError' object is not iterable",
-                                 'data': {'priv_check': True, 'limit_num': 0}})
+                                 'data': {'priv_check': True, 'limit_num': 100}})
 
     @patch('sql.query_privileges._table_ref', return_value=RuntimeError())
     @patch('sql.query_privileges._tb_priv', return_value=False)
@@ -368,14 +399,14 @@ class TestQueryPrivilegesCheck(TestCase):
         测试用户权限校验，非mysql实例、普通用户 无库权限
         :return:
         """
-        mssql_instance = Instance(instance_name='mssql', type='slave', db_type='mssql',
+        mssql_instance = Instance(instance_name='mssql', type='slave', db_type='oracle',
                                   host='some_host', port=3306, user='some_user', password='some_password')
         r = sql.query_privileges.query_priv_check(user=self.user,
                                                   instance=mssql_instance, db_name=self.db_name,
                                                   sql_content="select * from archery.sql_users;",
                                                   limit_num=100)
         self.assertDictEqual(r, {'data': {'limit_num': 0, 'priv_check': True},
-                                 'msg': '你无test_archery数据库的查询权限！请先到查询权限管理进行申请',
+                                 'msg': '你无archery数据库的查询权限！请先到查询权限管理进行申请',
                                  'status': 1})
 
 
@@ -719,6 +750,8 @@ class TestWorkflowView(TransactionTestCase):
     def setUp(self):
         self.now = datetime.now()
         can_view_permission = Permission.objects.get(codename='menu_sqlworkflow')
+        can_execute_permission = Permission.objects.get(codename='sql_execute')
+        can_execute_resource_permission = Permission.objects.get(codename='sql_execute_for_resource_group')
         self.u1 = User(username='some_user', display='用户1')
         self.u1.save()
         self.u1.user_permissions.add(can_view_permission)
@@ -728,6 +761,10 @@ class TestWorkflowView(TransactionTestCase):
         self.u3 = User(username='some_user3', display='用户3')
         self.u3.save()
         self.u3.user_permissions.add(can_view_permission)
+        self.executor1 = User(username='some_executor', display='执行者')
+        self.executor1.save()
+        self.executor1.user_permissions.add(can_view_permission, can_execute_permission,
+                                            can_execute_resource_permission)
         self.superuser1 = User(username='super1', is_superuser=True)
         self.superuser1.save()
         self.master1 = Instance(instance_name='test_master_instance', type='master', db_type='mysql',
@@ -789,6 +826,7 @@ class TestWorkflowView(TransactionTestCase):
         self.u1.delete()
         self.superuser1.delete()
         self.resource_group1.delete()
+        SysConfig().purge()
 
     def testWorkflowStatus(self):
         c = Client(header={})
@@ -813,6 +851,24 @@ class TestWorkflowView(TransactionTestCase):
         self.assertContains(r, expected_status_display)
         exepcted_status = r"""id="workflow_detail_status">workflow_finish"""
         self.assertContains(r, exepcted_status)
+
+        # 测试执行详情解析失败
+        self.wfc1.execute_result = 'cannotbedecode:1,:'
+        self.wfc1.save()
+        r = c.get('/detail/{}/'.format(self.wf1.id))
+        self.assertContains(r, expected_status_display)
+        self.assertContains(r, exepcted_status)
+        self.assertContains(r, 'Json decode failed.')
+
+        # 执行详情为空
+        self.wfc1.review_content = [
+            {"id": 1, "stage": "CHECKED", "errlevel": 0, "stagestatus": "Audit completed", "errormessage": "None",
+             "sql": "use archery", "affected_rows": 0, "sequence": "'0_0_0'", "backup_dbname": "None",
+             "execute_time": "0", "sqlsha1": "", "actual_affected_rows": ""}]
+        self.wfc1.execute_result = ''
+        self.wfc1.save()
+        r = c.get('/detail/{}/'.format(self.wf1.id))
+        self.assertContains(r, 'use archery')
 
     def testWorkflowListView(self):
         c = Client()
@@ -861,6 +917,23 @@ class TestWorkflowView(TransactionTestCase):
 
     @patch('sql.sql_workflow.Audit.add_log')
     @patch('sql.sql_workflow.Audit.detail_by_workflow_id')
+    @patch('sql.sql_workflow.can_execute')
+    def test_workflow_execute(self, mock_can_excute, mock_detail_by_id, mock_add_log):
+        c = Client()
+        c.force_login(self.executor1)
+        r = c.post('/execute/')
+        self.assertContains(r, 'workflow_id参数为空.')
+        mock_can_excute.return_value = False
+        r = c.post('/execute/', data={'workflow_id': self.wf2.id})
+        self.assertContains(r, '你无权操作当前工单！')
+        mock_can_excute.return_value = True
+        mock_detail_by_id = 123
+        r = c.post('/execute/', data={'workflow_id': self.wf2.id, 'mode': 'manual'})
+        self.wf2.refresh_from_db()
+        self.assertEqual('workflow_finish', self.wf2.status)
+
+    @patch('sql.sql_workflow.Audit.add_log')
+    @patch('sql.sql_workflow.Audit.detail_by_workflow_id')
     @patch('sql.sql_workflow.Audit.audit')
     # patch view里的can_cancel 而不是原始位置的can_cancel ,因为在调用时, 已经 import 了真的 can_cancel ,会导致mock失效
     # 在import 静态函数时需要注意这一点, 动态对象因为每次都会重新生成,也可以 mock 原函数/方法/对象
@@ -887,6 +960,7 @@ class TestWorkflowView(TransactionTestCase):
     @patch('sql.sql_workflow.get_engine')
     @patch('sql.sql_workflow.user_instances')
     def test_workflow_auto_review_view(self, mock_user_instances, mock_get_engine, mock_audit, mock_async_task):
+        """测试 autoreview/submit view"""
         c = Client()
         c.force_login(self.superuser1)
         request_data = {
@@ -919,6 +993,61 @@ class TestWorkflowView(TransactionTestCase):
         self.assertIn('detail', r.url)
         workflow_id = int(re.search(r'\/detail\/(\d+)\/', r.url).groups()[0])
         self.assertEqual(request_data['workflow_name'], SqlWorkflow.objects.get(id=workflow_id).workflow_name)
+
+        # 强制备份测试
+        # 打开备份开关, 对备份不要求
+        request_data_without_backup = {
+            'sql_content': "update some_db set some_key=\'some value\';",
+            'workflow_name': 'some_title_2',
+            'group_name': self.resource_group1.group_name,
+            'group_id': self.resource_group1.group_id,
+            'instance_name': self.master1.instance_name,
+            'db_name': 'some_db',
+            'is_backup': False,
+            'notify_users': ''
+        }
+        archer_config = SysConfig()
+        archer_config.set('enable_backup_switch', 'true')
+        r = c.post('/autoreview/', data=request_data_without_backup, follow=False)
+        self.assertIn('detail', r.url)
+        workflow_id = int(re.search(r'\/detail\/(\d+)\/', r.url).groups()[0])
+        self.assertEqual(request_data_without_backup['workflow_name'],
+                         SqlWorkflow.objects.get(id=workflow_id).workflow_name)
+
+        # 关闭备份选项, 不允许不备份
+        archer_config.set('enable_backup_switch', 'false')
+        r = c.post('/autoreview/', data=request_data_without_backup, follow=False)
+        self.assertIn('detail', r.url)
+        workflow_id = int(re.search(r'\/detail\/(\d+)\/', r.url).groups()[0])
+        self.assertEqual(SqlWorkflow.objects.get(id=workflow_id).is_backup, True)
+
+    @patch('sql.sql_workflow.get_engine')
+    def test_osc_control(self, _get_engine):
+        c = Client()
+        c.force_login(self.superuser1)
+        request_data = {
+            'workflow_id': self.wf1.id,
+            'sqlsha1': 'sqlsha1',
+            'command': 'get',
+        }
+        _get_engine.return_value.osc_control.return_value = ResultSet()
+        r = c.post('/inception/osc_control/', data=request_data, follow=False)
+        self.assertDictEqual(json.loads(r.content),
+                             {"total": 0, "rows": [], "msg": None})
+
+    @patch('sql.sql_workflow.get_engine')
+    def test_osc_control_exception(self, _get_engine):
+        c = Client()
+        c.force_login(self.superuser1)
+        request_data = {
+            'workflow_id': self.wf1.id,
+            'sqlsha1': 'sqlsha1',
+            'command': 'get',
+        }
+        _get_engine.return_value.osc_control.return_value = RuntimeError
+        r = c.post('/inception/osc_control/', data=request_data, follow=False)
+        self.assertDictEqual(json.loads(r.content),
+                             {"total": 0, "rows": [], "msg": "type object 'RuntimeError' has no attribute 'to_dict'"})
 
 
 class TestOptimize(TestCase):
@@ -1506,3 +1635,307 @@ class TestParam(TransactionTestCase):
                 "runtime_value": "STATEMENT"}
         r = self.client.post(path='/param/edit/', data=data)
         self.assertEqual(json.loads(r.content), {'status': 1, 'msg': '设置错误，错误信息：修改报错', 'data': []})
+
+
+class TestNotify(TestCase):
+    """
+    测试消息
+    """
+
+    def setUp(self):
+        self.sys_config = SysConfig()
+        self.user = User.objects.create(username='test_user', display='中文显示', is_active=True)
+        self.su = User.objects.create(username='s_user', display='中文显示', is_active=True, is_superuser=True)
+        tomorrow = datetime.today() + timedelta(days=1)
+        self.ins = Instance.objects.create(instance_name='some_ins', type='slave', db_type='mysql',
+                                           host='some_host',
+                                           port=3306, user='ins_user', password='some_pass')
+        self.wf = SqlWorkflow.objects.create(
+            workflow_name='some_name',
+            group_id=1,
+            group_name='g1',
+            engineer=self.user.username,
+            engineer_display=self.user.display,
+            audit_auth_groups='some_audit_group',
+            create_time=datetime.now(),
+            status='workflow_timingtask',
+            is_backup=True,
+            instance=self.ins,
+            db_name='some_db',
+            syntax_type=1
+        )
+        SqlWorkflowContent.objects.create(workflow=self.wf,
+                                          sql_content='some_sql',
+                                          execute_result='')
+        self.query_apply_1 = QueryPrivilegesApply.objects.create(
+            group_id=1,
+            group_name='some_name',
+            title='some_title1',
+            user_name='some_user',
+            instance=self.ins,
+            db_list='some_db,some_db2',
+            limit_num=100,
+            valid_date=tomorrow,
+            priv_type=1,
+            status=0,
+            audit_auth_groups='some_audit_group'
+        )
+        self.audit = WorkflowAudit.objects.create(
+            group_id=1,
+            group_name='some_group',
+            workflow_id=1,
+            workflow_type=1,
+            workflow_title='申请标题',
+            workflow_remark='申请备注',
+            audit_auth_groups='1,2,3',
+            current_audit='1',
+            next_audit='2',
+            current_status=0)
+        self.aug = Group.objects.create(id=1, name='auth_group')
+        self.rs = ResourceGroup.objects.create(group_id=1, ding_webhook='url')
+
+    def tearDown(self):
+        self.sys_config.purge()
+        User.objects.all().delete()
+        SqlWorkflow.objects.all().delete()
+        SqlWorkflowContent.objects.all().delete()
+        WorkflowAudit.objects.all().delete()
+        ResourceGroup.objects.all().delete()
+
+    def test_notify_disable(self):
+        """
+        测试关闭通知
+        :return:
+        """
+        # 关闭消息通知
+        self.sys_config.set('mail', 'false')
+        self.sys_config.set('ding', 'false')
+        r = notify_for_audit(audit_id=self.audit.audit_id)
+        self.assertIsNone(r)
+
+    @patch('sql.notify.MsgSender')
+    @patch('sql.notify.auth_group_users')
+    def test_notify_for_sqlreview_audit_wait(self, _auth_group_users, _msg_sender):
+        """
+        测试SQL上线申请审核通知
+        :return:
+        """
+        # 通知人修改
+        _auth_group_users.return_value = [self.user]
+        # 开启消息通知
+        self.sys_config.set('mail', 'true')
+        self.sys_config.set('ding', 'true')
+        # 修改工单状态为待审核
+        self.audit.workflow_type = WorkflowDict.workflow_type['sqlreview']
+        self.audit.workflow_id = self.wf.id
+        self.audit.current_status = WorkflowDict.workflow_status['audit_wait']
+        self.audit.save()
+        r = notify_for_audit(audit_id=self.audit.audit_id)
+        self.assertIsNone(r)
+
+    @patch('sql.notify.MsgSender')
+    @patch('sql.notify.auth_group_users')
+    def test_notify_for_sqlreview_audit_success(self, _auth_group_users, _msg_sender):
+        """
+        测试SQL上线申请审核通过通知
+        :return:
+        """
+        # 通知人修改
+        _auth_group_users.return_value = [self.user]
+        # 开启消息通知
+        self.sys_config.set('mail', 'true')
+        self.sys_config.set('ding', 'true')
+        # 修改工单状态审核通过
+        self.audit.workflow_type = WorkflowDict.workflow_type['sqlreview']
+        self.audit.workflow_id = self.wf.id
+        self.audit.current_status = WorkflowDict.workflow_status['audit_success']
+        self.audit.create_user = self.user.username
+        self.audit.save()
+        r = notify_for_audit(audit_id=self.audit.audit_id)
+        self.assertIsNone(r)
+
+    @patch('sql.notify.MsgSender')
+    @patch('sql.notify.auth_group_users')
+    def test_notify_for_sqlreview_audit_reject(self, _auth_group_users, _msg_sender):
+        """
+        测试SQL上线申请审核驳回通知
+        :return:
+        """
+        # 通知人修改
+        _auth_group_users.return_value = [self.user]
+        # 开启消息通知
+        self.sys_config.set('mail', 'true')
+        self.sys_config.set('ding', 'true')
+        # 修改工单状态审核通过
+        self.audit.workflow_type = WorkflowDict.workflow_type['sqlreview']
+        self.audit.workflow_id = self.wf.id
+        self.audit.current_status = WorkflowDict.workflow_status['audit_reject']
+        self.audit.create_user = self.user.username
+        self.audit.save()
+        r = notify_for_audit(audit_id=self.audit.audit_id)
+        self.assertIsNone(r)
+
+    @patch('sql.notify.MsgSender')
+    @patch('sql.notify.auth_group_users')
+    def test_notify_for_sqlreview_audit_reject(self, _auth_group_users, _msg_sender):
+        """
+        测试SQL上线申请审核驳回通知
+        :return:
+        """
+        # 通知人修改
+        _auth_group_users.return_value = [self.user]
+        # 开启消息通知
+        self.sys_config.set('mail', 'true')
+        self.sys_config.set('ding', 'true')
+        # 修改工单状态审核驳回
+        self.audit.workflow_type = WorkflowDict.workflow_type['sqlreview']
+        self.audit.workflow_id = self.wf.id
+        self.audit.current_status = WorkflowDict.workflow_status['audit_reject']
+        self.audit.create_user = self.user.username
+        self.audit.save()
+        r = notify_for_audit(audit_id=self.audit.audit_id)
+        self.assertIsNone(r)
+
+    @patch('sql.notify.MsgSender')
+    @patch('sql.notify.auth_group_users')
+    def test_notify_for_sqlreview_audit_reject(self, _auth_group_users, _msg_sender):
+        """
+        测试SQL上线申请审核取消通知
+        :return:
+        """
+        # 通知人修改
+        _auth_group_users.return_value = [self.user]
+        # 开启消息通知
+        self.sys_config.set('mail', 'true')
+        self.sys_config.set('ding', 'true')
+        # 修改工单状态审核取消
+        self.audit.workflow_type = WorkflowDict.workflow_type['sqlreview']
+        self.audit.workflow_id = self.wf.id
+        self.audit.current_status = WorkflowDict.workflow_status['audit_abort']
+        self.audit.create_user = self.user.username
+        self.audit.audit_auth_groups = self.aug.id
+        self.audit.save()
+        r = notify_for_audit(audit_id=self.audit.audit_id)
+        self.assertIsNone(r)
+
+    @patch('sql.notify.MsgSender')
+    @patch('sql.notify.auth_group_users')
+    def test_notify_for_sqlreview_audit_reject(self, _auth_group_users, _msg_sender):
+        """
+        测试不存在的工单类型
+        :return:
+        """
+        # 通知人修改
+        _auth_group_users.return_value = [self.user]
+        # 开启消息通知
+        self.sys_config.set('mail', 'true')
+        self.sys_config.set('ding', 'true')
+        # 修改工单状态审核取消
+        self.audit.workflow_type = 10
+        self.audit.save()
+        with self.assertRaisesMessage(Exception, '工单类型不正确'):
+            notify_for_audit(audit_id=self.audit.audit_id)
+
+    @patch('sql.notify.MsgSender')
+    @patch('sql.notify.auth_group_users')
+    def test_notify_for_query_audit_wait(self, _auth_group_users, _msg_sender):
+        """
+        测试查询申请库权限
+        :return:
+        """
+        # 通知人修改
+        _auth_group_users.return_value = [self.user]
+        # 开启消息通知
+        self.sys_config.set('mail', 'true')
+        self.sys_config.set('ding', 'true')
+        # 修改工单状态为待审核
+        self.audit.workflow_type = WorkflowDict.workflow_type['query']
+        self.audit.workflow_id = self.query_apply_1.apply_id
+        self.audit.current_status = WorkflowDict.workflow_status['audit_wait']
+        self.audit.save()
+        # 修改工单为库权限申请
+        self.query_apply_1.priv_type = 1
+        self.query_apply_1.save()
+        r = notify_for_audit(audit_id=self.audit.audit_id)
+        self.assertIsNone(r)
+
+    @patch('sql.notify.MsgSender')
+    @patch('sql.notify.auth_group_users')
+    def test_notify_for_query_audit_wait(self, _auth_group_users, _msg_sender):
+        """
+        测试查询申请表权限
+        :return:
+        """
+        # 通知人修改
+        _auth_group_users.return_value = [self.user]
+        # 开启消息通知
+        self.sys_config.set('mail', 'true')
+        self.sys_config.set('ding', 'true')
+        # 修改工单状态为待审核
+        self.audit.workflow_type = WorkflowDict.workflow_type['query']
+        self.audit.workflow_id = self.query_apply_1.apply_id
+        self.audit.current_status = WorkflowDict.workflow_status['audit_wait']
+        self.audit.save()
+        # 修改工单为表权限申请
+        self.query_apply_1.priv_type = 2
+        self.query_apply_1.save()
+        r = notify_for_audit(audit_id=self.audit.audit_id)
+        self.assertIsNone(r)
+
+    @patch('sql.notify.MsgSender')
+    def test_notify_for_execute_disable(self, _msg_sender):
+        """
+        测试执行消息关闭
+        :return:
+        """
+        # 开启消息通知
+        self.sys_config.set('mail', 'false')
+        self.sys_config.set('ding', 'false')
+        r = notify_for_execute(self.wf)
+        self.assertIsNone(r)
+
+    @patch('sql.notify.Audit')
+    @patch('sql.notify.MsgSender')
+    def test_notify_for_execute(self, _msg_sender, _audit):
+        """
+        测试执行消息
+        :return:
+        """
+        # 处理工单信息
+        _audit.review_info.return_value = self.audit.audit_auth_groups, self.audit.current_audit
+        # 开启消息通知
+        self.sys_config.set('mail', 'true')
+        self.sys_config.set('ding', 'true')
+        self.sys_config.set('ddl_notify_auth_group', self.aug.name)
+        # 修改工单状态为执行结束，修改为DDL工单
+        self.wf.status = 'workflow_finish'
+        self.wf.syntax_type = 1
+        self.wf.save()
+        r = notify_for_execute(self.wf)
+        self.assertIsNone(r)
+
+    @patch('sql.notify.MsgSender')
+    def test_notify_for_binlog2sql_disable(self, _msg_sender):
+        """
+        测试执行消息关闭
+        :return:
+        """
+        # 开启消息通知
+        self.sys_config.set('mail', 'false')
+        self.sys_config.set('ding', 'false')
+        r = notify_for_execute(self.wf)
+        self.assertIsNone(r)
+
+    @patch('django_q.tasks.async_task')
+    @patch('sql.notify.MsgSender')
+    def test_notify_for_binlog2sql(self, _auth_group_users, _async_task):
+        """
+        测试执行消息
+        :return:
+        """
+        # 开启消息通知
+        self.sys_config.set('mail', 'true')
+        # 设置为task成功
+        _async_task.return_value.success.return_value = True
+        r = notify_for_binlog2sql(_async_task)
+        self.assertIsNone(r)

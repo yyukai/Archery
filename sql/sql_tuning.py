@@ -2,7 +2,6 @@
 
 import time
 
-from MySQLdb.connections import numeric_part
 from common.utils.const import SQLTuning
 from sql.engines import get_engine
 from sql.models import Instance
@@ -59,7 +58,7 @@ class SqlTuning(object):
 
     def __extract_tables(self):
         """获取sql语句中的表名"""
-        return [i.name.replace('`', '').lower() for i in extract_tables(self.sqltext)]
+        return [i['name'].strip('`') for i in extract_tables(self.sqltext)]
 
     def basic_information(self):
         return self.engine.query(sql="select @@version", close_conn=False).to_sep_dict()

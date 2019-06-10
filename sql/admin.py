@@ -5,8 +5,8 @@ from django.contrib.auth.admin import UserAdmin
 # Register your models here.
 from .models import Users, Instance, SqlWorkflow, SqlWorkflowContent, QueryLog, DataMaskingColumns, DataMaskingRules, \
     AliyunAccessKey, AliyunRdsConfig, ResourceGroup, ResourceGroupRelations, QueryPrivilegesApply, QueryPrivileges, \
-    WorkflowAudit, WorkflowLog, ParamTemplate, ParamHistory, Backup, Host, DataBase, Replication, BGTable, \
-    ToolsLoanUpdate
+    WorkflowAudit, WorkflowLog, ParamTemplate, ParamHistory, InstanceTag, InstanceTagRelations, \
+    Backup, Host, DataBase, Replication, BGTable, ToolsLoanUpdate
 
 
 # 用户管理
@@ -18,10 +18,10 @@ class UsersAdmin(UserAdmin):
     ordering = ('id',)
     # 编辑页显示内容
     fieldsets = (
-        (('认证信息',), {'fields': ('username', 'password')}),
-        (('个人信息',), {'fields': ('ding_user_id', 'display', 'email')}),
-        (('权限信息',), {'fields': ('is_superuser', 'is_active', 'is_staff', 'groups', 'user_permissions')}),
-        (('其他信息',), {'fields': ('last_login', 'date_joined')}),
+        ('认证信息', {'fields': ('username', 'password')}),
+        ('个人信息', {'fields': ('ding_user_id', 'display', 'email')}),
+        ('权限信息', {'fields': ('is_superuser', 'is_active', 'is_staff', 'groups', 'user_permissions')}),
+        ('其他信息', {'fields': ('last_login', 'date_joined')}),
     )
     # 添加页显示内容
     add_fieldsets = (None, {'fields': ('username', 'display', 'email', 'password1', 'password2'), }),
@@ -40,9 +40,23 @@ class ResourceGroupRelationsAdmin(admin.ModelAdmin):
     list_display = ('object_type', 'object_id', 'object_name', 'group_id', 'group_name', 'create_time')
 
 
-# 阿里云实例配置
-class AliRdsConfigInline(admin.TabularInline):
-    model = AliyunRdsConfig
+# 实例标签配置
+@admin.register(InstanceTag)
+class InstanceTagAdmin(admin.ModelAdmin):
+    list_display = ('id', 'tag_code', 'tag_name', 'active', 'create_time')
+    list_display_links = ('id', 'tag_code',)
+    fieldsets = (None, {'fields': ('tag_code', 'tag_name', 'active'), }),
+
+    # 不支持修改标签代码
+    def get_readonly_fields(self, request, obj=None):
+        return ('tag_code',) if obj else ()
+
+
+# 实例标签关系配置
+@admin.register(InstanceTagRelations)
+class InstanceTagRelationsAdmin(admin.ModelAdmin):
+    list_display = ('instance', 'instance_tag', 'active', 'create_time')
+    list_filter = ('instance', 'instance_tag', 'active')
 
 
 # 实例管理
@@ -51,8 +65,17 @@ class InstanceAdmin(admin.ModelAdmin):
     list_display = ('id', 'instance_name', 'db_type', 'type', 'host', 'port', 'user', 'password', 'service_name',
                     'sid', 'create_time')
     search_fields = ['instance_name', 'host', 'port', 'user']
-    list_filter = ('db_type', 'type',)
-    inlines = [AliRdsConfigInline]
+    list_filter = ('db_type', 'type')
+
+    # 阿里云实例关系配置
+    class AliRdsConfigInline(admin.TabularInline):
+        model = AliyunRdsConfig
+
+    # 实例标签关系配置
+    class InstanceTagRelationsInline(admin.TabularInline):
+        model = InstanceTagRelations
+
+    inlines = [InstanceTagRelationsInline, AliRdsConfigInline]
 
 
 # SQL工单内容
@@ -195,3 +218,4 @@ class ToolsLoanUpdateAdmin(admin.ModelAdmin):
     list_display = ("loan_id", "s_sale_id", "s_sale_name", "t_sale_id", "t_sale_name", "t_emp_id", "t_sale_uid",
                     "t_pic_name", "applicant", "auditor", "audit_msg", "status", "create_time")
     search_fields = ('loan_id', 't_sale_id', 't_sale_name', 'applicant', 'auditor',)
+

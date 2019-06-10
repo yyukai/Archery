@@ -17,7 +17,6 @@ alter table sql_instance
 update sql_instance set db_type='mysql',type='master';
 
 -- 从库数据添加到实例信息表（如果原主从实例存在相同实例名的请先修改，并且修改相关关联表的数据）
-update sql_slave_config set cluster_name=concat(cluster_name,'-slave');
 insert into sql_instance (instance_name, db_type, type, host, port, user, password, create_time, update_time)
   select
     cluster_name,
@@ -81,7 +80,6 @@ INSERT INTO auth_permission (name, content_type_id, codename) VALUES ('菜单 Da
 INSERT INTO auth_permission (name, content_type_id, codename) VALUES ('菜单 SQL上线', @content_type_id, 'menu_sqlworkflow');
 INSERT INTO auth_permission (name, content_type_id, codename) VALUES ('菜单 SQL查询', @content_type_id, 'menu_query');
 INSERT INTO auth_permission (name, content_type_id, codename) VALUES ('菜单 MySQL查询', @content_type_id, 'menu_sqlquery');
-INSERT INTO auth_permission (name, content_type_id, codename) VALUES ('菜单 导出查询', @content_type_id, 'menu_query_export');
 INSERT INTO auth_permission (name, content_type_id, codename) VALUES ('菜单 查询权限申请', @content_type_id, 'menu_queryapplylist');
 INSERT INTO auth_permission (name, content_type_id, codename) VALUES ('菜单 SQL优化', @content_type_id, 'menu_sqloptimize');
 INSERT INTO auth_permission (name, content_type_id, codename) VALUES ('菜单 优化工具', @content_type_id, 'menu_sqladvisor');
@@ -97,7 +95,6 @@ INSERT INTO auth_permission (name, content_type_id, codename) VALUES ( '执行SQ
 INSERT INTO auth_permission (name, content_type_id, codename) VALUES ( '申请查询权限', @content_type_id, 'query_applypriv');
 INSERT INTO auth_permission (name, content_type_id, codename) VALUES ( '管理查询权限', @content_type_id, 'query_mgtpriv');
 INSERT INTO auth_permission (name, content_type_id, codename) VALUES ( '审核查询权限', @content_type_id, 'query_review');
-INSERT INTO auth_permission (name, content_type_id, codename) VALUES ( '审核导出查询权限', @content_type_id, 'query_export_review');
 INSERT INTO auth_permission (name, content_type_id, codename) VALUES ( '提交SQL查询', @content_type_id, 'query_submit');
 INSERT INTO auth_permission (name, content_type_id, codename) VALUES ( '查看会话', @content_type_id, 'process_view');
 INSERT INTO auth_permission (name, content_type_id, codename) VALUES ( '终止会话', @content_type_id, 'process_kill');
@@ -122,19 +119,3 @@ alter table mysql_slow_query_review_history modify `checksum` CHAR(32) NOT NULL;
 alter table sql_workflow modify engineer varchar(30) not null;
 alter table workflow_audit modify create_user varchar(30) not null;
 alter table workflow_audit_detail modify audit_user varchar(30) not null;
-
-
--- 导出查询表
-CREATE TABLE `query_export` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
-  `query_log_id` int(11) NOT NULL,
-  `auditor_id` int(11) NOT NULL,
-  `result_file` varchar(255) NOT NULL,
-  `error_msg` varchar(255) NOT NULL,
-  `reason` varchar(255) NOT NULL,
-  `audit_msg` varchar(255) NOT NULL,
-  `status` int(11) NOT NULL,
-  PRIMARY KEY (`id`),
-  FOREIGN KEY (`query_log_id`) REFERENCES query_log(id),
-  FOREIGN KEY (`auditor_id`) REFERENCES sql_users(id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8;

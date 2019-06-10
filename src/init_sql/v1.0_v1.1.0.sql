@@ -34,15 +34,3 @@ WHERE user_name = username;
 UPDATE query_log, sql_users
 SET user_display = display
 WHERE query_log.username = sql_users.username;
-
-
-ALTER TABLE sql_users
-  ADD user_id VARCHAR(50) NULL comment ''
-  AFTER id;
--- CREATE TABLE ding_config (
---   `agent_id` varchar(20) NOT NULL,
---   `corp_id` varchar(30) NOT NULL,
---   `corp_secret` varchar(100) NOT NULL,
---   `access_token` varchar(50) NULL,
---   `expires_in` int(11) NULL
--- );

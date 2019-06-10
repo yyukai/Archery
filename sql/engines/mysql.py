@@ -7,6 +7,7 @@ import sqlparse
 from MySQLdb.connections import numeric_part
 
 from sql.engines.goinception import GoInceptionEngine
+from sql.utils.sql_utils import get_syntax_type
 from . import EngineBase
 from .models import ResultSet, ReviewResult, ReviewSet
 from .inception import InceptionEngine
@@ -20,8 +21,12 @@ class MysqlEngine(EngineBase):
     def get_connection(self, db_name=None):
         if self.conn:
             return self.conn
-        self.conn = MySQLdb.connect(host=self.host,
-                                    port=self.port, user=self.user, passwd=self.password, charset='utf8')
+        if db_name:
+            self.conn = MySQLdb.connect(host=self.host, port=self.port, user=self.user, passwd=self.password,
+                                        db=db_name, charset='utf8mb4')
+        else:
+            self.conn = MySQLdb.connect(host=self.host, port=self.port, user=self.user, passwd=self.password,
+                                        charset='utf8mb4')
         return self.conn
 
     @property
@@ -84,10 +89,8 @@ class MysqlEngine(EngineBase):
         """返回 ResultSet """
         result_set = ResultSet(full_sql=sql)
         try:
-            conn = self.get_connection()
+            conn = self.get_connection(db_name=db_name)
             cursor = conn.cursor()
-            if db_name:
-                cursor.execute('use {}'.format(db_name))
             effect_row = cursor.execute(sql)
             if int(limit_num) > 0:
                 rows = cursor.fetchmany(size=int(limit_num))
@@ -115,7 +118,7 @@ class MysqlEngine(EngineBase):
             sql = sqlparse.split(sql)[0]
             result['filtered_sql'] = sql.strip()
         except IndexError:
-            result['has_star'] = True
+            result['bad_query'] = True
             result['msg'] = '没有有效的SQL语句'
         if re.match(r"^select|^show|^explain", sql, re.I) is None:
             result['bad_query'] = True
@@ -148,44 +151,52 @@ class MysqlEngine(EngineBase):
         """上线单执行前的检查, 返回Review set"""
         config = SysConfig()
         check_result = ReviewSet(full_sql=sql)
-        # 禁用语句检查
+        # 禁用/高危语句检查
         line = 1
+        critical_ddl_regex = config.get('critical_ddl_regex', '')
+        p = re.compile(critical_ddl_regex)
+        check_result.syntax_type = 2  # TODO 工单类型 0、其他 1、DDL，2、DML
         for statement in sqlparse.split(sql):
             statement = sqlparse.format(statement, strip_comments=True)
+            # 禁用语句
             if re.match(r"^select", statement.lower()):
                 check_result.is_critical = True
                 result = ReviewResult(id=line, errlevel=2,
-                                      stagestatus='驳回高危SQL',
+                                      stagestatus='驳回不支持语句',
                                       errormessage='仅支持DML和DDL语句，查询语句请使用SQL查询功能！',
                                       sql=statement)
                 check_result.rows += [result]
                 check_result.error_count += 1
-        # 高危SQL检查
-        if not check_result.is_critical and config.get('critical_ddl_regex'):
-            # 如果启用critical_ddl 的检查
-            critical_ddl_regex = config.get('critical_ddl_regex')
-            p = re.compile(critical_ddl_regex)
-            # 逐行匹配正则
-            line = 1
-            for statement in sqlparse.split(sql):
-                # 删除注释语句
-                statement = sqlparse.format(statement, strip_comments=True)
-                if p.match(statement.strip().lower()):
-                    result = ReviewResult(id=line, errlevel=2,
-                                          stagestatus='驳回高危SQL',
-                                          errormessage='禁止提交匹配' + critical_ddl_regex + '条件的语句！',
-                                          sql=statement)
-                    check_result.is_critical = True
-                    check_result.error_count += 1
-                else:
-                    result = ReviewResult(id=line, errlevel=0, sql=statement)
-                check_result.rows += [result]
-                line += 1
-        # 高危/禁用语句直接返回
-        if check_result.is_critical:
-            return check_result
+            # 高危语句
+            elif critical_ddl_regex and p.match(statement.strip().lower()):
+                check_result.is_critical = True
+                result = ReviewResult(id=line, errlevel=2,
+                                      stagestatus='驳回高危SQL',
+                                      errormessage='禁止提交匹配' + critical_ddl_regex + '条件的语句！',
+                                      sql=statement)
+            # 正常语句
+            else:
+                result = ReviewResult(id=line, errlevel=0,
+                                      stagestatus='Audit completed',
+                                      errormessage='None',
+                                      sql=statement,
+                                      affected_rows=0,
+                                      execute_time=0, )
+            # 判断工单类型
+            # 没有找出DDL语句的才继续执行此判断
+            if check_result.syntax_type == 2:
+                if get_syntax_type(statement) == 'DDL':
+                    check_result.syntax_type = 1
+            check_result.rows += [result]
+
+            # 遇到禁用和高危语句直接返回，提高效率
+            if check_result.is_critical:
+                check_result.error_count += 1
+                return check_result
+            line += 1
+
         # 通过检测的再进行inception检查
-        elif config.get('go_inception'):
+        if config.get('go_inception'):
             try:
                 inception_engine = GoInceptionEngine()
                 check_result = inception_engine.execute_check(instance=self.instance, db_name=db_name, sql=sql)
@@ -217,7 +228,7 @@ class MysqlEngine(EngineBase):
     def execute(self, db_name=None, sql='', close_conn=True):
         """原生执行语句"""
         result = ResultSet(full_sql=sql)
-        conn = self.get_connection()
+        conn = self.get_connection(db_name=db_name)
         try:
             cursor = conn.cursor()
             for statement in sqlparse.split(sql):
@@ -250,6 +261,17 @@ class MysqlEngine(EngineBase):
         """修改实例参数值"""
         sql = f"""set global {variable_name}={variable_value};"""
         return self.query(sql=sql)
+
+    def osc_control(self, **kwargs):
+        """控制osc执行，获取进度、终止、暂停、恢复等
+            get、kill、pause、resume
+        """
+        if SysConfig().get('go_inception'):
+            go_inception_engine = GoInceptionEngine()
+            return go_inception_engine.osc_control(**kwargs)
+        else:
+            inception_engine = InceptionEngine()
+            return inception_engine.osc_control(**kwargs)
 
     def close(self):
         if self.conn:

@@ -20,6 +20,7 @@ class Users(AbstractUser):
         return self.username
 
     class Meta:
+        managed = True
         db_table = 'sql_users'
         verbose_name = u'用户管理'
         verbose_name_plural = u'用户管理'
@@ -43,6 +44,7 @@ class ResourceGroup(models.Model):
         return self.group_name
 
     class Meta:
+        managed = True
         db_table = 'resource_group'
         verbose_name = u'资源组管理'
         verbose_name_plural = u'资源组管理'
@@ -61,6 +63,7 @@ class ResourceGroupRelations(models.Model):
     sys_time = models.DateTimeField(auto_now=True)
 
     class Meta:
+        managed = True
         db_table = 'resource_group_relations'
         unique_together = ('object_id', 'group_id', 'object_type')
         verbose_name = u'资源组对象管理'
@@ -72,7 +75,9 @@ DB_TYPE_CHOICES = (
     ('mssql', 'MsSQL'),
     ('redis', 'Redis'),
     ('pgsql', 'PgSQL'),
-    ('oracle', 'Oracle'),)
+    ('oracle', 'Oracle'),
+    ('inception', 'Inception'),
+    ('goinception', 'goInception'))
 
 
 class Instance(models.Model):
@@ -81,7 +86,7 @@ class Instance(models.Model):
     """
     instance_name = models.CharField('实例名称', max_length=50, unique=True)
     type = models.CharField('实例类型', max_length=6, choices=(('master', '主库'), ('slave', '从库')))
-    db_type = models.CharField('数据库类型', max_length=10, choices=DB_TYPE_CHOICES)
+    db_type = models.CharField('数据库类型', max_length=20, choices=DB_TYPE_CHOICES)
     host = models.CharField('实例连接', max_length=200)
     port = models.IntegerField('端口', default=0)
     user = models.CharField('用户名', max_length=100, default='', blank=True)
@@ -124,20 +129,38 @@ class Instance(models.Model):
         super(Instance, self).save(*args, **kwargs)
 
 
-class Replication(models.Model):
-    master = models.CharField('主库实例名称', max_length=50)
-    slave = models.CharField('从库实例名称', max_length=50)
-    delay = models.IntegerField('Seconds_Behind_Master（主从延时）', blank=True, null=True)
-    created = models.DateTimeField('创建时间', auto_now_add=True)
+class InstanceTag(models.Model):
+    """实例标签配置"""
+    tag_code = models.CharField('标签代码', max_length=20, unique=True)
+    tag_name = models.CharField('标签名称', max_length=20, unique=True)
+    active = models.BooleanField('激活状态', default=True)
+    create_time = models.DateTimeField('创建时间', auto_now_add=True)
+
+    def __str__(self):
+        return self.tag_name
 
     class Meta:
-        ordering = ("-created",)
-        db_table = 'sql_replication'
-        verbose_name = u'主从同步延时记录表'
-        verbose_name_plural = u'主从同步延时记录表'
+        managed = True
+        db_table = 'sql_instance_tag'
+        verbose_name = u'实例标签'
+        verbose_name_plural = u'实例标签'
 
 
-# 存放各个SQL上线工单的详细内容，可定期归档或清理历史数据，也可通过alter table workflow row_format=compressed; 来进行压缩
+class InstanceTagRelations(models.Model):
+    """实例标签关系"""
+    instance = models.ForeignKey(Instance, on_delete=models.CASCADE)
+    instance_tag = models.ForeignKey(InstanceTag, on_delete=models.CASCADE)
+    active = models.BooleanField('激活状态', default=True)
+    create_time = models.DateTimeField('创建时间', auto_now_add=True)
+
+    class Meta:
+        managed = True
+        db_table = 'sql_instance_tag_relations'
+        unique_together = ('instance', 'instance_tag')
+        verbose_name = u'实例标签关系'
+        verbose_name_plural = u'实例标签关系'
+
+
 SQL_WORKFLOW_CHOICES = (
     ('workflow_finish', _('workflow_finish')),
     ('workflow_abort', _('workflow_abort')),
@@ -251,8 +274,8 @@ class WorkflowAuditDetail(models.Model):
     class Meta:
         managed = True
         db_table = 'workflow_audit_detail'
-        verbose_name = u'工作流审批明细表'
-        verbose_name_plural = u'工作流审批明细表'
+        verbose_name = u'工作流审批明细'
+        verbose_name_plural = u'工作流审批明细'
 
 
 class WorkflowAuditSetting(models.Model):
@@ -297,8 +320,8 @@ class WorkflowLog(models.Model):
     class Meta:
         managed = True
         db_table = 'workflow_log'
-        verbose_name = u'工作流日志表'
-        verbose_name_plural = u'工作流日志表'
+        verbose_name = u'工作流日志'
+        verbose_name_plural = u'工作流日志'
 
 
 class QueryPrivilegesApply(models.Model):
@@ -314,11 +337,10 @@ class QueryPrivilegesApply(models.Model):
     user_display = models.CharField('申请人中文名', max_length=50, default='')
     instance = models.ForeignKey(Instance, on_delete=models.CASCADE)
     db_list = models.TextField('数据库', default='')  # 逗号分隔的数据库列表
-    schema_list = models.TextField('模式', default='')  # 逗号分隔的模式列表
     table_list = models.TextField('表', default='')  # 逗号分隔的表列表
     valid_date = models.DateField('有效时间')
     limit_num = models.IntegerField('行数限制', default=100)
-    priv_type = models.IntegerField('权限类型', choices=((1, 'DATABASE'), (2, 'TABLE'), (3, 'SCHEMA'),), default=0)
+    priv_type = models.IntegerField('权限类型', choices=((1, 'DATABASE'), (2, 'TABLE'),), default=0)
     status = models.IntegerField('审核状态', choices=workflow_status_choices)
     audit_auth_groups = models.CharField('审批权限组列表', max_length=255)
     create_time = models.DateTimeField(auto_now_add=True)
@@ -343,7 +365,6 @@ class QueryPrivileges(models.Model):
     user_display = models.CharField('申请人中文名', max_length=50, default='')
     instance = models.ForeignKey(Instance, on_delete=models.CASCADE)
     db_name = models.CharField('数据库', max_length=64, default='')
-    schema_name = models.CharField('模式', max_length=64, default='')
     table_name = models.CharField('表', max_length=64, default='')
     valid_date = models.DateField('有效时间')
     limit_num = models.IntegerField('行数限制', default=100)
@@ -358,7 +379,7 @@ class QueryPrivileges(models.Model):
     class Meta:
         managed = True
         db_table = 'query_privileges'
-        index_together = ["user_name", "instance", "db_name", "schema_name", "valid_date"]
+        index_together = ["user_name", "instance", "db_name", "valid_date"]
         verbose_name = u'查询权限记录'
         verbose_name_plural = u'查询权限记录'
 
@@ -370,7 +391,6 @@ class QueryLog(models.Model):
     # TODO 改为实例外键
     instance_name = models.CharField('实例名称', max_length=50)
     db_name = models.CharField('数据库名称', max_length=64)
-    schema_name = models.CharField('模式名称', max_length=64)
     sqllog = models.TextField('执行的sql查询')
     effect_row = models.BigIntegerField('返回行数')
     cost_time = models.CharField('执行耗时', max_length=10, default='')
@@ -447,6 +467,7 @@ class DataMaskingColumns(models.Model):
     sys_time = models.DateTimeField(auto_now=True)
 
     class Meta:
+        managed = True
         db_table = 'data_masking_columns'
         verbose_name = u'脱敏字段配置'
         verbose_name_plural = u'脱敏字段配置'
@@ -463,6 +484,7 @@ class DataMaskingRules(models.Model):
     sys_time = models.DateTimeField(auto_now=True)
 
     class Meta:
+        managed = True
         db_table = 'data_masking_rules'
         verbose_name = u'脱敏规则配置'
         verbose_name_plural = u'脱敏规则配置'
@@ -472,16 +494,17 @@ class ParamTemplate(models.Model):
     """
     实例参数模板配置
     """
-    db_type = models.CharField('数据库类型', max_length=10, choices=DB_TYPE_CHOICES)
+    db_type = models.CharField('数据库类型', max_length=20, choices=DB_TYPE_CHOICES)
     variable_name = models.CharField('参数名', max_length=64)
     default_value = models.CharField('默认参数值', max_length=1024)
-    editable = models.BooleanField('是否允许修改', default=False)
+    editable = models.BooleanField('是否支持修改', default=False)
     valid_values = models.CharField('有效参数值，范围参数[1-65535]，值参数[ON|OFF]', max_length=1024, blank=True)
     description = models.CharField('参数描述', max_length=1024, blank=True)
     create_time = models.DateTimeField('创建时间', auto_now_add=True)
     sys_time = models.DateTimeField('系统时间修改', auto_now=True)
 
     class Meta:
+        managed = True
         db_table = 'param_template'
         unique_together = ('db_type', 'variable_name')
         verbose_name = u'实例参数模板配置'
@@ -496,7 +519,7 @@ class ParamHistory(models.Model):
     variable_name = models.CharField('参数名', max_length=64)
     old_var = models.CharField('修改前参数值', max_length=1024)
     new_var = models.CharField('修改后参数值', max_length=1024)
-    set_sql = models.CharField('在线变更配置执行的SQL语句', max_length=1024, null=True)
+    set_sql = models.CharField('在线变更配置执行的SQL语句', max_length=1024)
     user_name = models.CharField('修改人', max_length=30)
     user_display = models.CharField('修改人中文名', max_length=50)
     create_time = models.DateTimeField('参数被修改时间点', auto_now_add=True)
@@ -578,6 +601,7 @@ class AliyunRdsConfig(models.Model):
         return self.rds_dbinstanceid
 
     class Meta:
+        managed = True
         db_table = 'aliyun_rds_config'
         verbose_name = u'阿里云rds配置'
         verbose_name_plural = u'阿里云rds配置'
@@ -612,6 +636,7 @@ class Permission(models.Model):
             ('menu_data_safe', '菜单 数据安全'),
             ('menu_host', '菜单 主机管理'),
             ('menu_param', '菜单 参数配置'),
+            ('menu_instance_list', '菜单 实例列表'),
             ('menu_system', '菜单 系统管理'),
             ('menu_document', '菜单 相关文档'),
             ('menu_themis', '菜单 themis'),
@@ -633,6 +658,7 @@ class Permission(models.Model):
             ('query_review', '审核查询权限'),
             ('query_export_review', '审核导出查询权限'),
             ('query_submit', '提交SQL查询'),
+            ('query_all_instances', '可查询所有实例'),
             ('process_view', '查看会话'),
             ('database_edit', '编辑数据库'),
             ('binlog_del', '删除Binlog文件'),
@@ -664,9 +690,23 @@ class SlowQuery(models.Model):
     comments = models.TextField(blank=True, null=True)
 
     class Meta:
+        managed = False
         db_table = 'mysql_slow_query_review'
         verbose_name = u'慢日志统计'
         verbose_name_plural = u'慢日志统计'
+
+
+class Replication(models.Model):
+    master = models.CharField('主库实例名称', max_length=50)
+    slave = models.CharField('从库实例名称', max_length=50)
+    delay = models.IntegerField('Seconds_Behind_Master（主从延时）', blank=True, null=True)
+    created = models.DateTimeField('创建时间', auto_now_add=True)
+
+    class Meta:
+        ordering = ("-created",)
+        db_table = 'sql_replication'
+        verbose_name = u'主从同步延时记录表'
+        verbose_name_plural = u'主从同步延时记录表'
 
 
 # Backup
@@ -885,6 +925,7 @@ class SlowQueryHistory(models.Model):
     filesort_on_disk_sum = models.FloatField(db_column='Filesort_on_disk_sum', blank=True, null=True)
 
     class Meta:
+        managed = False
         db_table = 'mysql_slow_query_review_history'
         unique_together = ('checksum', 'ts_min', 'ts_max')
         index_together = ('hostname_max', 'ts_min')

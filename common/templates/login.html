@@ -52,7 +52,7 @@
                     <input type="text" class="form-control" id="username" placeholder="用户名">
                 </div>
                 <div class="form-group">
-                    <input type="text" class="form-control" id="display" placeholder="昵称">
+                    <input type="text" class="form-control" id="display" placeholder="中文名">
                 </div>
                 <div class="form-group">
                     <input type="text" class="form-control" id="email" placeholder="邮箱">
@@ -100,7 +100,7 @@
 
 <!--底部部分 -->
 <div class="row clearfix user-bottom-div">
-    <p><strong>SQL审核平台</strong>&nbsp;(v1.5.3)</p>
+    <p><strong>SQL审核平台</strong>&nbsp;(v1.6.1)</p>
 </div>
 <!-- jQuery (Bootstrap 的 JavaScript 插件需要引入 jQuery，务必先引入jquery js再引入bootstrap js) -->
 <script src="{% static 'jquery/jquery.min.js' %}"></script>
@@ -144,8 +144,8 @@
             if (event.keyCode == 13) {
                 $('#btnLogin').addClass('disabled');
                 $('#btnLogin').prop('disabled', true);
-                var username = $('#inputUsername').val();
-                var password = $('#inputPassword').val();
+                username = $('#inputUsername').val();
+                password = $('#inputPassword').val();
                 authenticateUser(username, password);
             }
         });
@@ -154,8 +154,8 @@
     $('#btnLogin').click(function () {
         $('#btnLogin').addClass('disabled');
         $('#btnLogin').prop('disabled', true);
-        var username = $('#inputUsername').val();
-        var password = $('#inputPassword').val();
+        username = $('#inputUsername').val();
+        password = $('#inputPassword').val();
         authenticateUser(username, password);
     });
 

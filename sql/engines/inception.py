@@ -5,7 +5,6 @@ import traceback
 import MySQLdb
 import simplejson as json
 import sqlparse
-from django.db import connection, OperationalError
 
 from common.config import SysConfig
 from sql.utils.sql_utils import get_syntax_type
@@ -19,10 +18,13 @@ class InceptionEngine(EngineBase):
     def get_connection(self, db_name=None):
         if self.conn:
             return self.conn
+        if hasattr(self, 'instance'):
+            self.conn = MySQLdb.connect(host=self.host, port=self.port, charset='utf8mb4')
+            return self.conn
         archer_config = SysConfig()
         inception_host = archer_config.get('inception_host')
         inception_port = int(archer_config.get('inception_port', 6669))
-        self.conn = MySQLdb.connect(host=inception_host, port=inception_port, charset='utf8')
+        self.conn = MySQLdb.connect(host=inception_host, port=inception_port, charset='utf8mb4')
         return self.conn
 
     @staticmethod
@@ -36,7 +38,7 @@ class InceptionEngine(EngineBase):
                                port=backup_port,
                                user=backup_user,
                                passwd=backup_password,
-                               charset='utf8')
+                               charset='utf8mb4')
 
     def execute_check(self, instance=None, db_name=None, sql=''):
         """inception check"""
@@ -67,7 +69,7 @@ class InceptionEngine(EngineBase):
         inception_sql = f"""/*--user={instance.user};--password={instance.raw_password};--host={instance.host};
                             --port={instance.port};--enable-check=1;*/
                             inception_magic_start;
-                            use {db_name};
+                            use `{db_name}`;
                             {sql}
                             inception_magic_commit;"""
         inception_result = self.query(sql=inception_sql)
@@ -78,8 +80,10 @@ class InceptionEngine(EngineBase):
                 check_result.warning_count += 1
             elif r[2] == 2 or re.match(r"\w*comments\w*", r[4], re.I):  # 错误
                 check_result.error_count += 1
-            if get_syntax_type(r[5]) == 'DDL':
-                check_result.syntax_type = 1
+            # 没有找出DDL语句的才继续执行此判断
+            if check_result.syntax_type == 2:
+                if get_syntax_type(r[5]) == 'DDL':
+                    check_result.syntax_type = 1
         check_result.column_list = inception_result.column_list
         check_result.checked = True
         return check_result
@@ -96,7 +100,7 @@ class InceptionEngine(EngineBase):
         sql_split = f"""/*--user={instance.user};--password={instance.raw_password};--host={instance.host}; 
                          --port={instance.port};--enable-ignore-warnings;--enable-split;*/
                          inception_magic_start;
-                         use {workflow.db_name};
+                         use `{workflow.db_name}`;
                          {workflow.sqlworkflowcontent.sql_content}
                          inception_magic_commit;"""
         split_result = self.query(sql=sql_split)
@@ -114,22 +118,9 @@ class InceptionEngine(EngineBase):
             for r in one_line_execute_result.rows:
                 execute_result.rows += [ReviewResult(inception_result=r)]
 
-            # 每执行一次，就将执行结果更新到工单的execute_result，便于展示执行进度和保存执行信息
-            workflow.sqlworkflowcontent.execute_result = execute_result.json()
-            try:
-                workflow.sqlworkflowcontent.save()
-                workflow.save()
-            # 防止执行超时
-            except OperationalError:
-                connection.close()
-                workflow.sqlworkflowcontent.save()
-                workflow.save()
-
         # 如果发现任何一个行执行结果里有errLevel为1或2，并且状态列没有包含Execute Successfully，则最终执行结果为有异常.
-        execute_result.status = "workflow_finish"
         for r in execute_result.rows:
             if r.errlevel in (1, 2) and not re.search(r"Execute Successfully", r.stagestatus):
-                execute_result.status = "workflow_exception"
                 execute_result.error = "Line {0} has error/warning: {1}".format(r.id, r.errormessage)
                 break
         return execute_result
@@ -138,7 +129,8 @@ class InceptionEngine(EngineBase):
         """返回 ResultSet """
         result_set = ResultSet(full_sql=sql)
         conn = self.get_connection()
-        with conn.cursor() as cursor:
+        try:
+            cursor = conn.cursor()
             effect_row = cursor.execute(sql)
             if int(limit_num) > 0:
                 rows = cursor.fetchmany(size=int(limit_num))
@@ -149,6 +141,9 @@ class InceptionEngine(EngineBase):
             result_set.column_list = [i[0] for i in fields] if fields else []
             result_set.rows = rows
             result_set.affected_rows = effect_row
+        except Exception as e:
+            logger.error(f"Inception语句执行报错，语句：{sql}，错误信息{traceback.format_exc()}")
+            result_set.error = str(e)
         if close_conn:
             self.close()
         return result_set
@@ -160,7 +155,7 @@ class InceptionEngine(EngineBase):
         sql = f"""/*--user={instance.user};--password={instance.raw_password};--host={instance.host};
                           --port={instance.port};--enable-query-print;*/
                           inception_magic_start;\
-                          use {db_name};
+                          use `{db_name}`;
                           {sql}
                           inception_magic_commit;"""
         print_info = self.query(db_name=db_name, sql=sql).to_dict()[0]
@@ -221,6 +216,31 @@ class InceptionEngine(EngineBase):
                 logger.error(f"获取回滚语句报错，异常信息{traceback.format_exc()}")
                 raise Exception(e)
         return list_backup_sql
+
+    def get_variables(self, variables=None):
+        """获取实例参数"""
+        if variables:
+            sql = f"inception get variables '{variables[0]}';"
+        else:
+            sql = "inception get variables;"
+        return self.query(sql=sql)
+
+    def set_variable(self, variable_name, variable_value):
+        """修改实例参数值"""
+        sql = f"""inception set {variable_name}={variable_value};"""
+        return self.query(sql=sql)
+
+    def osc_control(self, **kwargs):
+        """控制osc执行，获取进度、终止、暂停、恢复等"""
+        sqlsha1 = kwargs.get('sqlsha1')
+        command = kwargs.get('command')
+        if command == 'get':
+            sql = f"inception get osc_percent '{sqlsha1}';"
+        elif command == 'kill':
+            sql = f"inception stop alter '{sqlsha1}';"
+        else:
+            raise ValueError('pt-osc不支持暂停和恢复，需要停止执行请使用终止按钮！')
+        return self.query(sql=sql)
 
     def close(self):
         if self.conn:
