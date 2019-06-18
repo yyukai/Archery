@@ -203,7 +203,7 @@ class HostAdmin(admin.ModelAdmin):
 
 @admin.register(DataBase)
 class DatabaseAdmin(admin.ModelAdmin):
-    list_display = ("host", "ip", "port", "instance_name", "db_name", "app_type", "db_application", "db_person",
+    list_display = ("host", "instance_name", "db_name", "app_type", "db_application", "db_person",
                     "create_time", "update_time")
 
 

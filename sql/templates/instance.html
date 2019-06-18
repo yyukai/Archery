@@ -120,6 +120,7 @@
                             type: $("#type").val(),
                             db_type: $("#db_type").val(),
                             tags: $("#tags").val(),
+                            host: "{{ ip }}"
                         }
                     },
                 columns: [
@@ -144,6 +145,15 @@
                     }, {
                         title: 'PORT',
                         field: 'port'
+                    }, {
+                        title: '连接数',
+                        field: 'process'
+                    }, {
+                        title: '硬盘/使用率',
+                        field: 'disk_info'
+                    }, {
+                        title: '硬盘读写',
+                        field: 'disk_io'
                     }, {
                         title: 'USER',
                         field: 'user'

@@ -235,7 +235,7 @@
                     title: '操作',
                     field: 'id',
                     formatter: function (value, row, index) {
-                        var html = '<button class="btn btn-primary btn-xs" onclick="pic_view(\'' +value+ '\')">图片预览</button>';
+                        var html = '<button class="btn btn-default btn-xs" onclick="pic_view(\'' +value+ '\')">图片预览</button>';
                         {% if perms.sql.tools_loan_update_audit %}
                             if (row.status === 0) {
                                 html += '<button class="btn btn-warning btn-xs" onclick="audit(\'' +value+ '\')">待审核</button>';
@@ -244,14 +244,14 @@
                             } else if (row.status === 2) {
                                 html += '<button class="btn btn-danger btn-xs" onclick="alert(\'' +row.audit_msg+ '\')">已被拒</button>';
                             } else if (row.status === 3) {
-                                html += '<button class="btn btn-default" disabled>该申请已过期</button>';
+                                html += '<button class="btn btn-default btn-xs" disabled>该申请已过期</button>';
                             } else if (row.status === 4) {
                                 return '用户主动取消';
                             }
                             return html;
                         {% else %}
                             var tmp = encodeURI(JSON.stringify(row));
-                            html += '<button class="btn btn-primary btn-xs" onclick="update(\'' +tmp+ '\')">我要修改</button>';
+                            html += '<button class="btn btn-default btn-xs" onclick="update(\'' +tmp+ '\')">我要修改</button>';
                             if (row.status === 0) {
                                 html += '<button class="btn btn-danger btn-xs" onclick="cancel(\'' +value+ '\')">我要取消</button>';
                             } else if (row.status === 1) {
@@ -259,7 +259,7 @@
                             } else if (row.status === 2) {
                                 html = '<button class="btn btn-danger btn-xs" onclick="alert(\'' +row.audit_msg+ '\')">已被拒</button>';
                             } else if (row.status === 3) {
-                                html = '<button class="btn btn-default" disabled>该申请已过期</button>';
+                                html = '<button class="btn btn-default btn-xs" disabled>该申请已过期</button>';
                             } else if (row.status === 4) {
                                 return '用户主动取消';
                             }
@@ -407,13 +407,16 @@
             $('#auditModal').modal({});
             $("#modal_btn_no").unbind("click").click(function(){
                 var audit_msg = document.getElementById("audit_msg").value;
-                do_audit(apply_id, "reject", audit_msg)
+                $("#modal_btn_no").attr("disabled", true);
+                do_audit(apply_id, "reject", audit_msg);
+                $("#modal_btn_no").attr("disabled", false);
             });
 
             $("#modal_btn_yes").unbind("click").click(function(){
                 var audit_msg = document.getElementById("audit_msg").value;
                 $("#modal_btn_yes").attr("disabled", true);
-                do_audit(apply_id, "pass", audit_msg)
+                do_audit(apply_id, "pass", audit_msg);
+                $("#modal_btn_yes").attr("disabled", false);
             });
         }
         function cancel(apply_id) {

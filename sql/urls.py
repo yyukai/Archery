@@ -7,7 +7,7 @@ import sql.query_privileges
 import sql.sql_optimize
 from common import auth, config, workflow, dashboard, check
 from sql import views, sql_workflow, sql_analyze, query, slowlog, instance, db_diagnostic, resource_group, binlog, \
-    backup, data_safe, query_audit, ip_white, host, database, data_dictionary, wpan_upload, bg_table, tools
+    backup, data_safe, query_audit, api, host, database, data_dictionary, wpan_upload, bg_table, tools
 from sql.utils import tasks
 
 urlpatterns = [
@@ -45,6 +45,7 @@ urlpatterns = [
     path('group/', views.group),
     path('grouprelations/<int:group_id>/', views.groupmgmt),
     path('instance/', views.instance),
+    path('instance/host/<ip>/', views.instance),
     path('instanceuser/<int:instance_id>/', views.instanceuser),
     path('instanceparam/', views.instance_param),
     path('binlog2sql/', views.binlog2sql),
@@ -83,6 +84,9 @@ urlpatterns = [
     path('instance/schemasync/', instance.schemasync),
     path('instance/instance_resource/', instance.instance_resource),
     path('instance/describetable/', instance.describe),
+
+    path('api/instance/edit/', api.api_instance_edit),
+    path('api/host/edit/', api.api_host_edit),
 
     path('database/', views.database),
     path('database_list/', database.db_list),
@@ -152,12 +156,6 @@ urlpatterns = [
     path('query_audit/', views.query_audit),
     path('query_audit/list/', query_audit.query_audit),
 
-    path('ip_white/<int:instance_id>/', views.ip_white),
-    path('ip_white/list/<int:instance_id>', ip_white.ip_white_list),
-    path('ip_white/add/<int:instance_id>', ip_white.ip_white_add),
-    path('ip_white/edit/<int:instance_id>', ip_white.ip_white_add),
-    path('ip_white/delete/<int:instance_id>', ip_white.ip_white_del),
-
     path('host/', views.host),
     path('host/list/', host.host_list),
 
@@ -167,9 +165,9 @@ urlpatterns = [
     path('wpan_upload/file_cont/', wpan_upload.wpan_upload_file_cont),
     path('wpan_upload/apply/', wpan_upload.wpan_upload_apply),
     path('wpan_upload/download/', wpan_upload.wpan_upload_download),
-    path('wpan_audit/', views.wpan_audit),
-    path('wpan_upload/audit/', wpan_upload.wpan_upload_audit),
-    path('wpan_upload/cancel/', wpan_upload.wpan_upload_cancel),
+    path('wpan_upload_audit/', views.wpan_upload_audit),
+    path('wpan_upload_audit/audit/', wpan_upload.wpan_upload_audit),
+    path('wpan_upload_audit/cancel/', wpan_upload.wpan_upload_cancel),
 
     path('tools/loan_update/', tools.tools_loan_update),
     path('tools/loan_update/search/', tools.loan_update_search),

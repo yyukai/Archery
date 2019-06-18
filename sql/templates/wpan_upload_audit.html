@@ -89,7 +89,7 @@
             $('#name-list').bootstrapTable('destroy').bootstrapTable({
                 method: 'get',
                 contentType: "application/x-www-form-urlencoded",
-                url: "/wpan_upload/audit/",
+                url: "/wpan_upload_audit/audit/",
                 striped: true,                      //是否显示行间隔色
                 cache: false,                       //是否使用缓存，默认为true，所以一般情况下需要设置一下这个属性（*）
                 pagination: true,                   //是否显示分页（*）
@@ -164,27 +164,27 @@
                     field: 'id',
                     formatter: function (value, row, index) {
                         {% if perms.sql.wpan_upload_audit %}
-                            var html = '<a type="button" class="btn btn-primary" href="/wpan_upload/download/?path=' + row.file_path.replace(/\+/g, '%2B').replace(/&/g, '%26') + '" >下载</a>';
+                            var html = '<a type="button" class="btn btn-primary btn-xs" href="/wpan_upload/download/?path=' + row.file_path.replace(/\+/g, '%2B').replace(/&/g, '%26') + '" >下载</a>';
                             if (row.status === 0) {
-                                html += '<button class="btn btn-warning" onclick="do_audit(\'' +value+ '\')">待审核</button>';
+                                html += '<button class="btn btn-warning btn-xs" onclick="do_audit(\'' +value+ '\')">待审核</button>';
                             } else if (row.status === 1) {
-                                html += '<button class="btn btn-success" onclick="alert(\'' +row.audit_msg+ '\')">已通过</button>';
+                                html += '<button class="btn btn-success btn-xs" onclick="alert(\'' +row.audit_msg+ '\')">已通过</button>';
                             } else if (row.status === 2) {
-                                html += '<button class="btn btn-danger" onclick="alert(\'' +row.audit_msg+ '\')">已被拒</button>';
+                                html += '<button class="btn btn-danger btn-xs" onclick="alert(\'' +row.audit_msg+ '\')">已被拒</button>';
                             } else if (row.status === 3) {
-                                html += '<button class="btn btn-default" disabled>已过期</button>';
+                                html += '<button class="btn btn-default btn-xs" disabled>已过期</button>';
                             } else if (row.status === 4) {
                                 return '用户主动取消';
                             }
                         {% else %}
                             if (row.status === 0) {
-                                html = '<button class="btn btn-danger" onclick="cancel(\'' +row.id+ '\')">取消上传</button>';
+                                html = '<button class="btn btn-danger btn-xs" onclick="cancel(\'' +row.id+ '\')">取消上传</button>';
                             } else if (row.status === 1) {
-                                html = '<button class="btn btn-success" onclick="alert(\'' +row.audit_msg+ '\')">已通过</button>';
+                                html = '<button class="btn btn-success btn-xs" onclick="alert(\'' +row.audit_msg+ '\')">已通过</button>';
                             } else if (row.status === 2) {
-                                html = '<button class="btn btn-danger" onclick="alert(\'' +row.audit_msg+ '\')">已被拒</button>';
+                                html = '<button class="btn btn-danger btn-xs" onclick="alert(\'' +row.audit_msg+ '\')">已被拒</button>';
                             } else if (row.status === 3) {
-                                html = '<button class="btn btn-default" disabled>已过期</button>';
+                                html = '<button class="btn btn-default btn-xs" disabled>已过期</button>';
                             } else if (row.status === 4) {
                                 return '用户主动取消';
                             }
@@ -242,7 +242,7 @@
                 var audit_msg = document.getElementById("audit_msg").value;
                 $.ajax({
                     type: "post",
-                    url: "/wpan_upload/audit/",
+                    url: "/wpan_upload_audit/audit/",
                     timeout: 3000,
                     data: {
                         apply_id: apply_id,
@@ -271,7 +271,7 @@
                 $("#modal_btn_yes").attr("disabled", true);
                 $.ajax({
                     type: "post",
-                    url: "/wpan_upload/audit/",
+                    url: "/wpan_upload_audit/audit/",
                     timeout: 3000,
                     data: {
                         apply_id: apply_id,
@@ -302,7 +302,7 @@
             if (confirm("确定取消上传申请吗？")) {
                 $.ajax({
                     type: "post",
-                    url: "/wpan_upload/cancel/",
+                    url: "/wpan_upload_audit/cancel/",
                     timeout: 3000,
                     data: {
                         id: apply_id

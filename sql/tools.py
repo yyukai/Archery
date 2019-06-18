@@ -224,10 +224,10 @@ def loan_update_audit(request):
                 return JsonResponse({"code": -1, "result": "您无审核权限！"})
             audit_msg = request.POST.get('audit_msg', "")
             if action == "pass":
-                ToolsLoanUpdate.objects.filter(id=lu_id).update(status=1, audit_msg=audit_msg)
+                ToolsLoanUpdate.objects.filter(id=lu_id).update(status=1, auditor=request.user, audit_msg=audit_msg)
                 return JsonResponse({"code": 0, "result": "该申请已审核通过！"})
             elif action == "reject":
-                ToolsLoanUpdate.objects.filter(id=lu_id).update(status=2, audit_msg=audit_msg)
+                ToolsLoanUpdate.objects.filter(id=lu_id).update(status=2, auditor=request.user, audit_msg=audit_msg)
                 return JsonResponse({"code": 0, "result": "该申请已拒绝！"})
             else:
                 JsonResponse({"code": -1, "result": "非法调用！"})

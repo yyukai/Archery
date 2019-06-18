@@ -78,34 +78,70 @@
                     },
                 columns: [{
                     title: 'IP',
-                    field: 'ip'
+                    field: 'ip',
+                    formatter: function (value, row, index) {
+                        return "<a target='_blank' href=\"/instance/host/" + value + "/\">" + value + "</a>"
+                    }
                 }, {
-                    title: '类型',
+                    title: '系统',
+                    field: 'release'
+                }, {
+                    title: '数据库类型',
                     field: 'type'
                 }, {
-                    title: '内存',
-                    field: 'mem'
+                    title: '总内存/使用率',
+                    field: 'mem_used',
+                    formatter: function (value, row, index) {
+                        return row.mem + "/" + (value > 60 ? "<span style='color:red'>"+value+"%</span>":value + "%")
+                    }
                 }, {
-                    title: 'CPU',
-                    field: 'cpu'
+                    title: 'CPU/使用率',
+                    field: 'cpu_used',
+                    formatter: function (value, row, index) {
+                        return row.cpu + "/" + (value > 60 ? "<span style='color:red'>"+value+"%</span>":value + "%")
+                    }
+                }, {
+                    title: '网卡流量（M）',
+                    field: 'net_traffic',
+                    formatter: function (value, row, index) {
+                        return value > 9 ? "<span style='color:red'>"+value+"</span>":value
+                    }
                 }, {
                     title: '实例一',
-                    field: 'ins1'
+                    field: 'ins1',
+                    formatter: function (value, row, index) {
+                        return value['instance_name']
+                    }
                 }, {
                     title: '实例二',
-                    field: 'ins2'
+                    field: 'ins2',
+                    formatter: function (value, row, index) {
+                        return value['instance_name']
+                    }
                 }, {
                     title: '实例三',
-                    field: 'ins3'
+                    field: 'ins3',
+                    formatter: function (value, row, index) {
+                        return value['instance_name']
+                    }
                 }, {
                     title: '实例四',
-                    field: 'ins4'
+                    field: 'ins4',
+                    formatter: function (value, row, index) {
+                        return value['instance_name']
+                    }
                 }, {
                     title: '实例五',
-                    field: 'ins5'
+                    field: 'ins5',
+                    formatter: function (value, row, index) {
+                        return value['instance_name']
+                    }
                 }, {
                     title: '实例六',
-                    field: 'ins6'
+                    field: 'ins6',
+                    formatter: function (value, row, index) {
+                        return value['instance_name']
+                    }
                 }, {
                     title: '更新时间',
                     field: 'time'
@@ -135,6 +171,9 @@
 
         }
 
+        setTimeout(function(){        //使用 setTimeout() 方法设定定时60000毫秒
+            window.location.reload(); //页面刷新
+        }, 60000);
         //初始化数据
         $(document).ready(function () {
             grouplist();

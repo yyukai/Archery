@@ -1,6 +1,7 @@
 # -*- coding: UTF-8 -*-
 import os
 import time
+import re
 
 import simplejson as json
 from django.conf import settings
@@ -25,8 +26,12 @@ def lists(request):
     tags = request.POST.getlist('tags[]')
     limit = offset + limit
     search = request.POST.get('search', '')
+    host = request.POST.get('host', '')
 
-    instances = Instance.objects.all()
+    if host:
+        instances = Instance.objects.filter(host=host)
+    else:
+        instances = Instance.objects.all()
     # 过滤搜索
     if search:
         instances = instances.filter(instance_name__icontains=search)
@@ -42,9 +47,26 @@ def lists(request):
             instances = instances.filter(instancetagrelations__instance_tag=tag, instancetagrelations__active=True)
 
     count = instances.count()
-    instances = instances[offset:limit].values("id", "instance_name", "db_type", "type", "host", "port", "user")
-    # QuerySet 序列化
-    rows = [row for row in instances]
+    rows = list()
+    for ins in instances[offset:limit]:
+        process = -1
+        if ins.db_type == "mysql":
+            query_engine = get_engine(instance=ins)
+            sql = "select count(1) from information_schema.processlist;"
+            process = query_engine.query('information_schema', sql).rows[0][0]
+        disk_info = '{}：{}/{}'.format(re.match(r'/\w+', ins.data_path).group(), ins.disk, ins.disk_used)
+        rows.append({
+            "id": ins.id,
+            "instance_name": ins.instance_name,
+            "db_type": ins.db_type,
+            "type": ins.type,
+            "host": ins.host,
+            "port": ins.port,
+            "disk_info": disk_info,
+            "disk_io": ins.disk_io,
+            "user": ins.user,
+            "process": process
+        })
 
     result = {"total": count, "rows": rows}
     return HttpResponse(json.dumps(result, cls=ExtendJSONEncoder, bigint_as_string=True),

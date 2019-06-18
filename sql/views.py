@@ -399,10 +399,6 @@ def query_audit(request):
     return render(request, 'query_audit.html', locals())
 
 
-def ip_white(request, instance_id):
-    return render(request, "ip_white.html", {'instance_id': instance_id})
-
-
 def host(request):
     return render(request, "host.html")
 
@@ -411,8 +407,8 @@ def wpan_upload(request):
     return render(request, "wpan_upload.html")
 
 
-def wpan_audit(request):
-    return render(request, "wpan_audit.html")
+def wpan_upload_audit(request):
+    return render(request, "wpan_upload_audit.html")
 
 
 # 工作流审核列表页面
@@ -480,10 +476,10 @@ def groupmgmt(request, group_id):
 
 # 实例管理页面
 @permission_required('sql.menu_instance', raise_exception=True)
-def instance(request):
+def instance(request, ip=''):
     # 获取实例标签
     tags = InstanceTag.objects.filter(active=True)
-    return render(request, 'instance.html', {'tags': tags})
+    return render(request, 'instance.html', {'tags': tags, 'ip': ip})
 
 
 # 实例用户管理页面

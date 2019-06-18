@@ -91,22 +91,9 @@
                             <a href="/dashboard/"><i class="fa fa-dashboard fa-fw"></i> Dashboard</a>
                         </li>
                     {% endif %}
-                    {% if perms.sql.menu_sqlcheck %}
+                    {% if perms.sql.menu_sqlworkflow %}
                         <li>
-                            <a href="#"><i class="fa fa-check fa-fw"></i> SQL审核<span class="fa arrow"></span></a>
-                            <ul class="nav nav-second-level">
-                                {% if perms.sql.menu_sqlworkflow %}
-                                    <li>
-                                        <a href="/sqlworkflow/">SQL上线</a>
-                                    </li>
-                                {% endif %}
-                                {% if perms.sql.menu_sqlanalyze %}
-                                    <li>
-                                        <a href="/sqlanalyze/">SQL分析</a>
-                                    </li>
-                                {% endif %}
-                            </ul>
-                            <!-- /.nav-second-level -->
+                            <a href="/sqlworkflow/"><i class="fa fa-cloud-upload fa-fw"></i> SQL上线</a>
                         </li>
                     {% endif %}
                     {% if perms.sql.menu_query %}
@@ -130,6 +117,28 @@
                                 {% endif %}
                             </ul>
                             <!-- /.nav-second-level -->
+                        </li>
+                    {% endif %}
+                    {% if perms.sql.menu_sqloptimize %}
+                        <li>
+                            <a href="#"><i class="fa fa-wrench fa-fw"></i> SQL优化<span class="fa arrow"></span></a>
+                            <ul class="nav nav-second-level">
+                                {% if perms.sql.menu_sqladvisor %}
+                                    <li>
+                                        <a href="/sqladvisor/">优化工具</a>
+                                    </li>
+                                {% endif %}
+                                {% if perms.sql.menu_sqlanalyze %}
+                                    <li>
+                                        <a href="/sqlanalyze/">SQL分析</a>
+                                    </li>
+                                {% endif %}
+                            </ul>
+                        </li>
+                    {% endif %}
+                    {% if perms.sql.menu_host %}
+                        <li>
+                            <a href="/host/"><i class="fa fa-hdd-o fa-fw"></i> 主机管理</a>
                         </li>
                     {% endif %}
                     {% if perms.sql.menu_instance %}
@@ -180,47 +189,6 @@
                             <!-- /.nav-second-level -->
                         </li>
                     {% endif %}
-                    {% if perms.sql.menu_sqloptimize %}
-                        <li>
-                            <a href="#"><i class="fa fa-wrench fa-fw"></i> SQL优化<span class="fa arrow"></span></a>
-                            <ul class="nav nav-second-level">
-                                {% if perms.sql.menu_sqladvisor %}
-                                    <li>
-                                        <a href="/sqladvisor/">优化工具</a>
-                                    </li>
-                                {% endif %}
-                            </ul>
-                        </li>
-                    {% endif %}
-                    {% if perms.sql.menu_themis %}
-                        <li>
-                            <a href="#"><i class="fa fa-stethoscope fa-fw"></i> 数据库审核<span class="fa arrow"></span></a>
-                            <ul class="nav nav-second-level">
-                                <li>
-                                    <a href="/themis/">规则设置</a>
-                                </li>
-                                <li>
-                                    <a href="#">规则增加<span class="fa arrow"></span></a>
-                                    <ul class="nav nav-third-level collapse">
-                                        <li>
-                                            <a href="/themis/sqlreview/rule/simple/addition">简单规则</a>
-                                        </li>
-                                        <li>
-                                            <a href="/themis/sqlreview/rule/complex/addition">复杂规则</a>
-                                        </li>
-                                    </ul>
-                                    <!-- /.nav-third-level -->
-                                </li>
-                                <li>
-                                    <a href="/themis/new/version/sql/review/rule/info/index">任务发布</a>
-                                </li>
-                                <li>
-                                    <a href="/themis/new/version/sql/review/task/index">任务查询</a>
-                                </li>
-                            </ul>
-                            <!-- /.nav-second-level -->
-                        </li>
-                    {% endif %}
                     {% if perms.sql.menu_log %}
                         <li>
                             <a href="#"><i class="fa fa-file fa-fw"></i> 日志管理<span class="fa arrow"></span></a>
@@ -262,52 +230,43 @@
                             <!-- /.nav-second-level -->
                         </li>
                     {% endif %}
-                    {% if perms.sql.menu_wpan_upload %}
-                        <li>
-                            <a href="#"><i class="glyphicon glyphicon-cloud-upload"></i> 上传网盘<span class="fa arrow"></span></a>
-                            <ul class="nav nav-second-level">
-                                <li>
-                                    <a href="/wpan_upload/">我的文件</a>
-                                </li>
-                                <li>
-                                    <a href="/wpan_audit/">我的待审核</a>
-                                </li>
-                            </ul>
-                            <!-- /.nav-second-level -->
-                        </li>
-                    {% endif %}
                     {% if perms.sql.menu_backup %}
                         <li>
                             <a href="/backup/"><i class="fa fa-save fa-fw"></i> 备份管理</a>
-                        </li>
-                    {% endif %}
-                    {% if perms.sql.menu_host %}
-                        <li>
-                            <a href="#"><i class="fa fa-hdd-o fa-fw"></i> 主机管理<span class="fa arrow"></span></a>
-                            <ul class="nav nav-second-level">
-                                <li>
-                                    <a href="/host/">主机列表</a>
-                                </li>
-                            </ul>
-                            <!-- /.nav-second-level -->
                         </li>
                     {% endif %}
                     {% if perms.sql.menu_tools %}
                         <li>
                             <a href="#"><i class="fa fa-gamepad fa-fw"></i> 高效小功能<span class="fa arrow"></span></a>
                             <ul class="nav nav-second-level">
-                                <li>
-                                    <a href="#">订单所属业务员更改 <span class="fa arrow"></span></a>
-                                    <ul class="nav nav-third-level collapse">
-                                        <li>
-                                            <a href="/tools/loan_update/">更改申请</a>
-                                        </li>
-                                        <li>
-                                            <a href="/tools/loan_update_audit/">更改审核</a>
-                                        </li>
-                                    </ul>
-                                    <!-- /.nav-third-level -->
-                                </li>
+                                {% if perms.sql.menu_wpan_upload %}
+                                    <li>
+                                        <a href="#">上传网盘<span class="fa arrow"></span></a>
+                                        <ul class="nav nav-third-level collapse">
+                                            <li>
+                                                <a href="/wpan_upload/">我的文件</a>
+                                            </li>
+                                            <li>
+                                                <a href="/wpan_audit/">我的待审核</a>
+                                            </li>
+                                        </ul>
+                                        <!-- /.nav-second-level -->
+                                    </li>
+                                {% endif %}
+                                {% if perms.sql.menu_loan_update %}
+                                    <li>
+                                        <a href="#">订单所属业务员更改 <span class="fa arrow"></span></a>
+                                        <ul class="nav nav-third-level collapse">
+                                            <li>
+                                                <a href="/tools/loan_update/">更改申请</a>
+                                            </li>
+                                            <li>
+                                                <a href="/tools/loan_update_audit/">更改审核</a>
+                                            </li>
+                                        </ul>
+                                        <!-- /.nav-third-level -->
+                                    </li>
+                                {% endif %}
                             </ul>
                             <!-- /.nav-second-level -->
                         </li>

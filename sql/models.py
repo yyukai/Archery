@@ -93,11 +93,14 @@ class Instance(models.Model):
     password = models.CharField('密码', max_length=300, default='', blank=True)
     service_name = models.CharField('Oracle service name', max_length=50, null=True, blank=True)
     sid = models.CharField('Oracle sid', max_length=50, null=True, blank=True)
-    bin_path = models.CharField('Mysql Bin文件安装路径', max_length=50, null=True, blank=True)
-    conf_path = models.CharField('Mysql 配置文件路径', max_length=50, null=True, blank=True)
-    data_path = models.CharField('Mysql 数据目录', max_length=50, null=True, blank=True)
-    err_log_path = models.CharField('Mysql 错误日志目录', max_length=50, null=True, blank=True)
-    slow_log_path = models.CharField('Mysql 慢日志目录', max_length=50, null=True, blank=True)
+    bin_path = models.CharField('Mysql Bin文件安装路径', max_length=50, default='')
+    conf_path = models.CharField('Mysql 配置文件路径', max_length=50, default='')
+    data_path = models.CharField('Mysql 数据目录', max_length=50, default='/data/')
+    err_log_path = models.CharField('Mysql 错误日志目录', max_length=50, default='')
+    slow_log_path = models.CharField('Mysql 慢日志目录', max_length=50, default='')
+    disk = models.CharField('磁盘', max_length=15, default='')
+    disk_used = models.IntegerField('磁盘使用率', default=-1)
+    disk_io = models.CharField('I/O速率', max_length=20, default="W:-1 K/s, R:-1 K/s")
     parent = models.ManyToManyField("self", symmetrical=False, related_name="children", blank=True)
     create_time = models.DateTimeField('创建时间', auto_now_add=True)
     update_time = models.DateTimeField('更新时间', auto_now=True)
@@ -114,6 +117,7 @@ class Instance(models.Model):
     class Meta:
         managed = True
         db_table = 'sql_instance'
+        unique_together = ('host', 'port')
         verbose_name = u'实例配置'
         verbose_name_plural = u'实例配置'
 
@@ -442,9 +446,9 @@ class WPanHistory(models.Model):
 
     class Meta:
         managed = True
-        db_table = 'wpan_history'
-        verbose_name = u'文件外传微贷云盘记录表'
-        verbose_name_plural = u'文件外传微贷云盘记录表'
+        db_table = 'tools_wpan_history'
+        verbose_name = u'工具：文件外传微贷云盘记录表'
+        verbose_name_plural = u'工具：文件外传微贷云盘记录表'
 
 
 # 脱敏字段配置
@@ -748,11 +752,15 @@ class QueryAudit(models.Model):
 
 
 class Host(models.Model):
+    release = models.CharField('系统版本', max_length=50)
     ip = models.CharField('IP地址', max_length=15)
     memory = models.CharField('内存', max_length=15)
+    memory_used = models.IntegerField('已用内存', null=True, blank=True)
     cpu = models.CharField('CPU', max_length=15)
+    cpu_used = models.IntegerField('已用CPU', null=True, blank=True)
+    net_traffic = models.IntegerField('网卡流量', null=True, blank=True)
     type = models.CharField(max_length=6, choices=(('master', 'Master'), ('slave', 'Slave')))
-    inited = models.IntegerField('是否已经初始化环境')
+    inited = models.BooleanField('是否已经初始化环境')
     create_time = models.DateTimeField('创建时间', auto_now_add=True)
     update_time = models.DateTimeField('更新时间', auto_now=True)
 
@@ -765,8 +773,6 @@ class Host(models.Model):
 
 class DataBase(models.Model):
     host = models.ForeignKey(Host, on_delete=models.CASCADE, null=True, blank=True)
-    ip = models.CharField('IP地址', max_length=15, null=True, blank=True)
-    port = models.CharField('MySQL端口', max_length=6, null=True, blank=True)
     instance = models.ForeignKey(Instance, on_delete=models.CASCADE, null=True, blank=True)
     instance_name = models.CharField('实例名', max_length=50, null=True, blank=True)
     db_name = models.CharField('数据库名', max_length=50, unique=True)
