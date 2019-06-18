@@ -17,8 +17,8 @@ logger = logging.getLogger('default')
 class MssqlEngine(EngineBase):
     def get_connection(self, db_name=None):
         connstr = """DRIVER=ODBC Driver 17 for SQL Server;SERVER={0},{1};UID={2};PWD={3};
-        client charset = UTF-8;connect timeout=10;CHARSET=UTF8;""".format(self.host,
-                                                                          self.port, self.user, self.password)
+client charset = UTF-8;connect timeout=10;CHARSET={4};""".format(self.host, self.port, self.user, self.password,
+                                                                 self.instance.charset or 'UTF8')
         if self.conn:
             return self.conn
         self.conn = pyodbc.connect(connstr)
@@ -29,7 +29,7 @@ class MssqlEngine(EngineBase):
         sql = "SELECT name FROM master.sys.databases"
         result = self.query(sql=sql)
         db_list = [row[0] for row in result.rows
-                   if row[0] not in ('information_schema', 'performance_schema', 'mysql', 'test', 'sys')]
+                   if row[0] not in ('master', 'msdb', 'tempdb', 'model')]
         result.rows = db_list
         return result
 
@@ -81,6 +81,9 @@ class MssqlEngine(EngineBase):
                            "string_escape", "string_split", "stuff", "substring", "trim", "unicode"]
         keyword_warning = ''
         star_patter = r"(^|,| )\*( |\(|$)"
+        sql_whitelist = ['select', 'sp_helptext']
+        # 根据白名单list拼接pattern语句
+        whitelist_pattern = "^" + "|^".join(sql_whitelist)
         # 删除注释语句，进行语法判断，执行第一条有效sql
         try:
             sql = sql.format(sql, strip_comments=True)
@@ -91,9 +94,9 @@ class MssqlEngine(EngineBase):
             result['has_star'] = True
             result['msg'] = '没有有效的SQL语句'
             return result
-        if re.match(r"^select", sql_lower) is None:
+        if re.match(whitelist_pattern, sql_lower) is None:
             result['bad_query'] = True
-            result['msg'] = '仅支持^select语法!'
+            result['msg'] = '仅支持{}语法!'.format(','.join(sql_whitelist))
             return result
         if re.search(star_patter, sql_lower) is not None:
             keyword_warning += '禁止使用 * 关键词\n'
@@ -160,16 +163,23 @@ class MssqlEngine(EngineBase):
         """上线单执行前的检查, 返回Review set"""
         check_result = ReviewSet(full_sql=sql)
         # 切分语句，追加到检测结果中，默认全部检测通过
-        split_sql = [f"""use [{db_name}]"""] + sqlparse.split(sql)
+        split_reg = re.compile('^GO$', re.I | re.M)
+        sql = re.split(split_reg, sql, 0)
+        sql = filter(None, sql)
+        split_sql = [f"""use [{db_name}]"""]
+        for i in sql:
+            split_sql = split_sql + [i]
+        rowid = 1
         for statement in split_sql:
             check_result.rows.append(ReviewResult(
-                id=1,
+                id=rowid,
                 errlevel=0,
                 stagestatus='Audit completed',
                 errormessage='None',
                 sql=statement,
                 affected_rows=0,
                 execute_time=0, ))
+            rowid += 1
         return check_result
 
     def execute_workflow(self, workflow):
@@ -183,7 +193,12 @@ class MssqlEngine(EngineBase):
         execute_result = ReviewSet(full_sql=sql)
         conn = self.get_connection(db_name=db_name)
         cursor = conn.cursor()
-        split_sql = [f"""use [{db_name}]"""] + [sql]
+        split_reg = re.compile('^GO$', re.I | re.M)
+        sql = re.split(split_reg, sql, 0)
+        sql = filter(None, sql)
+        split_sql = [f"""use [{db_name}]"""]
+        for i in sql:
+            split_sql = split_sql + [i]
         rowid = 1
         for statement in split_sql:
             try:

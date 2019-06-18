@@ -1,7 +1,9 @@
 # -*- coding: UTF-8 -*-
+import os
 import traceback
 import datetime
 import simplejson as json
+from django.conf import settings
 
 from django.contrib.auth.decorators import permission_required
 from django.contrib.auth.models import Group, Permission
@@ -41,14 +43,20 @@ def login(request):
     return render(request, 'login.html')
 
 
+@permission_required('sql.menu_dashboard', raise_exception=True)
+def dashboard(request):
+    """dashboard页面"""
+    return render(request, 'dashboard.html')
+
+
 def sqlworkflow(request):
     """SQL上线工单列表页面"""
     return render(request, 'sqlworkflow.html', {'status_list': SQL_WORKFLOW_CHOICES})
 
 
-# 提交SQL的页面
 @permission_required('sql.sql_submit', raise_exception=True)
 def submit_sql(request):
+    """提交SQL的页面"""
     user = request.user
     # 获取组信息
     group_list = user_groups(user)
@@ -67,8 +75,8 @@ def submit_sql(request):
     return render(request, 'sqlsubmit.html', context)
 
 
-# 展示SQL工单详细页面
 def detail(request, workflow_id):
+    """展示SQL工单详细页面"""
     workflow_detail = get_object_or_404(SqlWorkflow, pk=workflow_id)
     if workflow_detail.status in ['workflow_finish', 'workflow_exception']:
         rows = workflow_detail.sqlworkflowcontent.execute_result
@@ -146,8 +154,8 @@ def detail(request, workflow_id):
     return render(request, 'detail.html', context)
 
 
-# 展示回滚的SQL页面
 def rollback(request):
+    """展示回滚的SQL页面"""
     workflow_id = request.GET['workflow_id']
     if workflow_id == '' or workflow_id is None:
         context = {'errMsg': 'workflow_id参数为空.'}
@@ -172,39 +180,16 @@ def rollback(request):
 
 @permission_required('sql.menu_sqlanalyze', raise_exception=True)
 def sqlanalyze(request):
-    """
-    SQL分析页面
-    :param request:
-    :return:
-    """
-    # 获取实例列表
-    instances = [instance.instance_name for instance in user_instances(request.user, type='all', db_type='mysql')]
-    return render(request, 'sqlanalyze.html', {'instances': instances})
+    """SQL分析页面"""
+    return render(request, 'sqlanalyze.html')
 
 
-# SQL文档页面
-@permission_required('sql.menu_document', raise_exception=True)
-def dbaprinciples(request):
-    return render(request, 'dbaprinciples.html')
-
-
-# dashboard页面
-@permission_required('sql.menu_dashboard', raise_exception=True)
-def dashboard(request):
-    return render(request, 'dashboard.html')
-
-
-# SQL在线查询页面
 @permission_required('sql.menu_query', raise_exception=True)
 def sqlquery(request):
-    # 获取实例支持查询的标签id
-    tag_id = InstanceTag.objects.get_or_create(
-        tag_code='can_read', defaults={'tag_name': '支持查询', 'active': True})[0].id
-    # 获取用户关联实例列表
-    instances = [slave for slave in user_instances(request.user, type='all', db_type='all', tags=[tag_id])]
-
-    context = {'instances': instances}
-    return render(request, 'sqlquery.html', context)
+    """SQL在线查询页面"""
+    # 主动创建标签
+    InstanceTag.objects.get_or_create(tag_code='can_read', defaults={'tag_name': '支持查询', 'active': True})
+    return render(request, 'sqlquery.html')
 
 
 # SQL导出查询（大数据异步查询）
@@ -241,9 +226,9 @@ def sqladvisor(request):
     return render(request, 'sqladvisor.html', context)
 
 
-# 查询权限申请列表页面
 @permission_required('sql.menu_queryapplylist', raise_exception=True)
 def queryapplylist(request):
+    """查询权限申请列表页面"""
     user = request.user
     # 获取资源组
     group_list = user_groups(user)
@@ -252,8 +237,8 @@ def queryapplylist(request):
     return render(request, 'queryapplylist.html', context)
 
 
-# 查询权限申请详情页面
 def queryapplydetail(request, apply_id):
+    """查询权限申请详情页面"""
     workflow_detail = QueryPrivilegesApply.objects.get(apply_id=apply_id)
     # 获取当前审批和审批流程
     audit_auth_group, current_audit_auth_group = Audit.review_info(apply_id, 1)
@@ -277,22 +262,50 @@ def queryapplydetail(request, apply_id):
     return render(request, 'queryapplydetail.html', context)
 
 
-# 用户的查询权限管理页面
 def queryuserprivileges(request):
+    """查询权限管理页面"""
     # 获取所有用户
     user_list = QueryPrivileges.objects.filter(is_deleted=0).values('user_display').distinct()
     context = {'user_list': user_list}
     return render(request, 'queryuserprivileges.html', context)
 
 
-# 会话管理页面
+@permission_required('sql.menu_sqladvisor', raise_exception=True)
+def sqladvisor(request):
+    """SQL优化工具页面"""
+    return render(request, 'sqladvisor.html')
+
+
+@permission_required('sql.menu_slowquery', raise_exception=True)
+def slowquery(request):
+    """SQL慢日志页面"""
+    return render(request, 'slowquery.html')
+
+
+@permission_required('sql.menu_instance', raise_exception=True)
+def instance(request):
+    """实例管理页面"""
+    # 获取实例标签
+    tags = InstanceTag.objects.filter(active=True)
+    return render(request, 'instance.html', {'tags': tags})
+
+
+@permission_required('sql.menu_instance', raise_exception=True)
+def instanceuser(request, instance_id):
+    """实例用户管理页面"""
+    return render(request, 'instanceuser.html', {'instance_id': instance_id})
+
+
 @permission_required('sql.menu_dbdiagnostic', raise_exception=True)
 def dbdiagnostic(request):
-    # 获取用户关联实例列表
-    instances = [instance.instance_name for instance in user_instances(request.user, type='all', db_type='mysql')]
+    """会话管理页面"""
+    return render(request, 'dbdiagnostic.html')
 
-    context = {'tab': 'process', 'instances': instances}
-    return render(request, 'dbdiagnostic.html', context)
+
+@permission_required('sql.menu_param', raise_exception=True)
+def instance_param(request):
+    """实例参数管理页面"""
+    return render(request, 'param.html')
 
 
 @permission_required('sql.menu_database', raise_exception=True)
@@ -416,19 +429,21 @@ def workflows(request):
     return render(request, "workflow.html")
 
 
-# 工作流审核详情页面
-def workflowsdetail(request, audit_id):
-    # 按照不同的workflow_type返回不同的详情
-    audit_detail = Audit.detail(audit_id)
-    if audit_detail.workflow_type == WorkflowDict.workflow_type['query']:
-        return HttpResponseRedirect(reverse('sql:queryapplydetail', args=(audit_detail.workflow_id,)))
-    elif audit_detail.workflow_type == WorkflowDict.workflow_type['sqlreview']:
-        return HttpResponseRedirect(reverse('sql:detail', args=(audit_detail.workflow_id,)))
+@permission_required('sql.menu_binlog2sql', raise_exception=True)
+def binlog2sql(request):
+    """binlog2sql页面"""
+    return render(request, 'binlog2sql.html')
 
 
-# 配置管理页面
+@permission_required('sql.menu_schemasync', raise_exception=True)
+def schemasync(request):
+    """数据库差异对比页面"""
+    return render(request, 'schemasync.html')
+
+
 @superuser_required
 def config(request):
+    """配置管理页面"""
     # 获取所有资源组名称
     group_list = ResourceGroup.objects.all()
 
@@ -445,9 +460,9 @@ def config(request):
     return render(request, 'config.html', context)
 
 
-# 资源组管理页面
 @superuser_required
 def group(request):
+    """资源组管理页面"""
     return render(request, 'group.html')
 
 
@@ -470,6 +485,7 @@ def backup_detail(request, db_cluster):
 # 资源组组关系管理页面
 @superuser_required
 def groupmgmt(request, group_id):
+    """资源组组关系管理页面"""
     group = ResourceGroup.objects.get(group_id=group_id)
     return render(request, 'groupmgmt.html', {'group': group})
 
@@ -497,17 +513,26 @@ def instance_param(request):
     return render(request, 'param.html', context)
 
 
-# binlog2sql页面
-@permission_required('sql.menu_binlog2sql', raise_exception=True)
-def binlog2sql(request):
-    # 获取实例列表
-    instances = [instance.instance_name for instance in user_instances(request.user, type='all', db_type='mysql')]
-    return render(request, 'binlog2sql.html', {'instances': instances})
+def workflows(request):
+    """待办列表页面"""
+    return render(request, "workflow.html")
 
 
-# 数据库差异对比页面
-@permission_required('sql.menu_schemasync', raise_exception=True)
-def schemasync(request):
-    # 获取实例列表
-    instances = [instance.instance_name for instance in user_instances(request.user, type='all', db_type='mysql')]
-    return render(request, 'schemasync.html', {'instances': instances})
+def workflowsdetail(request, audit_id):
+    """待办详情"""
+    # 按照不同的workflow_type返回不同的详情
+    audit_detail = Audit.detail(audit_id)
+    if audit_detail.workflow_type == WorkflowDict.workflow_type['query']:
+        return HttpResponseRedirect(reverse('sql:queryapplydetail', args=(audit_detail.workflow_id,)))
+    elif audit_detail.workflow_type == WorkflowDict.workflow_type['sqlreview']:
+        return HttpResponseRedirect(reverse('sql:detail', args=(audit_detail.workflow_id,)))
+
+
+@permission_required('sql.menu_document', raise_exception=True)
+def dbaprinciples(request):
+    """SQL文档页面"""
+    #  读取MD文件
+    file = os.path.join(settings.BASE_DIR, 'docs/mysql_db_design_guide.md')
+    with open(file, 'r') as f:
+        md = f.read().replace('\n', '\\n')
+    return render(request, 'dbaprinciples.html', {'md': md})

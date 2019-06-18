@@ -19,7 +19,7 @@ class InceptionEngine(EngineBase):
         if self.conn:
             return self.conn
         if hasattr(self, 'instance'):
-            self.conn = MySQLdb.connect(host=self.host, port=self.port, charset='utf8mb4')
+            self.conn = MySQLdb.connect(host=self.host, port=self.port, charset=self.instance.charset or 'utf8mb4')
             return self.conn
         archer_config = SysConfig()
         inception_host = archer_config.get('inception_host')
@@ -162,8 +162,8 @@ class InceptionEngine(EngineBase):
         # 兼容语法错误时errlevel=0的场景
         if print_info['errlevel'] == 0 and print_info['errmsg'] == 'None':
             return json.loads(_repair_json_str(print_info['query_tree']))
-        elif print_info['errlevel'] == 0 and print_info['errmsg']:
-            raise RuntimeError(f"Inception Error: {print_info['query_tree']}")
+        elif print_info['errlevel'] == 0 and print_info['errmsg'] == 'Global environment':
+            raise SyntaxError(f"Inception Error: {print_info['query_tree']}")
         else:
             raise RuntimeError(f"Inception Error: {print_info['errmsg']}")
 
