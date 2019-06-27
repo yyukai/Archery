@@ -792,7 +792,7 @@ class Host(models.Model):
     cpu = models.CharField('CPU', max_length=15)
     cpu_used = models.FloatField('已用CPU', null=True, blank=True)
     disk = models.TextField('硬盘', default='')
-    net_io = models.CharField('网卡流量', null=True, blank=True)
+    net_io = models.CharField('网卡流量', max_length=50, null=True, blank=True)
     load_avg = models.CharField('负载', max_length=50)
     type = models.CharField(max_length=6, choices=(('master', 'Master'), ('slave', 'Slave')), default='master')
     inited = models.BooleanField('是否已经初始化环境', default=False)
