@@ -89,6 +89,7 @@ urlpatterns = [
 
     path('api/instance/edit/', api.api_instance_edit),
     path('api/host/edit/', api.api_host_edit),
+    path('api/v1/db_agent/', api.db_agent),
 
     path('database/', views.database),
     path('database_list/', database.db_list),

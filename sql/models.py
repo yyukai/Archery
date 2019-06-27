@@ -50,14 +50,6 @@ class Instance(models.Model):
     charset = models.CharField('字符集', max_length=20, default='', blank=True)
     service_name = models.CharField('Oracle service name', max_length=50, null=True, blank=True)
     sid = models.CharField('Oracle sid', max_length=50, null=True, blank=True)
-    bin_path = models.CharField('Mysql Bin文件安装路径', max_length=50, default='')
-    conf_path = models.CharField('Mysql 配置文件路径', max_length=50, default='')
-    data_path = models.CharField('Mysql 数据目录', max_length=50, default='/data/')
-    err_log_path = models.CharField('Mysql 错误日志目录', max_length=50, default='')
-    slow_log_path = models.CharField('Mysql 慢日志目录', max_length=50, default='')
-    disk = models.CharField('磁盘', max_length=15, default='')
-    disk_used = models.IntegerField('磁盘使用率', default=-1)
-    disk_io = models.CharField('I/O速率', max_length=20, default="W:-1 K/s, R:-1 K/s")
     parent = models.ManyToManyField("self", symmetrical=False, related_name="children", blank=True)
     create_time = models.DateTimeField('创建时间', auto_now_add=True)
     update_time = models.DateTimeField('更新时间', auto_now=True)
@@ -88,6 +80,30 @@ class Instance(models.Model):
             # 密码有变动才再次加密保存
             self.password = pc.encrypt(self.password) if old_password != self.password else self.password
         super(Instance, self).save(*args, **kwargs)
+
+
+class InstancePerf(models.Model):
+    instance = models.ForeignKey(Instance, on_delete=models.CASCADE)
+    base_path = models.CharField('Mysql BaseDir路径', max_length=50, default='/usr')
+    conf_path = models.CharField('Mysql 配置文件路径', max_length=50, default='/etc/my.cnf')
+    data_path = models.CharField('Mysql 数据目录', max_length=50, default='/var/lib/mysql')
+    err_log_path = models.CharField('Mysql 错误日志目录', max_length=50, default='/var/lib/mysql')
+    slow_log_path = models.CharField('Mysql 慢日志目录', max_length=50, default='/var/lib/mysql')
+    disk_used = models.CharField('磁盘使用率', max_length=50, default='')
+    disk_io = models.CharField('I/O速率', max_length=50, default="W:-1 K/s, R:-1 K/s")
+    com_select = models.IntegerField('Query数', null=True, blank=True)
+    threads_connected = models.IntegerField('总连接数', null=True, blank=True)
+    threads_running = models.IntegerField('活跃会话数', null=True, blank=True)
+    qps = models.FloatField('每秒增删改查量', null=True, blank=True)
+    tps = models.IntegerField('每秒的事务量', null=True, blank=True)
+    io = models.IntegerField('数据库I/O', null=True, blank=True)
+    slow_queries = models.IntegerField('慢查询数', null=True, blank=True)
+
+    class Meta:
+        managed = True
+        db_table = 'sql_instance_perf'
+        verbose_name = u'实例性能监控指标'
+        verbose_name_plural = u'实例性能监控指标'
 
 
 class ResourceGroup(models.Model):
@@ -768,15 +784,18 @@ class QueryAudit(models.Model):
 
 
 class Host(models.Model):
-    release = models.CharField('系统版本', max_length=50)
+    os = models.CharField('系统版本', max_length=50)
     ip = models.CharField('IP地址', max_length=15)
+    hostname = models.CharField('主机名', max_length=50)
     memory = models.CharField('内存', max_length=15)
-    memory_used = models.IntegerField('已用内存', null=True, blank=True)
+    memory_used = models.FloatField('已用内存', null=True, blank=True)
     cpu = models.CharField('CPU', max_length=15)
-    cpu_used = models.IntegerField('已用CPU', null=True, blank=True)
-    net_traffic = models.IntegerField('网卡流量', null=True, blank=True)
-    type = models.CharField(max_length=6, choices=(('master', 'Master'), ('slave', 'Slave')))
-    inited = models.BooleanField('是否已经初始化环境')
+    cpu_used = models.FloatField('已用CPU', null=True, blank=True)
+    disk = models.TextField('硬盘', default='')
+    net_io = models.CharField('网卡流量', null=True, blank=True)
+    load_avg = models.CharField('负载', max_length=50)
+    type = models.CharField(max_length=6, choices=(('master', 'Master'), ('slave', 'Slave')), default='master')
+    inited = models.BooleanField('是否已经初始化环境', default=False)
     create_time = models.DateTimeField('创建时间', auto_now_add=True)
     update_time = models.DateTimeField('更新时间', auto_now=True)
 

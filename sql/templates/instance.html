@@ -106,7 +106,10 @@
                 uniqueId: "id",                     //每一行的唯一标识，一般为主键列
                 showToggle: true,                   //是否显示详细视图和列表视图的切换按钮
                 cardView: false,                    //是否显示详细视图
-                detailView: false,                  //是否显示父子表
+                detailView: true,                  //是否显示父子表
+                detailFormatter: function (index, row) {
+                    return row.profile
+                },
                 locale: 'zh-CN',                    //本地化
                 toolbar: "#toolbar",               //指明自定义的toolbar
                 queryParamsType: 'limit',
@@ -146,11 +149,29 @@
                         title: 'PORT',
                         field: 'port'
                     }, {
-                        title: '连接数',
-                        field: 'process'
+                        title: 'Query数',
+                        field: 'com_select'
+                    }, {
+                        title: '总连接数',
+                        field: 'threads_connected'
+                    }, {
+                        title: '活跃会话数',
+                        field: 'threads_running'
+                    }, {
+                        title: 'QPS',
+                        field: 'qps'
+                    }, {
+                        title: 'TPS',
+                        field: 'tps'
+                    }, {
+                        title: '数据库I/O',
+                        field: 'io'
+                    }, {
+                        title: '慢查询数',
+                        field: 'slow_queries'
                     }, {
                         title: '硬盘/使用率',
-                        field: 'disk_info'
+                        field: 'disk_used'
                     }, {
                         title: '硬盘读写',
                         field: 'disk_io'

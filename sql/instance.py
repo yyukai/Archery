@@ -13,7 +13,7 @@ from common.config import SysConfig
 from common.utils.extend_json_encoder import ExtendJSONEncoder
 from sql.engines import get_engine
 from sql.plugins.schemasync import SchemaSync
-from .models import Instance, ParamTemplate, ParamHistory
+from .models import Instance, InstancePerf, ParamTemplate, ParamHistory
 
 
 @permission_required('sql.menu_instance', raise_exception=True)
@@ -54,7 +54,23 @@ def lists(request):
             query_engine = get_engine(instance=ins)
             sql = "select count(1) from information_schema.processlist;"
             process = query_engine.query('information_schema', sql).rows[0][0]
-        disk_info = '{}：{}/{}'.format(re.match(r'/\w+', ins.data_path).group(), ins.disk, ins.disk_used)
+        if InstancePerf.objects.filter(instance=ins).exists():
+            ins_perf = InstancePerf.objects.get(instance=ins)
+            profile = """
+            BaseDir：{}\nConfDir:{}\nDataDir:{}\nErrorLogDir:{}\nSlowLogDir:{}
+            """.format(
+                ins_perf.base_path, ins_perf.conf_path, ins_perf.data_path,
+                ins_perf.err_log_path, ins_perf.slow_log_path
+            )
+            disk_used, disk_io = ins_perf.disk_used, ins_perf.disk_io
+            com_select = ins_perf.com_select
+            threads_connected = ins_perf.threads_connected
+            threads_running = ins_perf.threads_running
+            qps, tps, io, slow_queries = ins_perf.qps, ins_perf.tps, ins_perf.io, ins_perf.slow_queries
+        else:
+            profile = disk_used = disk_io = ""
+            com_select = threads_connected = threads_running = ""
+            qps = tps = io = slow_queries = ""
         rows.append({
             "id": ins.id,
             "instance_name": ins.instance_name,
@@ -62,8 +78,16 @@ def lists(request):
             "type": ins.type,
             "host": ins.host,
             "port": ins.port,
-            "disk_info": disk_info,
-            "disk_io": ins.disk_io,
+            "profile": profile,
+            "disk_used": disk_used,
+            "disk_io": disk_io,
+            "com_select": com_select,
+            "threads_connected": threads_connected,
+            "threads_running": threads_running,
+            "qps": qps,
+            "tps": tps,
+            "io": io,
+            "slow_queries": slow_queries,
             "user": ins.user,
             "process": process
         })
