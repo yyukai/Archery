@@ -9,9 +9,13 @@
                 <div class="col-sm-3">
                     <input id="loan_id" name="loan_id"  placeholder="" class="form-control" style="width: 100%">
                 </div>
-                <label for="t_sale_id" class="col-sm-2 control-label">正确的业务员工号<span class="red-fonts">*</span></label>
+                <label for="t_sale_id" class="col-sm-1 control-label">正确的工号</label>
                 <div class="col-sm-2">
-                    <input id="t_sale_id" name="t_sale_id" placeholder="" class="form-control">
+                    <input id="t_sale_id" name="t_sale_id" placeholder="工号优先查找" class="form-control">
+                </div>
+                <label for="username" class="col-sm-1 control-label">正确的账号</label>
+                <div class="col-sm-2">
+                    <input id="username" name="username" placeholder="工号和账号，二选一填写" class="form-control">
                 </div>
                 <div class="col-sm-1">
                     <button type="button" class="btn btn-default" onclick="get_record_list()">
@@ -122,12 +126,13 @@
         function get_record_list() {
             var loan_id = $('#loan_id').val();
             var t_sale_id = $('#t_sale_id').val();
+            var username = $('#username').val();
             if (! /^\d+$/.test(loan_id)) {
                 alert("请检查订单编号是否填写正确？");
                 return
             }
-            if (! (/^wd\d+$/i).test(t_sale_id)) {
-                alert("请检查业务员工号是否填写正确？");
+            if (t_sale_id == null && username == null) {
+                alert("业务员工号和账户 必填其一！");
                 return
             }
             console.log(loan_id, t_sale_id);

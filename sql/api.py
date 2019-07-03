@@ -10,7 +10,7 @@ from common.utils.extend_json_encoder import ExtendJSONEncoder
 @csrf_exempt
 def api_host_edit(request):
     host = request.POST.get('host', '')
-    release = request.POST.get('release', '')
+    os = request.POST.get('os', '')
     memory = request.POST.get('memory', '')
     memory_used = request.POST.get('memory_used', '')
     cpu = request.POST.get('cpu', '')
@@ -18,7 +18,7 @@ def api_host_edit(request):
     net_io = request.POST.get('net_io', '')
 
     Host.objects.filter(ip=host).update(**{
-        'release': release,
+        'os': os,
         'memory': memory,
         'memory_used': memory_used,
         'cpu': cpu,
@@ -70,13 +70,17 @@ def db_agent(request):
         data['memory_used'] = t["mem_used"]
     if "mysql" in data:
         t = data.pop("mysql")
-        for port, m_perf in t.items():
+        for port, mysql_perf in t.items():
             try:
                 ins = Instance.objects.get(host=ip, port=port)
+                mysql_perf['instance'] = ins
             except Instance.DoesNotExist:
                 continue
-            m_perf['instance'] = ins
-            InstancePerf.objects.update_or_create(**m_perf)
+
+            if InstancePerf.objects.filter(instance=ins).exists():
+                InstancePerf.objects.filter(instance=ins).update(**mysql_perf)
+            else:
+                InstancePerf.objects.create(**mysql_perf)
 
     if Host.objects.filter(ip=ip).exists():
         Host.objects.filter(ip=ip).update(**data)

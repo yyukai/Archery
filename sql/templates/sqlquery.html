@@ -288,12 +288,7 @@
                     title: 'sql语句',
                     field: 'sqllog',
                     formatter: function (value, row, index) {
-                        if (value.length > 50) {
-                            var sql = value.substr(0, 50) + '...';
-                            return sql;
-                        } else {
-                            return value
-                        }
+                        return substring(value, 50)
                     }
                 }, {
                     title: '完整sql语句',
@@ -847,57 +842,55 @@
             get_querylog();
 
             //获取用户实例列表
-            $(function(){
+            $(function () {
                 $.ajax({
-                type: "get",
-                url: "/group/user_all_instances/",
-                dataType: "json",
-                data: {
-                    type: 'all',
-                    db_type: 'all',
-                    tag_codes: ['can_read']
-                },
-                complete: function () {
-                    //填充实例名
-                    $("#instance_name").selectpicker('val', sessionStorage.getItem('sql_query_instance_name'));
-                    if ( $("#instance_name").val()){
-                        $("#instance_name").selectpicker().trigger("change");
-                    }
-                },
-                success: function (data) {
-                    if (data.status === 0) {
-                        var result = data['data'];
-                        $("#optgroup-mysql").empty();
-                        $("#optgroup-mssql").empty();
-                        $("#optgroup-redis").empty();
-                        $("#optgroup-pgsql").empty();
-                        for (let i = 0; i < result.length; i++) {
-                            let instance = "<option value=\"" + result[i]['instance_name'] + "\">" + result[i]['instance_name'] + "</option>";
-                            if (result[i]['db_type'] === 'mysql') {
-                                $("#optgroup-mysql").append(instance);
-                            } else if (result[i]['db_type'] === 'mssql') {
-                                $("#optgroup-mssql").append(instance);
-                            } else if (result[i]['db_type'] === 'redis') {
-                                $("#optgroup-redis").append(instance);
-                            } else if (result[i]['db_type'] === 'pgsql') {
-                                $("#optgroup-pgsql").append(instance);
-                            } else if (result[i]['db_type'] === 'oracle') {
-                                $("#optgroup-oracle").append(instance);
-                            }
+                    type: "get",
+                    url: "/group/user_all_instances/",
+                    dataType: "json",
+                    data: {
+                        tag_codes: ['can_read']
+                    },
+                    complete: function () {
+                        //填充实例名
+                        $("#instance_name").selectpicker('val', sessionStorage.getItem('sql_query_instance_name'));
+                        if ($("#instance_name").val()) {
+                            $("#instance_name").selectpicker().trigger("change");
                         }
-                        $('#instance_name').selectpicker('render');
-                        $('#instance_name').selectpicker('refresh');
-                        $("#db_name").empty();
-                        $('#db_name').selectpicker('render');
-                        $('#db_name').selectpicker('refresh');
-                    } else {
-                        alert(data.msg);
+                    },
+                    success: function (data) {
+                        if (data.status === 0) {
+                            var result = data['data'];
+                            $("#optgroup-mysql").empty();
+                            $("#optgroup-mssql").empty();
+                            $("#optgroup-redis").empty();
+                            $("#optgroup-pgsql").empty();
+                            for (let i = 0; i < result.length; i++) {
+                                let instance = "<option value=\"" + result[i]['instance_name'] + "\">" + result[i]['instance_name'] + "</option>";
+                                if (result[i]['db_type'] === 'mysql') {
+                                    $("#optgroup-mysql").append(instance);
+                                } else if (result[i]['db_type'] === 'mssql') {
+                                    $("#optgroup-mssql").append(instance);
+                                } else if (result[i]['db_type'] === 'redis') {
+                                    $("#optgroup-redis").append(instance);
+                                } else if (result[i]['db_type'] === 'pgsql') {
+                                    $("#optgroup-pgsql").append(instance);
+                                } else if (result[i]['db_type'] === 'oracle') {
+                                    $("#optgroup-oracle").append(instance);
+                                }
+                            }
+                            $('#instance_name').selectpicker('render');
+                            $('#instance_name').selectpicker('refresh');
+                            $("#db_name").empty();
+                            $('#db_name').selectpicker('render');
+                            $('#db_name').selectpicker('refresh');
+                        } else {
+                            alert(data.msg);
+                        }
+                    },
+                    error: function (XMLHttpRequest, textStatus, errorThrown) {
+                        alert(errorThrown);
                     }
-                },
-                error: function (XMLHttpRequest, textStatus, errorThrown) {
-                    alert(errorThrown);
-                }
-            });
+                });
             });
 
 

@@ -5,11 +5,36 @@ from common.utils.aes_decryptor import Prpcrypt
 from django.utils.translation import gettext as _
 
 
+class ResourceGroup(models.Model):
+    """
+    资源组
+    """
+    group_id = models.AutoField('组ID', primary_key=True)
+    group_name = models.CharField('组名称', max_length=100, unique=True)
+    group_parent_id = models.BigIntegerField('父级id', default=0)
+    group_sort = models.IntegerField('排序', default=1)
+    group_level = models.IntegerField('层级', default=1)
+    ding_webhook = models.CharField('钉钉webhook地址', max_length=255, blank=True)
+    is_deleted = models.IntegerField('是否删除', choices=((0, '否'), (1, '是')), default=0)
+    create_time = models.DateTimeField(auto_now_add=True)
+    update_time = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return self.group_name
+
+    class Meta:
+        managed = True
+        db_table = 'resource_group'
+        verbose_name = u'资源组管理'
+        verbose_name_plural = u'资源组管理'
+
+
 class Users(AbstractUser):
     """
     用户信息扩展
     """
     display = models.CharField('显示的中文名', max_length=50, default='')
+    resource_group = models.ManyToManyField(ResourceGroup, related_name='res_group_users', help_text='资源组')
     ding_user_id = models.CharField('钉钉UserID', max_length=50, blank=True, null=True)
     failed_login_count = models.IntegerField('失败计数', default=0)
     last_login_failed_at = models.DateTimeField('上次失败登录时间', blank=True, null=True)
@@ -24,6 +49,23 @@ class Users(AbstractUser):
         db_table = 'sql_users'
         verbose_name = u'用户管理'
         verbose_name_plural = u'用户管理'
+
+
+class Tag(models.Model):
+    """实例标签配置"""
+    tag_code = models.CharField('标签代码', max_length=20, unique=True)
+    tag_name = models.CharField('标签名称', max_length=20, unique=True)
+    active = models.BooleanField('激活状态', default=True)
+    create_time = models.DateTimeField('创建时间', auto_now_add=True)
+
+    def __str__(self):
+        return self.tag_name
+
+    class Meta:
+        managed = True
+        db_table = 'sql_tag'
+        verbose_name = u'实例标签'
+        verbose_name_plural = u'实例标签'
 
 
 DB_TYPE_CHOICES = (
@@ -51,6 +93,8 @@ class Instance(models.Model):
     service_name = models.CharField('Oracle service name', max_length=50, null=True, blank=True)
     sid = models.CharField('Oracle sid', max_length=50, null=True, blank=True)
     parent = models.ManyToManyField("self", symmetrical=False, related_name="children", blank=True)
+    resource_group = models.ManyToManyField(ResourceGroup, related_name='res_group_instances', help_text='资源组')
+    tag = models.ManyToManyField(Tag, related_name='instance', help_text='标签')
     create_time = models.DateTimeField('创建时间', auto_now_add=True)
     update_time = models.DateTimeField('更新时间', auto_now=True)
 
@@ -98,101 +142,14 @@ class InstancePerf(models.Model):
     tps = models.IntegerField('每秒的事务量', null=True, blank=True)
     io = models.IntegerField('数据库I/O', null=True, blank=True)
     slow_queries = models.IntegerField('慢查询数', null=True, blank=True)
+    update_time = models.DateTimeField('更新时间', auto_now=True)
+
 
     class Meta:
         managed = True
         db_table = 'sql_instance_perf'
         verbose_name = u'实例性能监控指标'
         verbose_name_plural = u'实例性能监控指标'
-
-
-class ResourceGroup(models.Model):
-    """
-    资源组
-    """
-    group_id = models.AutoField('组ID', primary_key=True)
-    group_name = models.CharField('组名称', max_length=100, unique=True)
-    group_parent_id = models.BigIntegerField('父级id', default=0)
-    group_sort = models.IntegerField('排序', default=1)
-    group_level = models.IntegerField('层级', default=1)
-    ding_webhook = models.CharField('钉钉webhook地址', max_length=255, blank=True)
-    is_deleted = models.IntegerField('是否删除', choices=((0, '否'), (1, '是')), default=0)
-    create_time = models.DateTimeField(auto_now_add=True)
-    sys_time = models.DateTimeField(auto_now=True)
-    users = models.ManyToManyField(Users, through='ResourceGroup2User', through_fields=('resource_group', 'user'))
-    instances = models.ManyToManyField(Instance, through='ResourceGroup2Instance',
-                                       through_fields=('resource_group', 'instance'))
-
-    def __str__(self):
-        return self.group_name
-
-    class Meta:
-        managed = True
-        db_table = 'resource_group'
-        verbose_name = u'资源组管理'
-        verbose_name_plural = u'资源组管理'
-
-
-class ResourceGroup2User(models.Model):
-    """资源组和用户关联表"""
-    resource_group = models.ForeignKey(ResourceGroup, on_delete=models.CASCADE)
-    user = models.ForeignKey(Users, on_delete=models.CASCADE)
-    create_time = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        managed = True
-        db_table = 'resource_group_user'
-        unique_together = ('resource_group', 'user')
-        verbose_name = u'资源组关联用户'
-        verbose_name_plural = u'资源组关联用户'
-
-
-class ResourceGroup2Instance(models.Model):
-    """资源组和实例关联表"""
-    resource_group = models.ForeignKey(ResourceGroup, on_delete=models.CASCADE)
-    instance = models.ForeignKey(Instance, on_delete=models.CASCADE)
-    create_time = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        managed = True
-        db_table = 'resource_group_instance'
-        unique_together = ('resource_group', 'instance')
-        verbose_name = u'资源组关联实例'
-        verbose_name_plural = u'资源组关联实例'
-
-
-class InstanceTag(models.Model):
-    """实例标签配置"""
-    tag_code = models.CharField('标签代码', max_length=20, unique=True)
-    tag_name = models.CharField('标签名称', max_length=20, unique=True)
-    active = models.BooleanField('激活状态', default=True)
-    create_time = models.DateTimeField('创建时间', auto_now_add=True)
-    instances = models.ManyToManyField(Instance, through='InstanceTagRelations',
-                                       through_fields=('instance_tag', 'instance'))
-
-    def __str__(self):
-        return self.tag_name
-
-    class Meta:
-        managed = True
-        db_table = 'sql_instance_tag'
-        verbose_name = u'实例标签'
-        verbose_name_plural = u'实例标签'
-
-
-class InstanceTagRelations(models.Model):
-    """实例标签关系"""
-    instance = models.ForeignKey(Instance, on_delete=models.CASCADE)
-    instance_tag = models.ForeignKey(InstanceTag, on_delete=models.CASCADE)
-    active = models.BooleanField('激活状态', default=True)
-    create_time = models.DateTimeField('创建时间', auto_now_add=True)
-
-    class Meta:
-        managed = True
-        db_table = 'sql_instance_tag_relations'
-        unique_together = ('instance', 'instance_tag')
-        verbose_name = u'实例标签关系'
-        verbose_name_plural = u'实例标签关系'
 
 
 SQL_WORKFLOW_CHOICES = (
@@ -649,6 +606,7 @@ class Permission(models.Model):
     """
 
     class Meta:
+        managed = True
         permissions = (
             ('menu_dashboard', '菜单 Dashboard'),
             ('menu_sqlcheck', '菜单 SQL审核'),
@@ -661,26 +619,29 @@ class Permission(models.Model):
             ('menu_sqloptimize', '菜单 SQL优化'),
             ('menu_sqladvisor', '菜单 优化工具'),
             ('menu_slowquery', '菜单 慢查日志'),
-            ('menu_dbdiagnostic', '菜单 会话管理'),
             ('menu_backup', '菜单 备份'),
             ('menu_binlog', '菜单 Binlog管理'),
-            ('menu_binlog2sql', '菜单 Binlog2SQL'),
-            ('menu_schemasync', '菜单 SchemaSync'),
             ('menu_instance', '菜单 实例管理'),
+            ('menu_instance_list', '菜单 实例列表'),
+            ('instance_user', '实例用户查看'),
+            ('instance_user_edit', '实例用户编辑'),
+            ('menu_dbdiagnostic', '菜单 会话管理'),
             ('menu_database', '菜单 数据库管理'),
             ('menu_log', '菜单 日志管理'),
             ('menu_data_safe', '菜单 数据安全'),
             ('menu_host', '菜单 主机管理'),
             ('menu_param', '菜单 参数配置'),
             ('menu_data_dictionary', '菜单 数据字典'),
+            ('menu_binlog2sql', '菜单 Binlog2SQL'),
+            ('menu_schemasync', '菜单 SchemaSync'),
             ('menu_system', '菜单 系统管理'),
             ('menu_document', '菜单 相关文档'),
             ('menu_themis', '菜单 themis'),
             ('menu_tools', '菜单 高效小功能'),
             ('menu_wpan_upload', '菜单 上传微贷云盘'),
+            ('wpan_upload_audit', '上传微贷云盘审核'),
             ('tools_loan_update', '订单所属业务员更改'),
             ('tools_loan_update_audit', '订单所属业务员更改审核'),
-            ('wpan_upload_audit', '上传微贷云盘审核'),
             ('sql_submit', '提交SQL上线工单'),
             ('sql_review', '审核SQL上线工单'),
             ('sql_execute_for_resource_group', '执行SQL上线工单(资源组粒度)'),
@@ -698,9 +659,6 @@ class Permission(models.Model):
             ('process_view', '查看会话'),
             ('database_edit', '编辑数据库'),
             ('binlog_del', '删除Binlog文件'),
-            ('instance_list', '实例列表查看'),
-            ('instance_user', '实例用户查看'),
-            ('instance_user_edit', '实例用户编辑'),
             ('query_audit', '查询审计'),
             ('masking_field', '脱敏字段'),
             ('host', '物理主机管理'),
@@ -784,7 +742,7 @@ class QueryAudit(models.Model):
 
 
 class Host(models.Model):
-    os = models.CharField('系统版本', max_length=50)
+    os = models.CharField('系统版本', max_length=100)
     ip = models.CharField('IP地址', max_length=15)
     hostname = models.CharField('主机名', max_length=50)
     memory = models.CharField('内存', max_length=15)
@@ -839,9 +797,9 @@ class BGTable(models.Model):
 
 class ToolsLoanUpdate(models.Model):
     loan_id = models.CharField('订单编号', max_length=64)
-    s_sale_id = models.CharField('原业务员账号', max_length=64)
+    s_sale_id = models.CharField('原业务员账号', max_length=64, blank=True, null=True)
     s_sale_name = models.CharField('原业务员姓名', max_length=64, blank=True, null=True)
-    t_sale_id = models.CharField('修正业务员账号', max_length=64)
+    t_sale_id = models.CharField('修正业务员账号', max_length=64, blank=True, null=True)
     t_sale_name = models.CharField('修正业务员姓名', max_length=64, blank=True, null=True)
     t_emp_id = models.CharField('修正业务员工号', max_length=64, blank=True, null=True)
     t_sale_uid = models.CharField('袋鼠uid', max_length=64, blank=True, null=True)

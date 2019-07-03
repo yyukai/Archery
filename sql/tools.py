@@ -29,6 +29,7 @@ def tools_loan_update(request):
 def loan_update_search(request):
     loan_id = request.GET.get('loan_id', None)
     emp_id = request.GET.get('t_sale_id', None)
+    username = request.GET.get('username', None)
 
     if not loan_id or not re.match(r'WD\d+', emp_id, re.I):
         return JsonResponse({"code": -1, "errmsg": "异常调用！"})
@@ -42,7 +43,10 @@ def loan_update_search(request):
     db2 = MySQLdb.connect(host=au_db_host, port=au_db_port, user=au_db_user, passwd=au_db_pwd, db="auth",
                           charset='utf8', use_unicode=True)
     c2 = db2.cursor()
-    sql2 = """SELECT username,realname,empid,daishuuid FROM user WHERE empid IN ('{}');""".format(emp_id)
+    if emp_id:
+        sql2 = """SELECT username,realname,empid,daishuuid FROM user WHERE empid IN ('{}');""".format(emp_id)
+    else:
+        sql2 = """SELECT username,realname,empid,daishuuid FROM user WHERE username IN ('{}');""".format(username)
     c2.execute(sql2)
     tuple_user = c2.fetchall()
 

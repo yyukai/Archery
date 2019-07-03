@@ -25,6 +25,7 @@
                                 <select id="instance_name" name="instance_name"
                                         class="selectpicker show-tick form-control bs-select-hidden"
                                         data-live-search="true"
+                                        title="请选择实例:"
                                         data-placeholder="请选择实例:" required>
                                     <option value="is-empty" disabled="" selected="selected">请选择实例:</option>
                                 </select>
@@ -660,12 +661,7 @@
                                             "field": i,
                                             "title": column,
                                             formatter: function (value, row, index) {
-                                                if (value.length > 200) {
-                                                    var sql = value.substr(0, 200) + '...';
-                                                    return sql;
-                                                } else {
-                                                    return value
-                                                }
+                                                return substring(value, 200)
                                             }
                                         })
                                     }
@@ -720,12 +716,7 @@
                                                 "field": i,
                                                 "title": column,
                                                 formatter: function (value, row, index) {
-                                                    if (value.length > 200) {
-                                                        var sql = value.substr(0, 200) + '...';
-                                                        return sql;
-                                                    } else {
-                                                        return value
-                                                    }
+                                                    return substring(value, 200)
                                                 }
                                             })
                                         });
@@ -869,8 +860,7 @@
                     url: "/group/user_all_instances/",
                     dataType: "json",
                     data: {
-                        type: 'all',
-                        db_type: 'mysql'
+                        db_type: ['mysql']
                     },
                     complete: function () {
                         //适配从慢查询过来的优化请求

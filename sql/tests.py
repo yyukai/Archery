@@ -36,6 +36,8 @@ class TestSignUp(TestCase):
 
     def tearDown(self):
         SysConfig().purge()
+        Group.objects.all().delete()
+        User.objects.all().delete()
 
     def test_sing_up_not_username(self):
         """
@@ -96,7 +98,8 @@ class TestSignUp(TestCase):
         with self.assertRaises(User.DoesNotExist):
             User.objects.get(username='test')
 
-    def test_sing_up_valid(self):
+    @patch('common.auth.init_user')
+    def test_sing_up_valid(self, mock_init):
         """
         正常注册
         """
@@ -105,26 +108,37 @@ class TestSignUp(TestCase):
                                'password2': '123456test', 'display': 'test', 'email': '123@123.com'})
         user = User.objects.get(username='test')
         self.assertTrue(user)
+        # 注册后登录
+        r = self.client.post('/authenticate/', data={'username': 'test', 'password': '123456test'}, follow=False)
+        r_json = r.json()
+        self.assertEqual(0, r_json['status'])
+        # 只允许初始化用户一次
+        mock_init.assert_called_once()
 
 
 class TestUser(TestCase):
     def setUp(self):
         self.u1 = User(username='test_user', display='中文显示', is_active=True)
+        self.u1.set_password('test_password')
         self.u1.save()
 
     def tearDown(self):
         self.u1.delete()
 
-    def testLogin(self):
+    @patch('common.auth.init_user')
+    def testLogin(self, mock_init):
         """login 页面测试"""
-        c = Client()
-        r = c.get('/login/')
+        r = self.client.get('/login/')
         self.assertEqual(r.status_code, 200)
         self.assertTemplateUsed(r, 'login.html')
-        c.force_login(self.u1)
+        r = self.client.post('/authenticate/', data={'username': 'test_user', 'password': 'test_password'})
+        r_json = r.json()
+        self.assertEqual(0, r_json['status'])
         # 登录后直接跳首页
-        r = c.get('/login/', follow=True)
+        r = self.client.get('/login/', follow=True)
         self.assertRedirects(r, '/sqlworkflow/')
+        # init 只调用一次
+        mock_init.assert_called_once()
 
 
 class TestQueryPrivilegesCheck(TestCase):
@@ -1058,7 +1072,7 @@ class TestWorkflowView(TransactionTestCase):
         """测试工单列表"""
         c = Client()
         c.force_login(self.superuser1)
-        r = c.post('/sqlworkflow_list/', {'limit': 10, 'offset': 0, 'navStatus': 'all'})
+        r = c.post('/sqlworkflow_list/', {'limit': 10, 'offset': 0, 'navStatus': ''})
         r_json = r.json()
         self.assertEqual(r_json['total'], 2)
         # 列表按创建时间倒序排列, 第二个是wf1 , 是已正常结束
@@ -1066,16 +1080,48 @@ class TestWorkflowView(TransactionTestCase):
 
         # u1拿到u1的
         c.force_login(self.u1)
-        r = c.post('/sqlworkflow_list/', {'limit': 10, 'offset': 0, 'navStatus': 'all'})
+        r = c.post('/sqlworkflow_list/', {'limit': 10, 'offset': 0, 'navStatus': ''})
         r_json = r.json()
         self.assertEqual(r_json['total'], 1)
         self.assertEqual(r_json['rows'][0]['id'], self.wf1.id)
 
         # u3拿到None
         c.force_login(self.u3)
-        r = c.post('/sqlworkflow_list/', {'limit': 10, 'offset': 0, 'navStatus': 'all'})
+        r = c.post('/sqlworkflow_list/', {'limit': 10, 'offset': 0, 'navStatus': ''})
         r_json = r.json()
         self.assertEqual(r_json['total'], 0)
+
+    def testWorkflowListViewFilter(self):
+        """测试工单列表筛选"""
+        c = Client()
+        c.force_login(self.superuser1)
+        # 工单状态
+        r = c.post('/sqlworkflow_list/', {'limit': 10, 'offset': 0, 'navStatus': 'workflow_finish'})
+        r_json = r.json()
+        self.assertEqual(r_json['total'], 1)
+        # 列表按创建时间倒序排列
+        self.assertEqual(r_json['rows'][0]['status'], 'workflow_finish')
+
+        # 实例
+        r = c.post('/sqlworkflow_list/', {'limit': 10, 'offset': 0, 'instance_id': self.wf1.instance_id})
+        r_json = r.json()
+        self.assertEqual(r_json['total'], 2)
+        # 列表按创建时间倒序排列, 第二个是wf1
+        self.assertEqual(r_json['rows'][1]['workflow_name'], self.wf1.workflow_name)
+
+        # 资源组
+        r = c.post('/sqlworkflow_list/', {'limit': 10, 'offset': 0, 'instance_id': self.wf1.group_id})
+        r_json = r.json()
+        self.assertEqual(r_json['total'], 2)
+        # 列表按创建时间倒序排列, 第二个是wf1
+        self.assertEqual(r_json['rows'][1]['workflow_name'], self.wf1.workflow_name)
+
+        # 时间
+        start_date = datetime.strftime(self.now, '%Y-%m-%d')
+        end_date = datetime.strftime(self.now, '%Y-%m-%d')
+        r = c.post('/sqlworkflow_list/', {'limit': 10, 'offset': 0, 'start_date': start_date, 'end_date': end_date})
+        r_json = r.json()
+        self.assertEqual(r_json['total'], 2)
 
     @patch('sql.utils.workflow_audit.Audit.detail_by_workflow_id')
     @patch('sql.utils.workflow_audit.Audit.audit')
@@ -1970,29 +2016,7 @@ class TestNotify(TestCase):
 
     @patch('sql.notify.MsgSender')
     @patch('sql.notify.auth_group_users')
-    def test_notify_for_sqlreview_audit_reject(self, _auth_group_users, _msg_sender):
-        """
-        测试SQL上线申请审核驳回通知
-        :return:
-        """
-        # 通知人修改
-        _auth_group_users.return_value = [self.user]
-        # 开启消息通知
-        self.sys_config.set('mail', 'true')
-        self.sys_config.set('ding', 'true')
-        # 修改工单状态审核驳回
-        self.audit.workflow_type = WorkflowDict.workflow_type['sqlreview']
-        self.audit.workflow_id = self.wf.id
-        self.audit.current_status = WorkflowDict.workflow_status['audit_reject']
-        self.audit.create_user = self.user.username
-        self.audit.save()
-        r = notify_for_audit(audit_id=self.audit.audit_id)
-        self.assertIsNone(r)
-        _msg_sender.assert_called_once()
-
-    @patch('sql.notify.MsgSender')
-    @patch('sql.notify.auth_group_users')
-    def test_notify_for_sqlreview_audit_reject(self, _auth_group_users, _msg_sender):
+    def test_notify_for_sqlreview_audit_abort(self, _auth_group_users, _msg_sender):
         """
         测试SQL上线申请审核取消通知
         :return:
@@ -2015,7 +2039,7 @@ class TestNotify(TestCase):
 
     @patch('sql.notify.MsgSender')
     @patch('sql.notify.auth_group_users')
-    def test_notify_for_sqlreview_audit_reject(self, _auth_group_users, _msg_sender):
+    def test_notify_for_sqlreview_wrong_workflow_type(self, _auth_group_users, _msg_sender):
         """
         测试不存在的工单类型
         :return:
@@ -2033,7 +2057,7 @@ class TestNotify(TestCase):
 
     @patch('sql.notify.MsgSender')
     @patch('sql.notify.auth_group_users')
-    def test_notify_for_query_audit_wait(self, _auth_group_users, _msg_sender):
+    def test_notify_for_query_audit_wait_apply_db_perm(self, _auth_group_users, _msg_sender):
         """
         测试查询申请库权限
         :return:
@@ -2057,7 +2081,7 @@ class TestNotify(TestCase):
 
     @patch('sql.notify.MsgSender')
     @patch('sql.notify.auth_group_users')
-    def test_notify_for_query_audit_wait(self, _auth_group_users, _msg_sender):
+    def test_notify_for_query_audit_wait_apply_tb_perm(self, _auth_group_users, _msg_sender):
         """
         测试查询申请表权限
         :return:
@@ -2140,3 +2164,149 @@ class TestNotify(TestCase):
         r = notify_for_binlog2sql(_async_task)
         self.assertIsNone(r)
         _msg_sender.assert_called_once()
+
+
+class TestDataDictionary(TestCase):
+    """
+    测试数据字典
+    """
+
+    def setUp(self):
+        self.sys_config = SysConfig()
+        self.su = User.objects.create(username='s_user', display='中文显示', is_active=True, is_superuser=True)
+        self.client = Client()
+        self.client.force_login(self.su)
+        # 使用 travis.ci 时实例和测试service保持一致
+        self.ins = Instance.objects.create(instance_name='test_instance', type='slave', db_type='mysql',
+                                           host=settings.DATABASES['default']['HOST'],
+                                           port=settings.DATABASES['default']['PORT'],
+                                           user=settings.DATABASES['default']['USER'],
+                                           password=settings.DATABASES['default']['PASSWORD'])
+        self.db_name = settings.DATABASES['default']['TEST']['NAME']
+
+    def tearDown(self):
+        self.sys_config.purge()
+        Instance.objects.all().delete()
+        User.objects.all().delete()
+
+    def test_data_dictionary_view(self):
+        """
+        测试访问数据字典页面
+        :return:
+        """
+        r = self.client.get(path='/data_dictionary/')
+        self.assertEqual(r.status_code, 200)
+
+    @patch('sql.data_dictionary.get_engine')
+    def test_table_list(self, _get_engine):
+        """
+        测试获取表清单
+        :return:
+        """
+        _get_engine.return_value.query.return_value = ResultSet(rows=(('test1', '测试表1'), ('test2', '测试表2')))
+        data = {
+            'instance_name': self.ins.instance_name,
+            'db_name': self.db_name
+        }
+        r = self.client.get(path='/data_dictionary/table_list/', data=data)
+        self.assertEqual(r.status_code, 200)
+        self.assertDictEqual(json.loads(r.content),
+                             {'data': {'t': [['test1', '测试表1'], ['test2', '测试表2']]}, 'status': 0})
+
+    def test_table_list_not_param(self):
+        """
+        测试获取表清单，参数不完整
+        :return:
+        """
+        data = {
+            'instance_name': 'not exist ins',
+        }
+        r = self.client.get(path='/data_dictionary/table_list/', data=data)
+        self.assertEqual(r.status_code, 200)
+        self.assertDictEqual(json.loads(r.content), {'msg': '非法调用！', 'status': 1})
+
+    def test_table_list_instance_does_not_exist(self):
+        """
+        测试获取表清单，实例不存在
+        :return:
+        """
+        data = {
+            'instance_name': 'not exist ins',
+            'db_name': self.db_name
+        }
+        r = self.client.get(path='/data_dictionary/table_list/', data=data)
+        self.assertEqual(r.status_code, 200)
+        self.assertDictEqual(json.loads(r.content), {'msg': 'Instance.DoesNotExist', 'status': 1})
+
+    @patch('sql.data_dictionary.get_engine')
+    def test_table_list_exception(self, _get_engine):
+        """
+        测试获取表清单，异常
+        :return:
+        """
+        _get_engine.side_effect = RuntimeError('test error')
+        data = {
+            'instance_name': self.ins.instance_name,
+            'db_name': self.db_name
+        }
+        r = self.client.get(path='/data_dictionary/table_list/', data=data)
+        self.assertEqual(r.status_code, 200)
+        self.assertDictEqual(json.loads(r.content), {'msg': 'test error', 'status': 1})
+
+    @patch('sql.data_dictionary.get_engine')
+    def test_table_info(self, _get_engine):
+        """
+        测试获取表信息
+        :return:
+        """
+        _get_engine.return_value.query.return_value = ResultSet(rows=(('test1', '测试表1'), ('test2', '测试表2')))
+        data = {
+            'instance_name': self.ins.instance_name,
+            'db_name': self.db_name,
+            'tb_name': 'sql_instance'
+        }
+        r = self.client.get(path='/data_dictionary/table_info/', data=data)
+        self.assertEqual(r.status_code, 200)
+        self.assertListEqual(list(json.loads(r.content)['data'].keys()), ['meta_data', 'desc', 'index', 'create_sql'])
+
+    def test_table_info_not_param(self):
+        """
+        测试获取表清单，参数不完整
+        :return:
+        """
+        data = {
+            'instance_name': 'not exist ins',
+        }
+        r = self.client.get(path='/data_dictionary/table_info/', data=data)
+        self.assertEqual(r.status_code, 200)
+        self.assertDictEqual(json.loads(r.content), {'msg': '非法调用！', 'status': 1})
+
+    def test_table_info_instance_does_not_exist(self):
+        """
+        测试获取表清单，实例不存在
+        :return:
+        """
+        data = {
+            'instance_name': 'not exist ins',
+            'db_name': self.db_name,
+            'tb_name': 'sql_instance'
+        }
+        r = self.client.get(path='/data_dictionary/table_info/', data=data)
+        self.assertEqual(r.status_code, 200)
+        self.assertDictEqual(json.loads(r.content), {'msg': 'Instance.DoesNotExist', 'status': 1})
+
+    @patch('sql.data_dictionary.get_engine')
+    def test_table_info_exception(self, _get_engine):
+        """
+        测试获取表清单，异常
+        :return:
+        """
+        _get_engine.side_effect = RuntimeError('test error')
+        data = {
+            'instance_name': self.ins.instance_name,
+            'db_name': self.db_name,
+            'tb_name': 'sql_instance'
+        }
+        r = self.client.get(path='/data_dictionary/table_info/', data=data)
+        self.assertEqual(r.status_code, 200)
+        self.assertDictEqual(json.loads(r.content), {'msg': 'test error', 'status': 1})

@@ -69,11 +69,7 @@
                 title: '执行语句',
                 field: 0,
                 formatter: function (value, row, index) {
-                    if (value.length > 50) {
-                        return value.substr(0, 50) + '...';
-                    } else {
-                        return value
-                    }
+                    return substring(value, 50)
                 }
             }, {
                 title: '完整执行语句',
@@ -83,11 +79,7 @@
                 title: '回滚语句',
                 field: 1,
                 formatter: function (value, row, index) {
-                    if (value.length > 80) {
-                        return value.substr(0, 80) + '...';
-                    } else {
-                        return value
-                    }
+                    return substring(value, 80)
                 }
             }, {
                 title: '完整回滚语句',

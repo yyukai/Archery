@@ -160,8 +160,7 @@
                 url: "/group/user_all_instances/",
                 dataType: "json",
                 data: {
-                    type: 'all',
-                    db_type: 'mysql'
+                    db_type: ['mysql']
                 },
                 complete: function () {
                 },
@@ -356,12 +355,7 @@
                                     title: 'SQL',
                                     field: 'sql',
                                     formatter: function (value, row, index) {
-                                        if (value.length > 200) {
-                                            var sql = value.substr(0, 200) + '...';
-                                            return sql;
-                                        } else {
-                                            return value
-                                        }
+                                        return substring(value, 200)
                                     }
                                 }, {
                                     title: '完整SQL',

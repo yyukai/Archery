@@ -1,11 +1,9 @@
 # -*- coding: UTF-8 -*-
 import os
 import time
-import re
 
 import simplejson as json
 from django.conf import settings
-
 from django.contrib.auth.decorators import permission_required
 from django.http import HttpResponse
 
@@ -28,37 +26,31 @@ def lists(request):
     search = request.POST.get('search', '')
     host = request.POST.get('host', '')
 
+    # 组合筛选项
+    filter_dict = dict()
     if host:
-        instances = Instance.objects.filter(host=host)
-    else:
-        instances = Instance.objects.all()
+        filter_dict['host'] = host
     # 过滤搜索
     if search:
-        instances = instances.filter(instance_name__icontains=search)
+        filter_dict['instance_name__icontains'] = search
     # 过滤实例类型
     if type:
-        instances = instances.filter(type=type)
+        filter_dict['type'] = type
     # 过滤数据库类型
     if db_type:
-        instances = instances.filter(db_type=db_type)
+        filter_dict['db_type'] = db_type
+
+    instances = Instance.objects.filter(**filter_dict)
     # 过滤标签，返回同时包含全部标签的实例，TODO 循环会生成多表JOIN，如果数据量大会存在效率问题
-    if tags:
-        for tag in tags:
-            instances = instances.filter(instancetagrelations__instance_tag=tag, instancetagrelations__active=True)
+    for tag in tags:
+        instances = instances.filter(tag__tag_code=tag)
 
     count = instances.count()
     rows = list()
     for ins in instances[offset:limit]:
-        process = -1
-        if ins.db_type == "mysql":
-            query_engine = get_engine(instance=ins)
-            sql = "select count(1) from information_schema.processlist;"
-            process = query_engine.query('information_schema', sql).rows[0][0]
         if InstancePerf.objects.filter(instance=ins).exists():
             ins_perf = InstancePerf.objects.get(instance=ins)
-            profile = """
-            BaseDir：{}\nConfDir:{}\nDataDir:{}\nErrorLogDir:{}\nSlowLogDir:{}
-            """.format(
+            profile = """BaseDir：{}\nConfDir：{}\nDataDir：{}\nErrorLogDir：{}\nSlowLogDir：{}""".format(
                 ins_perf.base_path, ins_perf.conf_path, ins_perf.data_path,
                 ins_perf.err_log_path, ins_perf.slow_log_path
             )
@@ -67,10 +59,12 @@ def lists(request):
             threads_connected = ins_perf.threads_connected
             threads_running = ins_perf.threads_running
             qps, tps, io, slow_queries = ins_perf.qps, ins_perf.tps, ins_perf.io, ins_perf.slow_queries
+            update_time = ins_perf.update_time
         else:
             profile = disk_used = disk_io = ""
             com_select = threads_connected = threads_running = ""
             qps = tps = io = slow_queries = ""
+            update_time = ""
         rows.append({
             "id": ins.id,
             "instance_name": ins.instance_name,
@@ -78,6 +72,7 @@ def lists(request):
             "type": ins.type,
             "host": ins.host,
             "port": ins.port,
+            "user": ins.user,
             "profile": profile,
             "disk_used": disk_used,
             "disk_io": disk_io,
@@ -88,8 +83,7 @@ def lists(request):
             "tps": tps,
             "io": io,
             "slow_queries": slow_queries,
-            "user": ins.user,
-            "process": process
+            "update_time": update_time
         })
 
     result = {"total": count, "rows": rows}

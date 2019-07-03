@@ -116,7 +116,7 @@ def replication_delay(request):
     masters = list()
     delay_info = {}
     all_instances = list()
-    for ins in user_instances(request.user, type='all', db_type='mysql'):
+    for ins in user_instances(request.user, type='all', db_type=['mysql']):
         all_instances.append([str(ins.id), ins.host + ":" + str(ins.port), ins.instance_name])
     hour = datetime.datetime.now() - datetime.timedelta(hours=1)
     ins_name = request.GET.get('name', '')
@@ -124,10 +124,10 @@ def replication_delay(request):
         for ins in Instance.objects.filter(instance_name=ins_name):
             masters.append([str(ins.id), ins.host + ":" + str(ins.port), ins.instance_name])
     else:
-        for ins in user_instances(request.user, type='master', db_type='mysql'):
+        for ins in user_instances(request.user, type='master', db_type=['mysql']):
             masters.append([str(ins.id), ins.host + ":" + str(ins.port), ins.instance_name])
 
-    for ins in user_instances(request.user, type='all', db_type='mysql'):
+    for ins in user_instances(request.user, type='all', db_type=['mysql']):
         all_instances.append([str(ins.id), ins.host + ":" + str(ins.port), ins.instance_name])
         slave_ins_info = list()
         for slave in Instance.objects.filter(parent=ins, type='slave'):

@@ -31,7 +31,7 @@ def binlog_list_total(request):
 
     result = []
 
-    obj_list = user_instances(request.user, 'all', 'mysql')
+    obj_list = user_instances(request.user, type='all', db_type=['mysql'])
     search = request.POST.get('search', '')
     if search:
         obj_list = obj_list.filter(Q(instance_name__contains=search) | Q(host__contains=search))

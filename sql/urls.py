@@ -7,7 +7,7 @@ import sql.query_privileges
 import sql.sql_optimize
 from common import auth, config, workflow, dashboard, check
 from sql import views, sql_workflow, sql_analyze, query, slowlog, instance, db_diagnostic, resource_group, binlog, \
-    backup, data_safe, query_audit, api, host, database, data_dictionary, wpan_upload, bg_table, tools
+    data_dictionary, backup, data_safe, query_audit, api, host, database, wpan_upload, bg_table, tools
 from sql.utils import tasks
 
 urlpatterns = [
@@ -76,9 +76,9 @@ urlpatterns = [
     path('group/addrelation/', resource_group.addrelation),
     path('group/relations/', resource_group.associated_objects),
     path('group/instances/', resource_group.instances),
-    path('group/instances/', resource_group.instances),
     path('group/unassociated/', resource_group.unassociated_objects),
     path('group/auditors/', resource_group.auditors),
+    path('group/changeauditors/', resource_group.changeauditors),
     path('group/user_all_instances/', resource_group.user_all_instances),
 
     path('instance/list/', instance.lists),
@@ -101,12 +101,6 @@ urlpatterns = [
 
     path('bg_table/', views.bg_table),
     path('bg_table_list/', bg_table.bg_table_list),
-
-    # path('redis/', views.redis),
-    # path('redis_query/', redis.redis_query),
-    # path('redis_apply/', views.redis_apply),
-    # path('redis_apply_list/', redis.redis_apply_list),
-    # path('redis_apply_audit/', redis.redis_apply_audit),
 
     path('replication/', views.replication),
     path('replication_echart/', views.replication_echart),

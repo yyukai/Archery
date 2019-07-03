@@ -84,7 +84,10 @@
                     }
                 }, {
                     title: '系统',
-                    field: 'release'
+                    field: 'os',
+                    formatter: function (value, row, index) {
+                        return substring(value, 20)
+                    }
                 }, {
                     title: '数据库类型',
                     field: 'type'
@@ -101,8 +104,8 @@
                         return row.cpu + "/" + (value > 60 ? "<span style='color:red'>"+value+"%</span>":value + "%")
                     }
                 }, {
-                    title: '网卡流量（M）',
-                    field: 'net_traffic',
+                    title: '网卡流量',
+                    field: 'net_io',
                     formatter: function (value, row, index) {
                         return value > 9 ? "<span style='color:red'>"+value+"</span>":value
                     }
@@ -144,7 +147,7 @@
                     }
                 }, {
                     title: '更新时间',
-                    field: 'time'
+                    field: 'update_time'
                 }, {
                     title: '操作',
                     field: 'inited',

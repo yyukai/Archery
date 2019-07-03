@@ -28,13 +28,13 @@ def host_list(request):
         (ins1, ins2, ins3, ins4, ins5, ins6) = instance_names
         result.append({
             'id': obj.id,
-            'release': obj.release,
+            'os': obj.os,
             'ip': obj.ip,
             'mem': obj.memory,
             'mem_used': obj.memory_used,
             'cpu': obj.cpu,
             'cpu_used': obj.cpu_used,
-            'net_traffic': obj.net_traffic,
+            'net_io': obj.net_io,
             'type': obj.type,
             'inited': obj.inited,
             'ins1': ins1,
@@ -43,7 +43,7 @@ def host_list(request):
             'ins4': ins4,
             'ins5': ins5,
             'ins6': ins6,
-            'time': obj.update_time
+            'update_time': obj.update_time
         })
     return HttpResponse(json.dumps(result, cls=ExtendJSONEncoder, bigint_as_string=True),
                         content_type='application/json')

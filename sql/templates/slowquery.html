@@ -176,8 +176,7 @@
                     url: "/group/user_all_instances/",
                     dataType: "json",
                     data: {
-                        type: 'all',
-                        db_type: 'mysql'
+                        db_type: ['mysql']
                     },
                     complete: function () {
                         //保留如果已选择instance_name，进入页面自动加载
@@ -347,12 +346,7 @@
                                 }
                             },
                         formatter: function (value, row, index) {
-                            if (value.length > 100) {
-                                var sql = value.substr(0, 100) + '...';
-                                return sql;
-                            } else {
-                                return value
-                            }
+                            return substring(value, 100)
                         }
                     }, {
                         title: '执行总次数',
@@ -462,12 +456,7 @@
                         title: 'SQL语句',
                         field: 'SQLText',
                         formatter: function (value, row, index) {
-                            if (value.length > 100) {
-                                var sql = value.substr(0, 100) + '...';
-                                return sql;
-                            } else {
-                                return value
-                            }
+                            return substring(value, 100)
                         }
                     }, {
                         title: '执行总次数',

@@ -4,10 +4,9 @@ from django.contrib.auth.admin import UserAdmin
 
 # Register your models here.
 from .models import Users, Instance, SqlWorkflow, SqlWorkflowContent, QueryLog, DataMaskingColumns, DataMaskingRules, \
-    AliyunAccessKey, AliyunRdsConfig, ResourceGroup, ResourceGroup2User, ResourceGroup2Instance, QueryPrivilegesApply, \
-    QueryPrivileges, \
-    WorkflowAudit, WorkflowLog, ParamTemplate, ParamHistory, InstanceTag, InstanceTagRelations, \
-    Backup, Host, DataBase, Replication, BGTable, ToolsLoanUpdate
+    AliyunAccessKey, AliyunRdsConfig, ResourceGroup, QueryPrivilegesApply, \
+    QueryPrivileges, WorkflowAudit, WorkflowLog, ParamTemplate, ParamHistory, Tag, \
+    InstancePerf, Backup, Host, DataBase, Replication, BGTable, ToolsLoanUpdate
 
 
 # 用户管理
@@ -15,27 +14,22 @@ from .models import Users, Instance, SqlWorkflow, SqlWorkflowContent, QueryLog, 
 class UsersAdmin(UserAdmin):
     list_display = ('id', 'ding_user_id', 'username', 'display', 'email', 'is_superuser', 'is_staff', 'is_active')
     search_fields = ('id', 'username', 'display', 'email')
+    filter_horizontal = ('groups', 'resource_group', 'user_permissions')
     list_display_links = ('id', 'username',)
     ordering = ('id',)
     # 编辑页显示内容
     fieldsets = (
         ('认证信息', {'fields': ('username', 'password')}),
         ('个人信息', {'fields': ('ding_user_id', 'display', 'email')}),
-        ('权限信息', {'fields': ('is_superuser', 'is_active', 'is_staff', 'groups', 'user_permissions')}),
+        ('权限信息', {'fields': ('is_superuser', 'is_active', 'is_staff', 'groups', 'resource_group', 'user_permissions')}),
         ('其他信息', {'fields': ('date_joined',)}),
     )
     # 添加页显示内容
     add_fieldsets = (
         ('认证信息', {'fields': ('username', 'password1', 'password2')}),
         ('个人信息', {'fields': ('display', 'email')}),
-        ('权限信息', {'fields': ('is_superuser', 'is_active', 'is_staff', 'groups',)}),
+        ('权限信息', {'fields': ('is_superuser', 'is_active', 'is_staff', 'groups', 'resource_group')}),
     )
-
-    # 用户资源组关联配置
-    class ResourceGroup2UserInline(admin.TabularInline):
-        model = ResourceGroup2User
-
-    inlines = [ResourceGroup2UserInline]
 
 
 # 资源组管理
@@ -45,21 +39,9 @@ class ResourceGroupAdmin(admin.ModelAdmin):
     exclude = ('group_parent_id', 'group_sort', 'group_level',)
 
 
-# 资源组关联用户关系管理
-@admin.register(ResourceGroup2User)
-class ResourceGroup2UserAdmin(admin.ModelAdmin):
-    list_display = ('id', 'resource_group', 'user', 'create_time')
-
-
-# 资源组关联实例关系管理
-@admin.register(ResourceGroup2Instance)
-class ResourceGroup2InstanceAdmin(admin.ModelAdmin):
-    list_display = ('id', 'resource_group', 'instance', 'create_time')
-
-
 # 实例标签配置
-@admin.register(InstanceTag)
-class InstanceTagAdmin(admin.ModelAdmin):
+@admin.register(Tag)
+class TagAdmin(admin.ModelAdmin):
     list_display = ('id', 'tag_code', 'tag_name', 'active', 'create_time')
     list_display_links = ('id', 'tag_code',)
     fieldsets = (None, {'fields': ('tag_code', 'tag_name', 'active'), }),
@@ -69,34 +51,27 @@ class InstanceTagAdmin(admin.ModelAdmin):
         return ('tag_code',) if obj else ()
 
 
-# 实例标签关系配置
-@admin.register(InstanceTagRelations)
-class InstanceTagRelationsAdmin(admin.ModelAdmin):
-    list_display = ('instance', 'instance_tag', 'active', 'create_time')
-    list_filter = ('instance', 'instance_tag', 'active')
-
-
 # 实例管理
 @admin.register(Instance)
 class InstanceAdmin(admin.ModelAdmin):
     list_display = ('id', 'instance_name', 'db_type', 'type', 'host', 'port', 'user', 'password', 'service_name',
                     'sid', 'create_time')
     search_fields = ['instance_name', 'host', 'port', 'user']
+    filter_horizontal = ('resource_group', 'tag')
     list_filter = ('db_type', 'type')
 
     # 阿里云实例关系配置
     class AliRdsConfigInline(admin.TabularInline):
         model = AliyunRdsConfig
 
-    # 实例标签关系配置
-    class InstanceTagRelationsInline(admin.TabularInline):
-        model = InstanceTagRelations
+    inlines = [AliRdsConfigInline]
 
-    # 实例资源组关联配置
-    class ResourceGroup2InstanceInline(admin.TabularInline):
-        model = ResourceGroup2Instance
 
-    inlines = [InstanceTagRelationsInline, ResourceGroup2InstanceInline, AliRdsConfigInline]
+@admin.register(InstancePerf)
+class InstancePerfAdmin(admin.ModelAdmin):
+    list_display = ('instance', 'base_path', 'conf_path', 'data_path', 'err_log_path', 'slow_log_path', 'disk_used',
+                    'disk_io', 'com_select', 'threads_connected', 'threads_running', 'qps', 'tps', 'io', 'slow_queries')
+    search_fields = ('instance', )
 
 
 # SQL工单内容

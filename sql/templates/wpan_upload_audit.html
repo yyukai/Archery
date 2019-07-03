@@ -152,12 +152,7 @@
                     title: '审核理由',
                     field: 'audit_msg',
                     formatter: function (value, row, index) {
-                        if (value.length > 50) {
-                            return "<span title ='"+value+"'>"+value.substring(0,50)+"...</span>"
-                        }
-                        else {
-                            return value
-                        }
+                        return substring(value, 50)
                     }
                 }, {
                     title: '操作',

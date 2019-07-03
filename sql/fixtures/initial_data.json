@@ -1,6 +1,6 @@
 [
   {
-    "model": "sql.InstanceTag",
+    "model": "sql.Tag",
     "pk": 1,
     "fields": {
       "tag_code": "can_write",
@@ -10,7 +10,7 @@
     }
   },
   {
-    "model": "sql.InstanceTag",
+    "model": "sql.Tag",
     "pk": 2,
     "fields": {
       "tag_code": "can_read",

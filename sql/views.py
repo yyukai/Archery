@@ -19,7 +19,7 @@ from sql.engines.models import ReviewResult, ReviewSet
 from sql.utils.tasks import task_info
 
 from .models import Users, SqlWorkflow, QueryPrivileges, ResourceGroup, \
-    QueryPrivilegesApply, Config, SQL_WORKFLOW_CHOICES, InstanceTag, \
+    QueryPrivilegesApply, Config, SQL_WORKFLOW_CHOICES, Tag, \
     Instance, DataBase, Replication, QueryAudit, BGTable
 from sql.utils.workflow_audit import Audit
 from sql.utils.sql_review import can_execute, can_timingtask, can_cancel
@@ -51,7 +51,29 @@ def dashboard(request):
 
 def sqlworkflow(request):
     """SQL上线工单列表页面"""
-    return render(request, 'sqlworkflow.html', {'status_list': SQL_WORKFLOW_CHOICES})
+    user = request.user
+    # 过滤筛选项的数据
+    filter_dict = dict()
+    # 管理员，可查看所有工单
+    if user.is_superuser:
+        pass
+    # 非管理员，拥有审核权限、资源组粒度执行权限的，可以查看组内所有工单
+    elif user.has_perm('sql.sql_review') or user.has_perm('sql.sql_execute_for_resource_group'):
+        # 先获取用户所在资源组列表
+        group_list = user_groups(user)
+        group_ids = [group.group_id for group in group_list]
+        filter_dict['group_id__in'] = group_ids
+    # 其他人只能查看自己提交的工单
+    else:
+        filter_dict['engineer'] = user.username
+    instance_id = SqlWorkflow.objects.filter(**filter_dict).values('instance_id').distinct()
+    instance = Instance.objects.filter(pk__in=instance_id)
+    resource_group_id = SqlWorkflow.objects.filter(**filter_dict).values('group_id').distinct()
+    resource_group = ResourceGroup.objects.filter(group_id__in=resource_group_id)
+
+    return render(request, 'sqlworkflow.html',
+                  {'status_list': SQL_WORKFLOW_CHOICES,
+                   'instance': instance, 'resource_group': resource_group})
 
 
 @permission_required('sql.sql_submit', raise_exception=True)
@@ -68,7 +90,7 @@ def submit_sql(request):
     archer_config = SysConfig()
 
     # 主动创建标签
-    InstanceTag.objects.get_or_create(tag_code='can_write', defaults={'tag_name': '支持上线', 'active': True})
+    Tag.objects.get_or_create(tag_code='can_write', defaults={'tag_name': '支持上线', 'active': True})
 
     context = {'active_user': active_user, 'group_list': group_list,
                'enable_backup_switch': archer_config.get('enable_backup_switch')}
@@ -137,6 +159,12 @@ def detail(request, workflow_id):
                 for r in loaded_rows:
                     review_result.rows += [ReviewResult(inception_result=r)]
                 rows = review_result.json()
+        except IndexError:
+            review_result.rows += [ReviewResult(
+                errormessage="Json decode failed."
+                             "执行结果Json解析失败, 请联系管理员"
+            )]
+            rows = review_result.json()
         except json.decoder.JSONDecodeError:
             review_result.rows += [ReviewResult(
                 # 迫于无法单元测试这里加上英文报错信息
@@ -188,7 +216,7 @@ def sqlanalyze(request):
 def sqlquery(request):
     """SQL在线查询页面"""
     # 主动创建标签
-    InstanceTag.objects.get_or_create(tag_code='can_read', defaults={'tag_name': '支持查询', 'active': True})
+    Tag.objects.get_or_create(tag_code='can_read', defaults={'tag_name': '支持查询', 'active': True})
     return render(request, 'sqlquery.html')
 
 
@@ -210,7 +238,7 @@ def query_export(request):
 @permission_required('sql.menu_slowquery', raise_exception=True)
 def slowquery(request):
     # 获取用户关联实例列表
-    instances = [instance.instance_name for instance in user_instances(request.user, type='all', db_type='mysql')]
+    instances = [instance.instance_name for instance in user_instances(request.user, type='all', db_type=['mysql'])]
 
     context = {'tab': 'slowquery', 'instances': instances}
     return render(request, 'slowquery.html', context)
@@ -220,7 +248,7 @@ def slowquery(request):
 @permission_required('sql.menu_sqladvisor', raise_exception=True)
 def sqladvisor(request):
     # 获取用户关联实例列表
-    instances = [instance.instance_name for instance in user_instances(request.user, type='all', db_type='mysql')]
+    instances = [instance.instance_name for instance in user_instances(request.user, type='all', db_type=['mysql'])]
 
     context = {'instances': instances}
     return render(request, 'sqladvisor.html', context)
@@ -286,7 +314,7 @@ def slowquery(request):
 def instance(request):
     """实例管理页面"""
     # 获取实例标签
-    tags = InstanceTag.objects.filter(active=True)
+    tags = Tag.objects.filter(active=True)
     return render(request, 'instance.html', {'tags': tags})
 
 
@@ -302,6 +330,12 @@ def dbdiagnostic(request):
     return render(request, 'dbdiagnostic.html')
 
 
+@permission_required('sql.menu_data_dictionary', raise_exception=True)
+def data_dictionary(request):
+    """数据字典页面"""
+    return render(request, 'data_dictionary.html', locals())
+
+
 @permission_required('sql.menu_param', raise_exception=True)
 def instance_param(request):
     """实例参数管理页面"""
@@ -315,12 +349,6 @@ def database(request):
     return render(request, 'database.html', {'instances': instances})
 
 
-@permission_required('sql.menu_data_dictionary', raise_exception=True)
-def data_dictionary(request):
-    ins_name_list = [n.instance_name for n in user_instances(request.user, type='slave', db_type='mysql')]
-    return render(request, 'data_dictionary.html', locals())
-
-
 @permission_required('sql.menu_database', raise_exception=True)
 def bg_table(request):
     # 获取用户关联实例列表
@@ -328,27 +356,11 @@ def bg_table(request):
     db_list.sort()
     return render(request, 'bg_table.html', {'db_list': db_list})
 
-#
-# @permission_required('sql.menu_redis', raise_exception=True)
-# def redis(request):
-#     # 获取用户关联实例列表
-#     redis_list = Instance.objects.filter(db_type='redis').order_by('hostname')
-#     return render(request, 'redis.html', {'redis_list': redis_list, 'db_list': range(0, 16)})
-#
-#
-# @permission_required('sql.menu_redis', raise_exception=True)
-# def redis_apply(request):
-#     # 超过24H 未审核的申请设置为过期状态
-#     one_day_before = (datetime.datetime.now() + datetime.timedelta(days=-1)).strftime("%Y-%m-%d %H:%M:%S")
-#     RedisApply.objects.filter(create_time__lte=one_day_before).filter(status=0).update(status=4)
-#     redis_list = Instance.objects.filter(db_type='redis').order_by('hostname')
-#     return render(request, 'redis_apply.html', {'redis_list': redis_list})
-
 
 # 主从复制
 @permission_required('sql.menu_instance', raise_exception=True)
 def replication(request):
-    ins_names = [ins.instance_name for ins in user_instances(request.user, 'master', 'mysql')]
+    ins_names = [ins.instance_name for ins in user_instances(request.user, type='master', db_type=['mysql'])]
     replication_info = list()
     for rep in Replication.objects.filter(Q(master__in=ins_names)|Q(slave__in=ins_names))[:10]:
         if rep.delay > 600:
@@ -466,9 +478,17 @@ def group(request):
     return render(request, 'group.html')
 
 
+# 资源组组关系管理页面
+@superuser_required
+def groupmgmt(request, group_id):
+    """资源组组关系管理页面"""
+    group = ResourceGroup.objects.get(group_id=group_id)
+    return render(request, 'groupmgmt.html', {'group': group})
+
+
 @permission_required('sql.menu_binlog', raise_exception=True)
 def binlog(request):
-    instances = [instance.instance_name for instance in user_instances(request.user, 'all', 'mysql')]
+    instances = [instance.instance_name for instance in user_instances(request.user, type='all', db_type=['mysql'])]
     return render(request, 'binlog.html', {'instances': instances})
 
 
@@ -482,19 +502,11 @@ def backup_detail(request, db_cluster):
     return render(request, 'backup_detail.html', {'db_cluster': db_cluster})
 
 
-# 资源组组关系管理页面
-@superuser_required
-def groupmgmt(request, group_id):
-    """资源组组关系管理页面"""
-    group = ResourceGroup.objects.get(group_id=group_id)
-    return render(request, 'groupmgmt.html', {'group': group})
-
-
 # 实例管理页面
 @permission_required('sql.menu_instance', raise_exception=True)
 def instance(request, ip=''):
     # 获取实例标签
-    tags = InstanceTag.objects.filter(active=True)
+    tags = Tag.objects.filter(active=True)
     return render(request, 'instance.html', {'tags': tags, 'ip': ip})
 
 

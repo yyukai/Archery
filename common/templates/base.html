@@ -150,14 +150,19 @@
                                         <a href="/instance/">实例列表</a>
                                     </li>
                                 {% endif %}
+                                {% if perms.sql.menu_dbdiagnostic %}
+                                    <li>
+                                        <a href="/dbdiagnostic/">会话管理</a>
+                                    </li>
+                                {% endif %}
                                 {% if perms.sql.menu_param %}
                                     <li>
                                         <a href="/instanceparam/">参数管理</a>
                                     </li>
                                 {% endif %}
-                                {% if perms.sql.menu_dbdiagnostic %}
+                                {% if perms.sql.menu_data_dictionary %}
                                     <li>
-                                        <a href="/dbdiagnostic/">会话管理</a>
+                                        <a href="/data_dictionary/">数据字典</a>
                                     </li>
                                 {% endif %}
                                 {% if perms.sql.menu_schemasync %}
@@ -175,9 +180,6 @@
                             <ul class="nav nav-second-level">
                                 <li>
                                     <a href="/database/">数据库列表</a>
-                                </li>
-                                <li>
-                                    <a href="/data_dictionary/">数据字典</a>
                                 </li>
                                 <li>
                                     <a href="/bg_table/">大数据抽取表</a>
@@ -343,31 +345,15 @@
 <script src="{% static 'bootstrap-table/js/bootstrap-table-zh-CN.min.js' %}"></script>
 <script src="{% static 'sql-formatter/sql-formatter.min.js' %}"></script>
 <script src="{% static 'dist/js/formatter.js' %}"></script>
-
+<script src="{% static 'dist/js/archery.js' %}"></script>
 </body>
 <script>
-    <!-- 解决CSRF -->
+    <!-- 解决CSRF-->
     $(function () {
         $.ajaxSetup({
             headers: {"X-CSRFToken": getCookie("csrftoken")}
         });
     });
-
-    function getCookie(name) {
-        var cookieValue = null;
-        if (document.cookie && document.cookie !== '') {
-            var cookies = document.cookie.split(';');
-            for (var i = 0; i < cookies.length; i++) {
-                var cookie = jQuery.trim(cookies[i]);
-                // Does this cookie string begin with the name we want?
-                if (cookie.substring(0, name.length + 1) === (name + '=')) {
-                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-                    break;
-                }
-            }
-        }
-        return cookieValue;
-    }
 </script>
 {% block js %}
 {% endblock %}

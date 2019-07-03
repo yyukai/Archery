@@ -170,12 +170,7 @@
                         title: 'INFO',
                         field: 'info',
                         formatter: function (value, row, index) {
-                            if (value.length > 20) {
-                                var sql = value.substr(0, 20) + '...';
-                                return sql;
-                            } else {
-                                return value
-                            }
+                            return substring(value, 20)
                         }
                     }],
                     onLoadSuccess: function () {
@@ -482,8 +477,7 @@
                         url: "/group/user_all_instances/",
                         dataType: "json",
                         data: {
-                            type: 'all',
-                            db_type: 'mysql'
+                            db_type: ['mysql']
                         },
                         complete: function () {
                             //如果已选择instance_name，进入页面自动填充，并且重置激活id

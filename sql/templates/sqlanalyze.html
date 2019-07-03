@@ -177,12 +177,7 @@
                     title: 'SQL内容',
                     field: 'sql',
                     formatter: function (value, row, index) {
-                        if (value.length > 100) {
-                            var sql = value.substr(0, 100) + '...';
-                            return sql;
-                        } else {
-                            return value
-                        }
+                        return substring(value, 100)
                     }
                 }, {
                     title: '完整SQL内容',
@@ -318,12 +313,7 @@
                         title: 'SQL内容',
                         field: 'sql',
                         formatter: function (value, row, index) {
-                            if (value.length > 100) {
-                                var sql = value.substr(0, 100) + '...';
-                                return sql;
-                            } else {
-                                return value
-                            }
+                            return substring(value, 100)
                         }
                     }, {
                         title: '完整SQL内容',
@@ -394,8 +384,7 @@
                     url: "/group/user_all_instances/",
                     dataType: "json",
                     data: {
-                        type: 'all',
-                        db_type: 'mysql'
+                        db_type: ['mysql']
                     },
                     complete: function () {
                     },

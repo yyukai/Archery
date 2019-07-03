@@ -108,7 +108,7 @@
                 cardView: false,                    //是否显示详细视图
                 detailView: true,                  //是否显示父子表
                 detailFormatter: function (index, row) {
-                    return row.profile
+                    return row.profile.replace(/\n/g, '<br/>')
                 },
                 locale: 'zh-CN',                    //本地化
                 toolbar: "#toolbar",               //指明自定义的toolbar
@@ -149,6 +149,9 @@
                         title: 'PORT',
                         field: 'port'
                     }, {
+                        title: 'USER',
+                        field: 'user'
+                    }, {
                         title: 'Query数',
                         field: 'com_select'
                     }, {
@@ -176,8 +179,8 @@
                         title: '硬盘读写',
                         field: 'disk_io'
                     }, {
-                        title: 'USER',
-                        field: 'user'
+                        title: '更新时间',
+                        field: 'update_time'
                     }, {
                         title: '操作',
                         field: '',

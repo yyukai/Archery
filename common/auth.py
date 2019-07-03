@@ -12,7 +12,7 @@ from django.urls import reverse
 
 from common.config import SysConfig
 from sql.utils.ding_api import get_ding_user_id
-from sql.models import Users, ResourceGroup, ResourceGroup2User
+from sql.models import Users, ResourceGroup
 
 logger = logging.getLogger('default')
 
@@ -35,10 +35,7 @@ def init_user(user):
     default_resource_group = SysConfig().get('default_resource_group', '')
     if default_resource_group:
         try:
-            new_relation = ResourceGroup2User(
-                user_id=user.id,
-                resource_group_id=ResourceGroup.objects.get(group_name=default_resource_group).group_id)
-            new_relation.save()
+            user.resource_group.add(ResourceGroup.objects.get(group_name=default_resource_group))
         except ResourceGroup.DoesNotExist:
             logger.info(f'无name为[{default_resource_group}]的资源组，无法默认关联，请到系统设置进行配置')
 
@@ -85,7 +82,6 @@ class ArcheryAuth(object):
         # 验证是否在锁, 分了几个if 防止代码太长
         if user.failed_login_count and user.last_login_failed_at:
             if user.failed_login_count >= lock_count:
-                # 验证时候在加锁时间内
                 now = datetime.datetime.now()
                 if user.last_login_failed_at + datetime.timedelta(seconds=lock_time) > now:
                     return {'status': 3, 'msg': f'登录失败超过限制，该账号已被锁定！请等候大约{lock_time}秒再试', 'data': ''}
@@ -149,13 +145,12 @@ def sign_up(request):
         # 验证密码
         try:
             validate_password(password)
-            new_user = Users.objects.create_user(
+            Users.objects.create_user(
                 username=username,
                 password=password,
                 display=display,
                 email=email,
                 is_active=1)
-            init_user(new_user)
         except ValidationError as msg:
             result['status'] = 1
             result['msg'] = str(msg)

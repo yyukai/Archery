@@ -546,11 +546,7 @@
                     title: 'SQL内容',
                     field: 'sql',
                     formatter: function (value, row, index) {
-                        if (value.length > 80) {
-                            return value.substr(0, 80) + '...';
-                        } else {
-                            return value
-                        }
+                        return substring(value, 80)
                     },
                     sortable: false
                 }, {
