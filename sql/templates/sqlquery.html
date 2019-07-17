@@ -80,7 +80,9 @@
         <div class="col-md-12 column">
             <div class="panel panel-default">
                 <div class="panel-heading">
-                    查询结果
+                    查询结果 <span style="color: red">
+                        <small id="seconds_behind_master"></small>
+                    </span>
                 </div>
                 <div class="panel-body">
                     <!-- Nav tabs -->
@@ -417,13 +419,13 @@
             if (select_sqlContent) {
                 sqlContent = select_sqlContent
             }
-            if (instance_name === null || instance_name === $("#instance_name").attr("data-placeholder")) {
+            if (!instance_name) {
                 alert("请选择实例！");
                 return result = false;
-            } else if (db_name === null || db_name === $("#db_name").attr("data-placeholder")) {
+            } else if (!db_name) {
                 alert("请选择数据库！");
                 return result = false;
-            } else if (sqlContent === null || sqlContent.trim() === "") {
+            } else if (!sqlContent) {
                 alert("SQL内容不能为空！");
                 return result = false;
             }
@@ -552,6 +554,10 @@
                     //执行时间和脱敏时间赋值
                     $("#" + ('time') + n).text(result['query_time'] + ' sec');
                     $("#" + ('masking_time') + n).text(result['mask_time'] + ' sec');
+                    //主从延迟赋值，仅在出现延迟时展示，null和0都不展示
+                    if (result['seconds_behind_master']) {
+                        $("#seconds_behind_master").text('Seconds_Behind_Master:  ' + result['seconds_behind_master']);
+                    }
                 }
 
             } else {

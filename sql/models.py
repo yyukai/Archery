@@ -144,7 +144,6 @@ class InstancePerf(models.Model):
     slow_queries = models.IntegerField('慢查询数', null=True, blank=True)
     update_time = models.DateTimeField('更新时间', auto_now=True)
 
-
     class Meta:
         managed = True
         db_table = 'sql_instance_perf'

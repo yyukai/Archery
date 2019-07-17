@@ -23,17 +23,18 @@ def db_list(request):
         try:
             if instance_name:
                 obj_list = DataBase.objects.filter(instance__instance_name=instance_name).filter(
-                    Q(db_name__contains=search) | Q(db_application__contains=search) | Q(db_person__contains=search))
+                    Q(db_name__contains=search) | Q(db_application__contains=search) |
+                    Q(db_person__contains=search)).distinct()
             else:
-                obj_list = DataBase.objects.filter(Q(db_name__contains=search) |
-                                                   Q(db_application__contains=search) |
-                                                   Q(db_person__contains=search))
+                obj_list = DataBase.objects.filter(instance=None).filter(Q(db_name__contains=search) |
+                                                                          Q(db_application__contains=search) |
+                                                                          Q(db_person__contains=search)).distinct()
             res = list()
             for obj in obj_list:
                 res.append({
                     'id': obj.id,
-                    'ip_port': '{}:{}'.format(obj.instance.host, obj.instance.port),
-                    'instance': obj.instance.instance_name,
+                    'ip_port': '{}:{}'.format(obj.instance.host, obj.instance.port) if obj.instance else "未分配",
+                    'instance': obj.instance.instance_name if obj.instance else "未分配",
                     'db_name': obj.db_name,
                     'db_application': obj.db_application,
                     'db_person': obj.db_person,
@@ -48,6 +49,9 @@ def db_list(request):
         db_application = request.POST.get('db_application', '')
         db_person = request.user.display
         try:
+            if DataBase.objects.filter(db_name=db_name).exists():
+                instance_name = DataBase.objects.get(db_name=db_name).instance_name
+                raise Exception("数据库：{} 已存在！实例名：{}".format(db_name, instance_name))
             db = DataBase.objects.create(db_name=db_name, app_type=app_type, db_application=db_application,
                                          db_person=db_person)
             res = {'status': 0, 'msg': 'ok'}

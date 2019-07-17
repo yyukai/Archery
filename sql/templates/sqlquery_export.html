@@ -623,6 +623,49 @@
         }
 
         //将数据通过ajax提交给后端进行检查
+        function sqlquery(sql) {
+            var select_sqlContent = editor.session.getTextRange(editor.getSelectionRange());
+            if (select_sqlContent) {
+                sqlContent = select_sqlContent
+            } else {
+                var sqlContent = editor.getValue();
+
+            }
+            //查看执行计划
+            if (sql === 'explain') {
+                sqlContent = 'explain ' + sqlContent
+            }
+            //查看表结构
+            else if (sql === 'show create table') {
+                sqlContent = "show create table " + $("#table_name").val() + ";"
+            }
+            //提交请求
+            $.ajax({
+                type: "post",
+                url: "/query/",
+                dataType: "json",
+                data: {
+                    instance_name: $("#instance_name").val(),
+                    db_name: $("#db_name").val(),
+                    schema_name: $("#schema_name").val(),
+                    tb_name: $("#table_name").val(),
+                    sql_content: sqlContent,
+                    limit_num: $("#limit_num").val()
+                },
+                complete: function () {
+                    $('input[type=button]').removeClass('disabled');
+                    $('input[type=button]').prop('disabled', false);
+                },
+                success: function (data) {
+                    display_data(data)
+                },
+                error: function (XMLHttpRequest, textStatus, errorThrown) {
+                    alert(errorThrown);
+                }
+            });
+        }
+
+        //将数据通过ajax提交给后端进行检查
         function sql_async_query(sql) {
             var select_sqlContent = editor.session.getTextRange(editor.getSelectionRange());
             if (select_sqlContent) {

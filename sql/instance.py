@@ -61,10 +61,8 @@ def lists(request):
             qps, tps, io, slow_queries = ins_perf.qps, ins_perf.tps, ins_perf.io, ins_perf.slow_queries
             update_time = ins_perf.update_time
         else:
-            profile = disk_used = disk_io = ""
-            com_select = threads_connected = threads_running = ""
-            qps = tps = io = slow_queries = ""
-            update_time = ""
+            profile = disk_used = disk_io = com_select = threads_connected = threads_running = ""
+            qps = tps = io = slow_queries = update_time = ""
         rows.append({
             "id": ins.id,
             "instance_name": ins.instance_name,

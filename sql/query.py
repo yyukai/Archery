@@ -17,14 +17,14 @@ from django.core import serializers
 from django.db import connection, OperationalError
 from django.db.models import Q
 from django.http import HttpResponse
-from django_q.tasks import async_task, fetch
-
 from common.config import SysConfig
 from common.utils.extend_json_encoder import ExtendJSONEncoder
+from common.utils.timer import FuncTimer
 from sql.query_privileges import query_priv_check
-from .models import QueryLog, Instance, QueryExport, Users
+from sql.utils.tasks import add_kill_conn_schedule, del_schedule
 from sql.utils.api import BASE_DIR, async_func
-from sql.engines import get_engine, ResultSet
+from .models import QueryLog, Instance, QueryExport, Users
+from sql.engines import get_engine
 
 logger = logging.getLogger('default')
 
@@ -88,24 +88,21 @@ def query(request):
         # 对查询sql增加limit限制或者改写语句
         sql_content = query_engine.filter_sql(sql=sql_content, limit_num=limit_num)
 
-        # 执行查询语句，timeout=max_execution_time
+        # 先获取查询连接，用于后面查询复用连接以及终止会话
+        query_engine.get_connection(db_name=db_name)
+        thread_id = query_engine.thread_id
         max_execution_time = int(config.get('max_execution_time', 60))
-        query_task_id = async_task(query_engine.query, db_name=str(db_name), sql=sql_content, limit_num=limit_num,
-                                   timeout=max_execution_time, cached=60)
-        # 等待执行结果，max_execution_time后还没有返回结果代表将会被终止
-        query_task = fetch(query_task_id, wait=max_execution_time * 1000, cached=True)
-        # 在max_execution_time内执行结束
-        if query_task:
-            if query_task.success:
-                query_result = query_task.result
-                query_result.query_time = query_task.time_taken()
-            else:
-                query_result = ResultSet(full_sql=sql_content)
-                query_result.error = query_task.result
-        # 等待超时，async_task主动关闭连接
-        else:
-            query_result = ResultSet(full_sql=sql_content)
-            query_result.error = f'查询时间超过 {max_execution_time} 秒，已被主动终止，请优化语句或者联系管理员。'
+        # 执行查询语句，并增加一个定时终止语句的schedule，timeout=max_execution_time
+        if thread_id:
+            schedule_name = f'query-{time.time()}'
+            run_date = (datetime.datetime.now() + datetime.timedelta(seconds=max_execution_time))
+            add_kill_conn_schedule(schedule_name, run_date, instance.id, thread_id)
+        with FuncTimer() as t:
+            query_result = query_engine.query(db_name, sql_content, limit_num)
+        query_result.query_time = t.cost
+        # 返回查询结果后删除schedule
+        if thread_id:
+            del_schedule(schedule_name)
 
         # 查询异常
         if query_result.error:
@@ -113,18 +110,16 @@ def query(request):
             result['msg'] = query_result.error
         # 数据脱敏，仅对查询无错误的结果集进行脱敏，并且按照query_check配置是否返回
         elif config.get('data_masking'):
-            query_masking_task_id = async_task(query_engine.query_masking, db_name=db_name, sql=sql_content,
-                                               resultset=query_result, cached=60)
-            query_masking_task = fetch(query_masking_task_id, wait=60 * 1000, cached=True)
-            if query_masking_task.success:
-                masking_result = query_masking_task.result
-                masking_result.mask_time = query_masking_task.time_taken()
+            try:
+                with FuncTimer() as t:
+                    masking_result = query_engine.query_masking(db_name, sql_content, query_result)
+                masking_result.mask_time = t.cost
                 # 脱敏出错
                 if masking_result.error:
                     # 开启query_check，直接返回异常，禁止执行
                     if config.get('query_check'):
                         result['status'] = 1
-                        result['msg'] = masking_result.error
+                        result['msg'] = f'数据脱敏异常：{masking_result.error}'
                     # 关闭query_check，忽略错误信息，返回未脱敏数据，权限校验标记为跳过
                     else:
                         query_result.error = None
@@ -134,12 +129,12 @@ def query(request):
                 # 正常脱敏
                 else:
                     result['data'] = masking_result.__dict__
-            else:
-                logger.error(f'数据脱敏异常，查询语句：{sql_content}\n，错误信息：{query_masking_task.result}')
+            except Exception as msg:
+                logger.error(f'数据脱敏异常，查询语句：{sql_content}\n，错误信息：{msg}')
                 # 抛出未定义异常，并且开启query_check，直接返回异常，禁止执行
                 if config.get('query_check'):
                     result['status'] = 1
-                    result['msg'] = f'数据脱敏异常，请联系管理员，错误信息：{query_masking_task.result}'
+                    result['msg'] = f'数据脱敏异常，请联系管理员，错误信息：{msg}'
                 # 关闭query_check，忽略错误信息，返回未脱敏数据，权限校验标记为跳过
                 else:
                     query_result.error = None
@@ -151,6 +146,8 @@ def query(request):
 
         # 仅将成功的查询语句记录存入数据库
         if not query_result.error:
+            if hasattr(query_engine, 'seconds_behind_master'):
+                result['data']['seconds_behind_master'] = query_engine.seconds_behind_master
             if int(limit_num) == 0:
                 limit_num = int(query_result.affected_rows)
             else:
@@ -226,6 +223,13 @@ def querylog(request):
                         content_type='application/json')
 
 
+def kill_query_conn(instance_id, thread_id):
+    """终止查询会话，用于schedule调用"""
+    instance = Instance.objects.get(pk=instance_id)
+    query_engine = get_engine(instance)
+    query_engine.kill_connection(thread_id)
+
+
 # 异步获取SQL查询结果
 @csrf_exempt
 @permission_required('sql.query_submit', raise_exception=True)
@@ -233,8 +237,7 @@ def add_async_query(request):
     instance_name = request.POST.get('instance_name')
     sql_content = request.POST.get('sql_content')
     db_name = request.POST.get('db_name')
-    schema_name = request.POST.get('schema_name')
-    limit_num = int(request.POST.get('limit_num'))
+    limit_num = int(request.POST.get('limit_num', 0))
     auditor = request.POST.get('auditor')
     user = request.user
 
@@ -247,69 +250,64 @@ def add_async_query(request):
         return result
 
     # 服务器端参数验证
-    if None in [sql_content, instance_name, limit_num]:
+    if None in [sql_content, db_name, instance_name, limit_num]:
         result['status'] = 1
         result['msg'] = '页面提交参数可能为空'
         return HttpResponse(json.dumps(result), content_type='application/json')
 
-    config = SysConfig()
-    # 查询前的检查，禁用语句检查，语句切分
-    query_engine = get_engine(instance=instance)
-    query_check_info = query_engine.query_check(db_name=db_name, sql=sql_content)
-    if query_check_info.get('bad_query'):
-        # 引擎内部判断为 bad_query
-        result['status'] = 1
-        result['msg'] = query_check_info.get('msg')
-        return HttpResponse(json.dumps(result), content_type='application/json')
-    if query_check_info.get('has_star') and config.get('disable_star') is True:
-        # 引擎内部判断为有 * 且禁止 * 选项打开
-        result['status'] = 1
-        result['msg'] = query_check_info.get('msg')
-        return HttpResponse(json.dumps(result), content_type='application/json')
-    sql_content = query_check_info['filtered_sql']
+    try:
+        config = SysConfig()
+        # 查询前的检查，禁用语句检查，语句切分
+        query_engine = get_engine(instance=instance)
+        query_check_info = query_engine.query_check(db_name=db_name, sql=sql_content)
+        if query_check_info.get('bad_query'):
+            # 引擎内部判断为 bad_query
+            result['status'] = 1
+            result['msg'] = query_check_info.get('msg')
+            return HttpResponse(json.dumps(result), content_type='application/json')
+        if query_check_info.get('has_star') and config.get('disable_star') is True:
+            # 引擎内部判断为有 * 且禁止 * 选项打开
+            result['status'] = 1
+            result['msg'] = query_check_info.get('msg')
+            return HttpResponse(json.dumps(result), content_type='application/json')
+        sql_content = query_check_info['filtered_sql']
 
-    # 查询权限校验，并且获取limit_num
-    priv_check_info = query_priv_check(user, instance, db_name, schema_name, sql_content, limit_num)
-    if priv_check_info['status'] == 0:
-        limit_num = priv_check_info['data']['limit_num']
-        priv_check = priv_check_info['data']['priv_check']
-    else:
-        result['status'] = 1
-        result['msg'] = priv_check_info['msg']
-        return HttpResponse(json.dumps(result), content_type='application/json')
-    # explain的limit_num设置为0
-    limit_num = 0 if re.match(r"^explain", sql_content.lower()) else limit_num
+        # 查询权限校验，并且获取limit_num
+        priv_check_info = query_priv_check(user, instance, db_name, sql_content, limit_num)
+        if priv_check_info['status'] == 0:
+            limit_num = priv_check_info['data']['limit_num']
+            priv_check = priv_check_info['data']['priv_check']
+        else:
+            result['status'] = 1
+            result['msg'] = priv_check_info['msg']
+            return HttpResponse(json.dumps(result), content_type='application/json')
+        # explain的limit_num设置为0
+        limit_num = 0 if re.match(r"^explain", sql_content.lower()) else limit_num
 
-    # 对查询sql增加limit限制或者改写语句
-    sql_content = query_engine.filter_sql(sql=sql_content, limit_num=limit_num)
+        # 对查询sql增加limit限制或者改写语句
+        sql_content = query_engine.filter_sql(sql=sql_content, limit_num=limit_num)
 
-    if instance.db_type == "oracle":
-        query_log = QueryLog.objects.create(username=user.username, user_display=user.display,
-                                            schema_name=schema_name,
-                                            instance_name=instance_name, sqllog=sql_content, effect_row=0,
-                                            priv_check=priv_check)
-    else:
         query_log = QueryLog.objects.create(username=user.username, user_display=user.display, db_name=db_name,
                                             instance_name=instance_name, sqllog=sql_content, effect_row=0,
                                             priv_check=priv_check)
-    qe = QueryExport.objects.create(query_log=query_log, auditor=Users.objects.get(username=auditor), status=0)
+        qe = QueryExport.objects.create(query_log=query_log, auditor=Users.objects.get(username=auditor), status=0)
 
-    do_async_query(request, qe, instance_name, db_name, schema_name, sql_content, limit_num)
-    result['msg'] = '任务提交成功！后台拼命跑数据中... 请耐心等待钉钉或邮件通知！'
+        do_async_query(request, qe, instance_name, db_name, sql_content, limit_num)
+        result['msg'] = '任务提交成功！后台拼命跑数据中... 请耐心等待钉钉或邮件通知！'
+    except Exception as e:
+        result['status'] = 1
+        result['msg'] = f'查询异常报错，错误信息：{e}'
     return HttpResponse(json.dumps(result, cls=ExtendJSONEncoder, bigint_as_string=True),
                         content_type='application/json')
 
 
 @async_func
-def do_async_query(request, query_export, instance_name, db_name, schema_name, sql_content, limit_num):
+def do_async_query(request, query_export, instance_name, db_name, sql_content, limit_num):
     query_log = query_export.query_log
     instance = Instance.objects.get(instance_name=instance_name)
     query_engine = get_engine(instance=instance)
     t_start = int(time.time())
-    if instance.db_type == "oracle":
-        sql_result = query_engine.query(schema_name=schema_name, sql=sql_content, limit_num=limit_num)
-    else:
-        sql_result = query_engine.query(db_name=db_name, sql=sql_content, limit_num=limit_num)
+    sql_result = query_engine.query(db_name=db_name, sql=sql_content, limit_num=limit_num)
     t_end = int(time.time())
     query_log.cost_time = t_end - t_start
     query_log.effect_row = sql_result.affected_rows
@@ -319,12 +317,7 @@ def do_async_query(request, query_export, instance_name, db_name, schema_name, s
         try:
             file_dir = SysConfig().sys_config.get('query_result_dir', BASE_DIR)
             time_suffix = datetime.datetime.now().strftime("%m%d%H%M%S")
-            if instance.db_type == "oracle":
-                file_name = '{}-{}-{}-{}'.format(query_export.query_log.username, instance_name, schema_name,
-                                                 time_suffix)
-            else:
-                file_name = '{}-{}-{}-{}'.format(query_export.query_log.username, instance_name, db_name,
-                                                 time_suffix)
+            file_name = '{}-{}-{}-{}'.format(query_export.query_log.username, instance_name, db_name, time_suffix)
             template_file = os.path.join(file_dir, file_name)
 
             workbook = xlwt.Workbook(encoding='utf-8')
@@ -343,24 +336,21 @@ def do_async_query(request, query_export, instance_name, db_name, schema_name, s
             traceback.print_exc()
             query_export.error_msg = str(e)
             query_export.save(update_fields=['error_msg'])
-            return str(e)
+            return ""
         return template_file
 
     try:
         file_path = ''
         if SysConfig().sys_config.get('data_masking'):
             try:
-                if instance.db_type == "oracle":
-                    masking_result = query_engine.query_masking(schema_name, sql_content, sql_result)
-                else:
-                    masking_result = query_engine.query_masking(db_name, sql_content, sql_result)
+                masking_result = query_engine.query_masking(db_name, sql_content, sql_result)
             except Exception as e:
                 if SysConfig().sys_config.get('query_check'):
                     query_export.status = 1
                     query_export.error_msg = '脱敏数据报错,请联系管理员。报错：%s' % str(e)
             else:
                 if masking_result.status is None or not SysConfig().sys_config.get('query_check'):
-                    file_path = write_result_to_excel(sql_result)
+                    file_path = write_result_to_excel(masking_result)
                     query_export.status = 2
         else:
             file_path = write_result_to_excel(sql_result)
@@ -374,14 +364,9 @@ def do_async_query(request, query_export, instance_name, db_name, schema_name, s
 
     # 通知审核人审核
     audit_url = "{}://{}/query_export/".format(request.scheme, request.get_host())
-    if instance.db_type == "oracle":
-        msg_content = '''导出查询（提取大量数据）下载申请等待您审批：\n发起人：{}\n实例名称：{}\n模式：{}\n执行的sql查询：{}\n提取条数：{}\n操作时间：{}\n审批地址：{}\n'''. \
-            format(query_log.user_display, query_log.instance_name, query_log.schema_name, query_log.sqllog,
-                   query_log.effect_row, query_log.create_time, audit_url)
-    else:
-        msg_content = '''导出查询（提取大量数据）下载申请等待您审批：\n发起人：{}\n实例名称：{}\n数据库：{}\n执行的sql查询：{}\n提取条数：{}\n操作时间：{}\n审批地址：{}\n'''.\
-            format(query_log.user_display, query_log.instance_name, query_log.db_name, query_log.sqllog,
-                   query_log.effect_row, query_log.create_time, audit_url)
+    msg_content = '''导出查询（提取大量数据）下载申请等待您审批：\n发起人：{}\n实例名称：{}\n数据库：{}\n执行的sql查询：{}\n提取条数：{}\n操作时间：{}\n审批地址：{}\n'''. \
+        format(query_log.user_display, query_log.instance_name, query_log.db_name, query_log.sqllog,
+               query_log.effect_row, query_log.create_time, audit_url)
     from sql.utils.ding_api import DingSender
     DingSender().send_msg(query_export.auditor.ding_user_id, msg_content)
 

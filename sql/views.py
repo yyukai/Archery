@@ -345,7 +345,7 @@ def instance_param(request):
 @permission_required('sql.menu_database', raise_exception=True)
 def database(request):
     # 获取用户关联实例列表
-    instances = [ins.instance_name for ins in user_instances(request.user, 'all')]
+    instances = [ins.instance_name for ins in user_instances(request.user, type='master')]
     return render(request, 'database.html', {'instances': instances})
 
 

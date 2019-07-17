@@ -13,6 +13,7 @@ import urllib2
 import psutil
 import sys
 import time
+from pprint import pprint
 from datetime import datetime
 reload(sys)
 sys.setdefaultencoding("utf-8")
@@ -90,8 +91,8 @@ def get_net_io():
     net_io_1 = psutil.net_io_counters(pernic=False, nowrap=True)
     time.sleep(3)
     net_io_2 = psutil.net_io_counters(pernic=False, nowrap=True)
-    return "S: {}/s, R: {}/s".format(bytes_convert(net_io_2.bytes_sent - net_io_1.bytes_sent),
-                                     bytes_convert(net_io_2.bytes_recv - net_io_1.bytes_recv))
+    return "S: {0}/s, R: {1}/s".format(bytes_convert(net_io_2.bytes_sent - net_io_1.bytes_sent),
+                                       bytes_convert(net_io_2.bytes_recv - net_io_1.bytes_recv))
 
 
 def get_device_io():
@@ -103,8 +104,8 @@ def get_device_io():
     time.sleep(3)
     for dev, obj in psutil.disk_io_counters(perdisk=True).items():
         (io_1_read, io_1_write) = disk_io_1[dev]
-        ret[dev] = "W: {}/s, R: {}/s".format(bytes_convert(int((obj.write_bytes - io_1_write) / 3)),
-                                             bytes_convert(int((obj.read_bytes - io_1_read) / 3)))
+        ret[dev] = "W: {0}/s, R: {1}/s".format(bytes_convert(int((obj.write_bytes - io_1_write) / 3)),
+                                               bytes_convert(int((obj.read_bytes - io_1_read) / 3)))
     return ret
 
 
@@ -127,7 +128,7 @@ def get_mysql():
     ret = dict()
     device_mount = get_device_mount()
     device_io = get_device_io()
-    cmd = "ps -ef|grep mysql|grep '\-\-datadir='"
+    cmd = "ps -ef|grep -w mysqld|grep '\-\-datadir='|grep '\-\-port='"
     ports = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     for line1 in ports.stdout.readlines():
         base_path = re.findall(r'--basedir=(\S+)', line1, re.I)[0]
@@ -135,12 +136,14 @@ def get_mysql():
         data_path = re.findall(r'--datadir=(\S+)', line1, re.I)[0]
         err_log_path = re.findall(r'--log-error=(\S+)/\S+', line1, re.I)[0]
         port = re.findall(r'--port=([0-9]*)', line1, re.I)[0]
+        socket_path = re.findall(r'--socket=(\S+)', line1, re.I)[0]
         ret[port], gs = dict(), dict()
-        status_cmd = """/app/mysql/dist/bin/mysqladmin -uwddbms -p123456 --port={} extended-status -i 1 -c 2 -r |
-         grep -E 'Com|Threads|Key|Innodb|Questions|Uptime' |sed 's/|//g'""".format(port)
+        status_cmd = """/app/mysql/dist/bin/mysqladmin -uwddbms -p123456 --port={0} --socket={1} \
+        extended-status -i 1 -c 2 -r 2>/dev/null \
+        |grep -E 'Com|Threads|Key|Innodb|Questions|Uptime' |sed 's/|//g'""".format(port, socket_path)
         status = subprocess.Popen(status_cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         for line2 in status.stdout.readlines():
-            if len(line2.split()) == 1:
+            if len(line2.split()) != 2:
                 continue
             (var, value) = line2.split()
             gs[var] = value if not value.isdigit() else int(value)
@@ -162,14 +165,14 @@ def get_mysql():
         # ret[port]['slow_queries'] = gs['Slow_queries']
         # 慢查询
         cmd = """
-        /app/mysql/dist/bin/mysql -uwddbms -p123456 --port={} -e \
+        /app/mysql/dist/bin/mysql -uwddbms -p123456 --port={0} --socket={1} -e \
         "select count(*) from information_schema.INNODB_TRX where trx_started<SUBDATE(now(),interval 3 second)\G" \
-        |tail -n1 |awk '{{print $NF}}'
-        """.format(port)
+        2>/dev/null |tail -n1 |awk '{{print $NF}}'
+        """.format(port, socket_path)
         r = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         ret[port]['slow_queries'] = int(r.stdout.read().strip())
 
-        cmd = "df -P {} |tail -n1 |awk '{{print $NF}}'".format(data_path)
+        cmd = "df -P {0} |tail -n1 |awk '{{print $NF}}'".format(data_path)
         r = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         mount_point = r.stdout.read().strip()
         disk_used = psutil.disk_usage(mount_point)
@@ -184,7 +187,7 @@ def get_mysql():
 
 def send(post_data):
     try:
-        print(post_data)
+        pprint(post_data)
         url = "http://dbms.weidai.com.cn/api/v1/db_agent/"
         url = "http://192.168.21.241:9123/api/v1/db_agent/"
         req = urllib2.Request(url, json.dumps(post_data))
