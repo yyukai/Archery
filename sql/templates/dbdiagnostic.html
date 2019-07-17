@@ -173,7 +173,10 @@
                             return substring(value, 20)
                         }
                     }],
-                    onLoadSuccess: function () {
+                    onLoadSuccess: function (data) {
+                        if (data.status !== 0) {
+                            alert("数据加载失败！" + data.msg);
+                        }
                     },
                     onLoadError: function () {
                         alert("数据加载失败！请检查接口返回信息和错误日志！");
@@ -266,7 +269,10 @@
                         field: 'pct_free',
                         sortable: true
                     }],
-                    onLoadSuccess: function () {
+                    onLoadSuccess: function (data) {
+                        if (data.status !== 0) {
+                            alert("数据加载失败！" + data.msg);
+                        }
                     },
                     onLoadError: function () {
                         alert("数据加载失败！请检查接口返回信息和错误日志！");
@@ -375,7 +381,10 @@
                         title: '运行事务的sql',
                         field: '运行事务的sql'
                     }],
-                    onLoadSuccess: function () {
+                    onLoadSuccess: function (data) {
+                        if (data.status !== 0) {
+                            alert("数据加载失败！" + data.msg);
+                        }
                     },
                     onLoadError: function () {
                         alert("数据加载失败！请检查接口返回信息和错误日志！");
