@@ -1,31 +1,14 @@
 {% extends "base.html" %}
 
 {% block content %}
-    <div class="row clearfix">
-        <div id="principles" class="col-md-12">
-        </div>
-    </div>
-{% endblock content %}
+<h4><font size="10">1.支持OA帐号密码登录，SQL上线有钉钉消息通知，甚好！ </font></h4>
 
-{% block js %}
-    {% load staticfiles %}
-    <script src="{% static 'dist/js/marked.min.js' %}"></script>
-    <script>
-        let rendererMD = new marked.Renderer();
-        marked.setOptions({
-            renderer: rendererMD,
-            gfm: true,
-            tables: true,
-            breaks: true,
-            pedantic: false,
-            sanitize: false,
-            smartLists: false,
-            smartypants: false
-        });
-        //增加的代码，用于个性化输出table
-        rendererMD.table = function (header, body) {
-            return '<div class="table-responsive"><table class="table table-condensed">' + header + body + '</table></div>'
-        };
-        document.getElementById('principles').innerHTML = marked("{{ md|safe }}");
-    </script>
-{% endblock %}
+<br />
+<br />
+
+<h4><font size="10">2.请认真阅读SQL审核规则：</font></h4>
+数据库设计规约: <br>
+http://weidai.wiki/pages/viewpage.action?pageId=1365630
+
+
+{% endblock content %}

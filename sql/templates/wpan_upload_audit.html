@@ -169,7 +169,11 @@
                             } else if (row.status === 3) {
                                 html += '<button class="btn btn-default btn-xs" disabled>已过期</button>';
                             } else if (row.status === 4) {
-                                return '用户主动取消';
+                                return '<button class="btn btn-default btn-xs" disabled>用户主动取消</button>';
+                            } else if (row.status === 5) {
+                                html = '<button class="btn btn-default btn-xs" disabled>上传失败</button>';
+                                html += '<button class="btn btn-success btn-xs" onclick="do_upload(\''+row.id+'\',\''+ +row.audit_msg+ '\')">再次上传</button>';
+                                return html;
                             }
                         {% else %}
                             if (row.status === 0) {
@@ -181,7 +185,10 @@
                             } else if (row.status === 3) {
                                 html = '<button class="btn btn-default btn-xs" disabled>已过期</button>';
                             } else if (row.status === 4) {
-                                return '用户主动取消';
+                                return '<button class="btn btn-default btn-xs" disabled>用户主动取消</button>';
+                            } else if (row.status === 5) {
+                                html = '<button class="btn btn-default btn-xs" disabled>上传失败</button>';
+                                return html;
                             }
                         {% endif %}
                         return html
@@ -311,6 +318,33 @@
                     }
                 });
             }
+        }
+        function do_upload(apply_id, audit_msg) {
+            $.ajax({
+                type: "post",
+                url: "/wpan_upload_audit/audit/",
+                timeout: 3000,
+                data: {
+                    apply_id: apply_id,
+                    audit_msg: audit_msg,
+                    is_allow: "yes"
+                },
+                success: function (data) {
+                    if (data['code'] == 0) {
+                        alert(data['result']);
+                    } else {
+                        alert(data['errmsg']);
+                    }
+                    $('#name-list').bootstrapTable('refresh');
+                },
+                error: function (data) {
+                    alert(data);
+                },
+                complete: function () {
+                    $("#modal_btn_yes").attr("disabled", false);
+                    get_name_list()
+                }
+            });
         }
     </script>
 {% endblock %}

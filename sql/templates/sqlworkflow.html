@@ -201,6 +201,7 @@
                     title: '工单状态',
                     field: 'status',
                     formatter: function (value, row, index) {
+                        // console.log(row.workflow_name, value);
                         return sqlworkflowStatus_formatter(value)
                     }
                 }, {

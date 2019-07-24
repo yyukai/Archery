@@ -125,7 +125,7 @@ def instances(request):
 
     # 过滤tag
     if tag_code:
-        instances = instances.filter(tag__tag_code=tag_code).values('id', 'type', 'db_type', 'instance_name')
+        instances = instances.filter(tag__tag_code=tag_code).distinct().values('id', 'type', 'db_type', 'instance_name')
 
     rows = [row for row in instances]
     result = {'status': 0, 'msg': 'ok', "data": rows}

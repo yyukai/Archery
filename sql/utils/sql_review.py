@@ -60,7 +60,7 @@ def can_execute(user, workflow_id):
     workflow_detail = SqlWorkflow.objects.get(id=workflow_id)
     result = False
     # 只有审核通过和定时执行的数据才可以立即执行
-    if workflow_detail.status in ['workflow_review_pass', 'workflow_timingtask']:
+    if workflow_detail.status in ['workflow_review_pass', 'workflow_timingtask', 'workflow_autoreviewwrong']:
         # 当前登录用户有资源组粒度执行权限，并且为组内用户
         group_ids = [group.group_id for group in user_groups(user)]
         if workflow_detail.group_id in group_ids and user.has_perm('sql.sql_execute_for_resource_group'):
@@ -100,7 +100,7 @@ def can_timingtask(user, workflow_id):
     workflow_detail = SqlWorkflow.objects.get(id=workflow_id)
     result = False
     # 只有审核通过和定时执行的数据才可以执行
-    if workflow_detail.status in ['workflow_review_pass', 'workflow_timingtask']:
+    if workflow_detail.status in ['workflow_review_pass', 'workflow_timingtask', 'workflow_autoreviewwrong']:
         # 当前登录用户有资源组粒度执行权限，并且为组内用户
         group_ids = [group.group_id for group in user_groups(user)]
         if workflow_detail.group_id in group_ids and user.has_perm('sql.sql_execute_for_resource_group'):
@@ -128,6 +128,6 @@ def can_cancel(user, workflow_id):
         if Audit.can_review(user, workflow_id, 2) or user.username == workflow_detail.engineer:
             result = True
     # 审核通过但未执行的工单，执行人可以打回
-    if workflow_detail.status in ['workflow_review_pass', 'workflow_timingtask']:
+    if workflow_detail.status in ['workflow_review_pass', 'workflow_timingtask', 'workflow_autoreviewwrong']:
         result = True if can_execute(user, workflow_id) else False
     return result

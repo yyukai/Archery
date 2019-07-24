@@ -110,7 +110,7 @@ class Instance(models.Model):
     class Meta:
         managed = True
         db_table = 'sql_instance'
-        unique_together = ('host', 'port')
+        # unique_together = ('host', 'port')
         verbose_name = u'实例配置'
         verbose_name_plural = u'实例配置'
 
@@ -429,7 +429,7 @@ class WPanHistory(models.Model):
     error_msg = models.TextField('外传错误信息', default='')
     audit_msg = models.CharField('审核人审核理由', max_length=255, default='')
     status = models.IntegerField('状态', choices=((0, '待审核'), (1, '审核通过'), (2, '审核不通过'),
-                                                (3, '申请已过期'), (4, '用户主动取消')))
+                                                (3, '申请已过期'), (4, '用户主动取消'), (5, '上传失败')))
     create_time = models.DateTimeField('创建时间', auto_now_add=True)
 
     class Meta:

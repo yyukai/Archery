@@ -160,11 +160,6 @@
                                         <a href="/instanceparam/">参数管理</a>
                                     </li>
                                 {% endif %}
-                                {% if perms.sql.menu_data_dictionary %}
-                                    <li>
-                                        <a href="/data_dictionary/">数据字典</a>
-                                    </li>
-                                {% endif %}
                                 {% if perms.sql.menu_schemasync %}
                                     <li>
                                         <a href="/schemasync/">SchemaSync</a>
@@ -181,6 +176,11 @@
                                 <li>
                                     <a href="/database/">数据库列表</a>
                                 </li>
+                                {% if perms.sql.menu_data_dictionary %}
+                                    <li>
+                                        <a href="/data_dictionary/">数据字典</a>
+                                    </li>
+                                {% endif %}
                                 <li>
                                     <a href="/bg_table/">大数据抽取表</a>
                                 </li>
@@ -249,13 +249,13 @@
                                                 <a href="/wpan_upload/">我的文件</a>
                                             </li>
                                             <li>
-                                                <a href="/wpan_audit/">我的待审核</a>
+                                                <a href="/wpan_upload_audit/">我的待审核</a>
                                             </li>
                                         </ul>
                                         <!-- /.nav-second-level -->
                                     </li>
                                 {% endif %}
-                                {% if perms.sql.menu_loan_update %}
+                                {% if perms.sql.tools_loan_update %}
                                     <li>
                                         <a href="#">订单所属业务员更改 <span class="fa arrow"></span></a>
                                         <ul class="nav nav-third-level collapse">

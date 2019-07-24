@@ -62,7 +62,7 @@ def get_dept_list_id_fetch_child(token, parent_dept_id):
 def get_ding_user_id(username):
     try:
         rs = redis.StrictRedis(host="127.0.0.1", port=6379, password="archerPass", db=15)
-        ding_user_id = rs.execute_command('GET {}'.format(username.upper())).decode()
+        ding_user_id = str(rs.execute_command('GET {}'.format(username.upper())), encoding="utf8")
         if ding_user_id:
             user = Users.objects.get(username=username)
             if user.ding_user_id != ding_user_id:

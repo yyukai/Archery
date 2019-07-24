@@ -104,36 +104,27 @@ def detail(request, workflow_id):
         rows = workflow_detail.sqlworkflowcontent.execute_result
     else:
         rows = workflow_detail.sqlworkflowcontent.review_content
-    # 自动审批不通过的不需要获取下列信息
-    if workflow_detail.status != 'workflow_autoreviewwrong':
-        # 获取当前审批和审批流程
-        audit_auth_group, current_audit_auth_group = Audit.review_info(workflow_id, 2)
 
-        # 是否可审核
-        is_can_review = Audit.can_review(request.user, workflow_id, 2)
-        # 是否可执行
-        is_can_execute = can_execute(request.user, workflow_id)
-        # 是否可定时执行
-        is_can_timingtask = can_timingtask(request.user, workflow_id)
-        # 是否可取消
-        is_can_cancel = can_cancel(request.user, workflow_id)
+    # 获取当前审批和审批流程
+    audit_auth_group, current_audit_auth_group = Audit.review_info(workflow_id, 2)
 
-        # 获取审核日志
-        try:
-            audit_id = Audit.detail_by_workflow_id(workflow_id=workflow_id,
-                                                   workflow_type=WorkflowDict.workflow_type['sqlreview']).audit_id
-            last_operation_info = Audit.logs(audit_id=audit_id).latest('id').operation_info
-        except Exception as e:
-            logger.debug(f'无审核日志记录，错误信息{e}')
-            last_operation_info = ''
-    else:
-        audit_auth_group = '系统自动驳回'
-        current_audit_auth_group = '系统自动驳回'
-        is_can_review = False
-        is_can_execute = False
-        is_can_timingtask = False
-        is_can_cancel = False
-        last_operation_info = None
+    # 是否可审核
+    is_can_review = Audit.can_review(request.user, workflow_id, 2)
+    # 是否可执行
+    is_can_execute = can_execute(request.user, workflow_id)
+    # 是否可定时执行
+    is_can_timingtask = can_timingtask(request.user, workflow_id)
+    # 是否可取消
+    is_can_cancel = can_cancel(request.user, workflow_id)
+
+    # 获取审核日志
+    try:
+        audit_id = Audit.detail_by_workflow_id(workflow_id=workflow_id,
+                                               workflow_type=WorkflowDict.workflow_type['sqlreview']).audit_id
+        last_operation_info = Audit.logs(audit_id=audit_id).latest('id').operation_info
+    except Exception as e:
+        logger.debug(f'无审核日志记录，错误信息{e}')
+        last_operation_info = ''
 
     # 获取定时执行任务信息
     if workflow_detail.status == 'workflow_timingtask':
@@ -223,15 +214,12 @@ def sqlquery(request):
 # SQL导出查询（大数据异步查询）
 @permission_required('sql.menu_query_export', raise_exception=True)
 def query_export(request):
-    # 获取用户关联从库列表
-    instances = Instance.objects.filter(type='slave')
     # 获取导出查询审核人
     auditors = list()
     for p in Permission.objects.filter(codename='query_export_review'):
         for g in p.group_set.all():
             auditors.extend(g.user_set.all())
-    context = {'instances': instances, 'auditors': auditors}
-    return render(request, 'sqlquery_export.html', context)
+    return render(request, 'sqlquery_export.html', {'auditors': auditors})
 
 
 # SQL慢日志页面

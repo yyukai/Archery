@@ -211,20 +211,20 @@ def submit(request):
                                               )
             workflow_id = sql_workflow.id
             # 自动审核通过了，才调用工作流
-            if workflow_status == 'workflow_manreviewing':
-                # 调用工作流插入审核信息, 查询权限申请workflow_type=2
-                Audit.add(WorkflowDict.workflow_type['sqlreview'], workflow_id)
+            # if workflow_status == 'workflow_manreviewing':
+            # 调用工作流插入审核信息, 查询权限申请workflow_type=2
+            Audit.add(WorkflowDict.workflow_type['sqlreview'], workflow_id)
     except Exception as msg:
         logger.error(f"提交工单报错，错误信息：{traceback.format_exc()}")
         context = {'errMsg': msg}
         return render(request, 'error.html', context)
     else:
         # 自动审核通过才进行消息通知
-        if workflow_status == 'workflow_manreviewing':
-            # 获取审核信息
-            audit_id = Audit.detail_by_workflow_id(workflow_id=workflow_id,
-                                                   workflow_type=WorkflowDict.workflow_type['sqlreview']).audit_id
-            async_task(notify_for_audit, audit_id=audit_id, email_cc=list_cc_addr, timeout=60)
+        # if workflow_status == 'workflow_manreviewing':
+        # 获取审核信息
+        audit_id = Audit.detail_by_workflow_id(workflow_id=workflow_id,
+                                               workflow_type=WorkflowDict.workflow_type['sqlreview']).audit_id
+        async_task(notify_for_audit, audit_id=audit_id, email_cc=list_cc_addr, timeout=60)
 
     return HttpResponseRedirect(reverse('sql:detail', args=(workflow_id,)))
 

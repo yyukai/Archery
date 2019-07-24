@@ -194,12 +194,14 @@ def do_upload_func(apply_id, audit_msg, user):
                 user.display, audit_msg, share_link)
             DingSender().send_msg_sync(wa.apply.ding_user_id, msg_content)
         else:
+            wa.status = 5
             wa.error_msg = json.dumps(ret)
-            wa.save(update_fields=['error_msg', 'auditor'])
+            wa.save(update_fields=['status', 'error_msg', 'auditor'])
     else:
         # 传输出错
-        wa.error_msg = json.dumps(json.dumps(ret))
-        wa.save(update_fields=['error_msg', 'auditor'])
+        wa.status = 5
+        wa.error_msg = json.dumps(ret)
+        wa.save(update_fields=['status', 'error_msg', 'auditor'])
 
 
 @permission_required('sql.menu_wpan_upload', raise_exception=True)

@@ -274,13 +274,14 @@ def add_async_query(request):
 
         # 查询权限校验，并且获取limit_num
         priv_check_info = query_priv_check(user, instance, db_name, sql_content, limit_num)
-        if priv_check_info['status'] == 0:
-            limit_num = priv_check_info['data']['limit_num']
-            priv_check = priv_check_info['data']['priv_check']
-        else:
-            result['status'] = 1
-            result['msg'] = priv_check_info['msg']
-            return HttpResponse(json.dumps(result), content_type='application/json')
+        priv_check = priv_check_info['data']['priv_check']
+        # if priv_check_info['status'] == 0:
+        #     limit_num = priv_check_info['data']['limit_num']
+        #     priv_check = priv_check_info['data']['priv_check']
+        # else:
+        #     result['status'] = 1
+        #     result['msg'] = priv_check_info['msg']
+        #     return HttpResponse(json.dumps(result), content_type='application/json')
         # explain的limit_num设置为0
         limit_num = 0 if re.match(r"^explain", sql_content.lower()) else limit_num
 
@@ -328,7 +329,7 @@ def do_async_query(request, query_export, instance_name, db_name, sql_content, l
             # 写入数据段信息
             for row in range(1, int(res.affected_rows) + 1):
                 for col in range(0, len(res.column_list)):
-                    print(type(res.rows[row - 1][col]), res.rows[row - 1][col])
+                    # print(type(res.rows[row - 1][col]), res.rows[row - 1][col])
                     value = '' if res.rows[row - 1][col] is None else res.rows[row - 1][col]
                     sheet.write(row, col, value)
             workbook.save(template_file)
@@ -418,8 +419,15 @@ def query_export_audit(request):
 @permission_required('sql.query_submit', raise_exception=True)
 def query_export_cancel(request):
     query_export_id = request.POST.get("id")
-    if QueryExport.objects.filter(id=query_export_id).exists():
-        QueryExport.objects.filter(id=query_export_id).update(status=5)
+    qe = QueryExport.objects.filter(id=query_export_id)
+    if qe.exists():
+        qe.update(status=5)
+        query_log = qe[0].query_log
+        msg_content = '''导出查询（提取大量数据）下载申请 已取消：\n发起人：{}\n实例名称：{}\n数据库：{}\n执行的sql查询：{}\n提取条数：{}\n操作时间：{}\n'''. \
+            format(query_log.user_display, query_log.instance_name, query_log.db_name, query_log.sqllog,
+                   query_log.effect_row, query_log.create_time)
+        from sql.utils.ding_api import DingSender
+        DingSender().send_msg(qe[0].auditor.ding_user_id, msg_content)
         msg = "取消成功！"
     else:
         msg = "未找到该申请！"
