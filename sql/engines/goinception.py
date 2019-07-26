@@ -1,6 +1,7 @@
 # -*- coding: UTF-8 -*-
 import logging
 import re
+import simplejson as json
 import traceback
 import MySQLdb
 
@@ -105,6 +106,24 @@ class GoInceptionEngine(EngineBase):
             self.close()
         return result_set
 
+    def query_print(self, instance, db_name=None, sql=''):
+        """
+        将sql交给inception打印语法树。
+        """
+        sql = f"""/*--user={instance.user};--password={instance.raw_password};--host={instance.host};--port={instance.port};--query-print=1;*/
+                            inception_magic_start;
+                            use `{db_name}`;
+                            {sql.rstrip(';')};
+                            inception_magic_commit;"""
+        print_info = self.query(db_name=db_name, sql=sql).to_dict()[0]
+        # 兼容语法错误时errlevel=0的场景
+        if print_info['errlevel'] == 0 and print_info['errmsg'] is None:
+            return json.loads(_repair_json_str(print_info['query_tree']))
+        elif print_info['errlevel'] == 0 and print_info['errmsg'] == 'Global environment':
+            raise SyntaxError(f"Inception Error: {print_info['query_tree']}")
+        else:
+            raise RuntimeError(f"Inception Error: {print_info['errmsg']}")
+
     def get_variables(self, variables=None):
         """获取实例参数"""
         if variables:
@@ -132,3 +151,16 @@ class GoInceptionEngine(EngineBase):
         if self.conn:
             self.conn.close()
             self.conn = None
+
+
+def _repair_json_str(json_str):
+    """
+    处理JSONDecodeError: Expecting property name enclosed in double quotes
+    inception语法树出现{"a":1,}、["a":1,]、{'a':1}、[, { }]
+    """
+    json_str = re.sub(r"{\s*'(.+)':", r'{"\1":', json_str)
+    json_str = re.sub(r",\s*?]", "]", json_str)
+    json_str = re.sub(r",\s*?}", "}", json_str)
+    json_str = re.sub(r"\[,\s*?{", "[{", json_str)
+    json_str = json_str.replace("'", "\"")
+    return json_str

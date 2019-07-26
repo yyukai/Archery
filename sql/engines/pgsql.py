@@ -12,7 +12,7 @@ import traceback
 import sqlparse
 
 from . import EngineBase
-from .models import ResultSet
+from .models import ReviewSet, ResultSet
 
 __author__ = 'hhyo、yyukai'
 
@@ -167,7 +167,7 @@ class PgSQLEngine(EngineBase):
     def filter_sql(self, sql='', limit_num=0):
         # 对查询sql增加limit限制，# TODO limit改写待优化
         sql_lower = sql.lower().rstrip(';').strip()
-        if re.match(r"^select", sql_lower):
+        if limit_num != 0 and re.match(r"^select", sql_lower):
             if re.search(r"limit\s+(\d+)$", sql_lower) is None:
                 if re.search(r"limit\s+\d+\s*,\s*(\d+)$", sql_lower) is None:
                     return f"{sql.rstrip(';')} limit {limit_num};"

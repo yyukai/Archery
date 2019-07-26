@@ -15,10 +15,10 @@ from sql.models import ToolsLoanUpdate
 # from sql.utils.ding_api import DingSender
 #
 # ding_sender = DingSender()
-ml_db_host, ml_db_port, ml_db_user, ml_db_pwd = "192.168.16.250", 6606, "uatloan", "UATloan123!"
-au_db_host, au_db_port, au_db_user, au_db_pwd = "192.168.16.250", 6606, "uatauth", "UATauth123!"
-# ml_db_host, ml_db_port, ml_db_user, ml_db_pwd = "172.20.2.7", 3338, "wdsfangjb", "WDsfangjb1016!"
-# au_db_host, au_db_port, au_db_user, au_db_pwd = "172.20.2.7", 3336, "wdsfangjb", "WDsfangjb1016!"
+# ml_db_host, ml_db_port, ml_db_user, ml_db_pwd = "192.168.16.250", 6606, "uatloan", "UATloan123!"
+# au_db_host, au_db_port, au_db_user, au_db_pwd = "192.168.16.250", 6606, "uatauth", "UATauth123!"
+ml_db_host, ml_db_port, ml_db_user, ml_db_pwd = "172.20.2.7", 3338, "wdsfangjb", "WDsfangjb1016!"
+au_db_host, au_db_port, au_db_user, au_db_pwd = "172.20.2.7", 3336, "wdsfangjb", "WDsfangjb1016!"
 
 
 @permission_required('sql.tools_loan_update', raise_exception=True)

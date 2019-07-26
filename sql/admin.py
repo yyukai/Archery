@@ -60,11 +60,11 @@ class InstanceAdmin(admin.ModelAdmin):
     filter_horizontal = ('resource_group', 'tag')
     list_filter = ('db_type', 'type')
 
-    # 阿里云实例关系配置
-    class AliRdsConfigInline(admin.TabularInline):
-        model = AliyunRdsConfig
-
-    inlines = [AliRdsConfigInline]
+    # # 阿里云实例关系配置
+    # class AliRdsConfigInline(admin.TabularInline):
+    #     model = AliyunRdsConfig
+    #
+    # inlines = [AliRdsConfigInline]
 
 
 @admin.register(InstancePerf)

@@ -363,7 +363,7 @@ def replication(request):
 @permission_required('sql.menu_instance', raise_exception=True)
 def replication_echart(request):
     from pyecharts import Page, Line
-    instances = [ins.instance_name for ins in user_instances(request.user, 'all')]
+    instances = [ins.instance_name for ins in user_instances(request.user)]
     begin_date = (datetime.datetime.now() - datetime.timedelta(minutes=+29))
     ins_name = request.GET.get('name', '')
     dt_s = request.GET.get('stime', begin_date)
@@ -398,13 +398,13 @@ def replication_echart(request):
 
 
 def masking_field(request):
-    ins_list = user_instances(request.user, 'all')
+    ins_list = user_instances(request.user)
     db_name_list = [db.db_name for db in DataBase.objects.filter(instance__in=ins_list)]
     return render(request, 'masking_field.html', locals())
 
 
 def query_audit(request):
-    ins_list = user_instances(request.user, 'all')
+    ins_list = user_instances(request.user)
     ins_name_list = [n.instance_name for n in ins_list]
     db_name_list = [db.db_name for db in DataBase.objects.filter(instance__in=ins_list)]
     qa_user_list = QueryAudit.objects.values('db_user').distinct().order_by('db_user')

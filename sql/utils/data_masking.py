@@ -2,6 +2,7 @@
 import logging
 import traceback
 from sql.engines.inception import InceptionEngine
+from sql.engines.goinception import GoInceptionEngine
 from sql.models import DataMaskingRules, DataMaskingColumns
 import re
 

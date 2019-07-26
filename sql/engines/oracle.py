@@ -157,7 +157,7 @@ class OracleEngine(EngineBase):
     def filter_sql(self, sql='', limit_num=0):
         sql_lower = sql.lower()
         # 对查询sql增加limit限制
-        if re.match(r"^select", sql_lower):
+        if limit_num != 0 and re.match(r"^select", sql_lower):
             if sql_lower.find(' rownum ') == -1:
                 if sql_lower.find(' where ') == -1:
                     return f"{sql.rstrip(';')} WHERE ROWNUM <= {limit_num}"
@@ -175,8 +175,8 @@ class OracleEngine(EngineBase):
                 cursor.execute(f"ALTER SESSION SET CURRENT_SCHEMA = {db_name}")
             cursor.execute(sql)
             fields = cursor.description
-            if any(x[1] == cx_Oracle.CLOB for x in fields):
-                rows = [tuple([(c.read() if type(c) == cx_Oracle.LOB else c) for c in r]) for r in cursor]
+            if any(x[1] in [cx_Oracle.LOB, cx_Oracle.BLOB, cx_Oracle.CLOB] for x in fields):
+                rows = [tuple([('LOB Data' if type(c) in [cx_Oracle.LOB, cx_Oracle.BLOB, cx_Oracle.CLOB] else c) for c in r]) for r in cursor]
                 if int(limit_num) > 0:
                     rows = rows[0:int(limit_num)]
             else:

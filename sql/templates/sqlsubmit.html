@@ -251,6 +251,13 @@
         // 实例变更获取数据库补全提示
         $("#instance_name").change(function () {
             var optgroup = $('#instance_name :selected').parent().attr('label');
+            if (optgroup != 'MySQL') {
+                $("#btn-autoreview").prop('disabled', true);
+                $("#btn-submitsql").removeClass('disabled');
+                $("#btn-submitsql").prop('disabled', false);
+            } else {
+                $("#btn-autoreview").prop('disabled', false);
+            }
             $("#div-backup").show();
             //将数据通过ajax提交给获取db_name
             $.ajax({
@@ -588,7 +595,7 @@
                             } else if (result[i]['db_type'] === 'redis') {
                                 $("#optgroup-redis").append(instance);
                             } else if (result[i]['db_type'] === 'pgsql') {
-                                $("#optgroup-pgsql").append(instance);
+                                // $("#optgroup-pgsql").append(instance);
                             } else if (result[i]['db_type'] === 'oracle') {
                                 $("#optgroup-oracle").append(instance);
                             }

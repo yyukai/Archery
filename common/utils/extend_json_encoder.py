@@ -3,6 +3,7 @@ import simplejson as json
 
 from datetime import datetime, date, timedelta
 from functools import singledispatch
+from cx_Oracle import LOB
 
 
 @singledispatch
@@ -24,6 +25,15 @@ def _(o):
 def _(o):
     return o.total_seconds()
 
+
+@convert.register(bytes)
+def _(o):
+    return str(o, encoding='utf-8')
+
+
+@convert.register(LOB)
+def _(o):
+    return "LOB Data"
 
 # @convert.register(Decimal)
 # def _(o):

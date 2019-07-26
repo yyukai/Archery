@@ -18,6 +18,8 @@ from .models import Instance, DataBase, Replication
 def db_list(request):
     res = {}
     if request.method == 'GET':
+        limit = int(request.GET.get('limit'))
+        offset = int(request.GET.get('offset'))
         instance_name = request.GET.get('instance_name', '')
         search = request.GET.get('search', '')
         try:
@@ -26,11 +28,11 @@ def db_list(request):
                     Q(db_name__contains=search) | Q(db_application__contains=search) |
                     Q(db_person__contains=search)).distinct()
             else:
-                obj_list = DataBase.objects.filter(instance=None).filter(Q(db_name__contains=search) |
-                                                                          Q(db_application__contains=search) |
-                                                                          Q(db_person__contains=search)).distinct()
+                obj_list = DataBase.objects.filter(Q(db_name__contains=search) |
+                                                   Q(db_application__contains=search) |
+                                                   Q(db_person__contains=search)).order_by('instance').distinct()
             res = list()
-            for obj in obj_list:
+            for obj in obj_list[offset:offset + limit]:
                 res.append({
                     'id': obj.id,
                     'ip_port': '{}:{}'.format(obj.instance.host, obj.instance.port) if obj.instance else "未分配",
@@ -39,6 +41,7 @@ def db_list(request):
                     'db_application': obj.db_application,
                     'db_person': obj.db_person,
                 })
+            res = {"total": obj_list.count(), "rows": res}
         except Instance.DoesNotExist:
             res = {'status': 1, 'msg': 'Instance.DoesNotExist'}
         except Exception as e:
