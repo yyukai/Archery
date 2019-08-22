@@ -151,7 +151,7 @@ MONGODB_DATABASES = {
 Q_CLUSTER = {
     'name': 'archery',
     'workers': 4,
-    'recycle': 500,
+    'recycle': 20,
     'timeout': 60,
     'compress': True,
     'cpu_affinity': 1,

@@ -274,8 +274,12 @@ def wpan_upload_audit(request):
                 DingSender().send_msg(wpan_apply.apply.ding_user_id, msg_content)
                 result = {"code": 0, "result": "申请已打回！"}
             else:
-                do_upload_func(apply_id, audit_msg, request.user)
-                result = {"code": 0, "result": "外传正在执行...结果会通过钉钉发送给申请人！"}
+                wpan_his = WPanHistory.objects.get(id=apply_id)
+                if wpan_his.apply.ding_user_id:
+                    do_upload_func(apply_id, audit_msg, request.user)
+                    result = {"code": 0, "result": "外传正在执行...结果会通过钉钉发送给申请人！"}
+                else:
+                    result = {"code": -1, "errmsg": "未获取到该申请人的钉钉ID，无法审核！"}
         except Exception as e:
             result = {"code": -1, "errmsg": str(e)}
         return HttpResponse(json.dumps(result, cls=ExtendJSONEncoder, bigint_as_string=True),

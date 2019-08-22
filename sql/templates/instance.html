@@ -129,7 +129,8 @@
                 columns: [
                     {
                         title: 'ID',
-                        field: 'id'
+                        field: 'id',
+                        visible: false
                     }, {
                         title: '实例名称',
                         field: 'instance_name',
@@ -138,19 +139,24 @@
                         }
                     }, {
                         title: '实例类型',
-                        field: 'type'
+                        field: 'type',
+                        visible: false
                     }, {
                         title: '数据库类型',
-                        field: 'db_type'
+                        field: 'db_type',
+                        visible: false
                     }, {
                         title: 'HOST',
-                        field: 'host'
+                        field: 'host',
+                        visible: false
                     }, {
                         title: 'PORT',
-                        field: 'port'
+                        field: 'port',
+                        visible: false
                     }, {
                         title: 'USER',
-                        field: 'user'
+                        field: 'user',
+                        visible: false
                     }, {
                         title: 'Query数',
                         field: 'com_select'
@@ -174,7 +180,15 @@
                         field: 'slow_queries'
                     }, {
                         title: '硬盘/使用率',
-                        field: 'disk_used'
+                        field: 'disk_used',
+                        formatter: function (value, row, index) {
+                            var array = value.split(/\/|%/);
+                            if (array.length > 1 && array[1] > 85) {
+                                return "<span style='color:red'>"+value+"</span>"
+                            } else {
+                                return value
+                            }
+                        }
                     }, {
                         title: '硬盘读写',
                         field: 'disk_io'

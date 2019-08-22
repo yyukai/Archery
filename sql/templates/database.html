@@ -5,7 +5,7 @@
     <div id="toolbar" class="form-inline">
         <div class="form-group bootstrap-select ">
             <select id="instance_name" class="dropdown-menu-right selectpicker " data-live-search="true">
-                <option value="" selected="selected" disabled>请选择实例</option>
+                <option value="" selected="selected">请选择实例</option>
                 {% for instance_name in instances %}
                     <option value="{{ instance_name }}">{{ instance_name }}</option>
                 {% endfor %}

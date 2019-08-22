@@ -71,16 +71,12 @@ def db_agent(request):
     if "mysql" in data:
         t = data.pop("mysql")
         for port, mysql_perf in t.items():
-            try:
-                ins = Instance.objects.get(host=ip, port=port)
+            for ins in Instance.objects.filter(host=ip, port=port):
                 mysql_perf['instance'] = ins
-            except Instance.DoesNotExist:
-                continue
-
-            if InstancePerf.objects.filter(instance=ins).exists():
-                InstancePerf.objects.filter(instance=ins).update(**mysql_perf)
-            else:
-                InstancePerf.objects.create(**mysql_perf)
+                if InstancePerf.objects.filter(instance=ins).exists():
+                    InstancePerf.objects.filter(instance=ins).update(**mysql_perf)
+                else:
+                    InstancePerf.objects.create(**mysql_perf)
 
     if Host.objects.filter(ip=ip).exists():
         Host.objects.filter(ip=ip).update(**data)

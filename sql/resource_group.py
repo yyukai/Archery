@@ -138,7 +138,7 @@ def user_all_instances(request):
     type = request.GET.get('type')
     db_type = request.GET.getlist('db_type[]')
     tag_codes = request.GET.getlist('tag_codes[]')
-    instances = user_instances(user, type, db_type, tag_codes).values('id', 'type', 'db_type', 'instance_name')
+    instances = user_instances(user, type, db_type, tag_codes).values('id', 'host', 'port', 'type', 'db_type', 'instance_name')
     rows = [row for row in instances]
     result = {'status': 0, 'msg': 'ok', "data": rows}
     return HttpResponse(json.dumps(result), content_type='application/json')

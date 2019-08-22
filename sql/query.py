@@ -9,7 +9,7 @@ import os
 import shutil
 from wsgiref.util import FileWrapper
 import datetime
-import xlwt
+import xlsxwriter
 
 from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth.decorators import permission_required
@@ -321,18 +321,18 @@ def do_async_query(request, query_export, instance_name, db_name, sql_content, l
             file_name = '{}-{}-{}-{}'.format(query_export.query_log.username, instance_name, db_name, time_suffix)
             template_file = os.path.join(file_dir, file_name)
 
-            workbook = xlwt.Workbook(encoding='utf-8')
-            sheet = workbook.add_sheet('Sheet1', cell_overwrite_ok=True)
+            workbook = xlsxwriter.Workbook(template_file)
+            ws = workbook.add_worksheet('Sheet1')
             # 写入字段信息
             for field in range(0, len(res.column_list)):
-                sheet.write(0, field, res.column_list[field])
+                ws.write(0, field, res.column_list[field])
             # 写入数据段信息
             for row in range(1, int(res.affected_rows) + 1):
                 for col in range(0, len(res.column_list)):
                     # print(type(res.rows[row - 1][col]), res.rows[row - 1][col])
                     value = '' if res.rows[row - 1][col] is None else res.rows[row - 1][col]
-                    sheet.write(row, col, value)
-            workbook.save(template_file)
+                    ws.write(row, col, value)
+            workbook.close()
         except Exception as e:
             traceback.print_exc()
             query_export.error_msg = str(e)
@@ -393,9 +393,9 @@ def query_export_audit(request):
             if is_allow == "yes":
                 qe.status = 3
                 msg = "已通过！"
-                if os.path.exists(qe.result_file):
-                    if os.path.getsize(qe.result_file) > 0:
-                        shutil.copy2(qe.result_file, "{}.xls".format(qe.result_file.split('/')[-1]))
+                # if os.path.exists(qe.result_file):
+                #     if os.path.getsize(qe.result_file) > 0:
+                #         shutil.copy2(qe.result_file, "{}.xls".format(qe.result_file.split('/')[-1]))
             else:
                 qe.status = 4
                 msg = "已拒绝！"
@@ -444,7 +444,7 @@ def query_result_export(request):
         wrapper = FileWrapper(open(qe.result_file, "rb"))
         response = HttpResponse(wrapper, content_type='application/vnd.ms-excel')
         response['Content-Length'] = os.path.getsize(qe.result_file)
-        response['Content-Disposition'] = 'attachment; filename="result.xls"'
+        response['Content-Disposition'] = 'attachment; filename="result.xlsx"'
         return response
     else:
         return HttpResponse(qe.error_msg)

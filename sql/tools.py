@@ -31,7 +31,7 @@ def loan_update_search(request):
     emp_id = request.GET.get('t_sale_id', None)
     username = request.GET.get('username', None)
 
-    if not loan_id or not re.match(r'WD\d+', emp_id, re.I):
+    if not loan_id or not re.match(r'10\d+', emp_id, re.I):
         return JsonResponse({"code": -1, "errmsg": "异常调用！"})
 
     db1 = MySQLdb.connect(host=ml_db_host, port=ml_db_port, user=ml_db_user, passwd=ml_db_pwd, db="loan",
@@ -44,9 +44,9 @@ def loan_update_search(request):
                           charset='utf8', use_unicode=True)
     c2 = db2.cursor()
     if emp_id:
-        sql2 = """SELECT username,realname,empid,daishuuid FROM user WHERE empid IN ('{}');""".format(emp_id)
+        sql2 = """SELECT username,realname,empid_new,daishuuid FROM user WHERE empid_new IN ('{}');""".format(emp_id)
     else:
-        sql2 = """SELECT username,realname,empid,daishuuid FROM user WHERE username IN ('{}');""".format(username)
+        sql2 = """SELECT username,realname,empid_new,daishuuid FROM user WHERE username IN ('{}');""".format(username)
     c2.execute(sql2)
     tuple_user = c2.fetchall()
 
@@ -74,7 +74,8 @@ def loan_update_search(request):
                 "s_sale_name": o[2]
             })
     # 返回查询结果
-    return HttpResponse(json.dumps(result, cls=ExtendJSONEncoder, bigint_as_string=True),
+    res = {"code": 0, "data": result}
+    return HttpResponse(json.dumps(res, cls=ExtendJSONEncoder, bigint_as_string=True),
                         content_type='application/json')
 
 

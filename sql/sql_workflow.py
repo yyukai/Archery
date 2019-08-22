@@ -444,7 +444,7 @@ def cancel(request):
                                                    workflow_type=WorkflowDict.workflow_type[
                                                        'sqlreview']).audit_id
             # 仅待审核的需要调用工作流，审核通过的不需要
-            if workflow_detail.status != 'workflow_manreviewing':
+            if workflow_detail.status not in ['workflow_manreviewing', 'workflow_autoreviewwrong']:
                 # 增加工单日志
                 if user.username == workflow_detail.engineer:
                     Audit.add_log(audit_id=audit_id,

@@ -113,11 +113,11 @@ def get_device_mount():
     ret = dict()
     for mnt in psutil.disk_partitions(all=False):
         dev_path = mnt.device
-        cmd = "lvdisplay %s |grep 'VG Name' |awk '{print $NF}'" % dev_path
+        cmd = "sudo lvdisplay %s |grep 'VG Name' |awk '{print $NF}'" % dev_path
         p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         stdout, _ = p.stdout.read().strip(), p.stderr.read().strip()
         if stdout != "":
-            cmd = "pvscan |awk '/%s/{print $2}'" % stdout
+            cmd = "sudo pvscan |awk '/%s/{print $2}'" % stdout
             r = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             dev_path = r.stdout.read().strip()
         ret[mnt.mountpoint] = dev_path.split("/")[-1]
@@ -128,7 +128,7 @@ def get_mysql():
     ret = dict()
     device_mount = get_device_mount()
     device_io = get_device_io()
-    cmd = "ps -ef|grep -w mysqld|grep '\-\-datadir='|grep '\-\-port='"
+    cmd = "sudo ps -ef|grep -w mysqld|grep '\-\-datadir='|grep '\-\-port='"
     ports = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     for line1 in ports.stdout.readlines():
         base_path = re.findall(r'--basedir=(\S+)', line1, re.I)[0]
@@ -138,7 +138,7 @@ def get_mysql():
         port = re.findall(r'--port=([0-9]*)', line1, re.I)[0]
         socket_path = re.findall(r'--socket=(\S+)', line1, re.I)[0]
         ret[port], gs = dict(), dict()
-        status_cmd = """/app/mysql/dist/bin/mysqladmin -uwddbms -p123456 --port={0} --socket={1} \
+        status_cmd = """/app/mysql/dist/bin/mysqladmin -uwddbms -pWDdbms0412\! --port={0} --socket={1} \
         extended-status -i 1 -c 2 -r 2>/dev/null \
         |grep -E 'Com|Threads|Key|Innodb|Questions|Uptime' |sed 's/|//g'""".format(port, socket_path)
         status = subprocess.Popen(status_cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
@@ -165,14 +165,14 @@ def get_mysql():
         # ret[port]['slow_queries'] = gs['Slow_queries']
         # 慢查询
         cmd = """
-        /app/mysql/dist/bin/mysql -uwddbms -p123456 --port={0} --socket={1} -e \
+        /app/mysql/dist/bin/mysql -uwddbms -pWDdbms0412\! --port={0} --socket={1} -e \
         "select count(*) from information_schema.INNODB_TRX where trx_started<SUBDATE(now(),interval 3 second)\G" \
         2>/dev/null |tail -n1 |awk '{{print $NF}}'
         """.format(port, socket_path)
         r = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         ret[port]['slow_queries'] = int(r.stdout.read().strip())
 
-        cmd = "df -P {0} |tail -n1 |awk '{{print $NF}}'".format(data_path)
+        cmd = "sudo df -P {0} |tail -n1 |awk '{{print $NF}}'".format(data_path)
         r = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         mount_point = r.stdout.read().strip()
         disk_used = psutil.disk_usage(mount_point)
@@ -189,7 +189,7 @@ def send(post_data):
     try:
         pprint(post_data)
         url = "http://dbms.weidai.com.cn/api/v1/db_agent/"
-        url = "http://192.168.21.241:9123/api/v1/db_agent/"
+        # url = "http://192.168.21.241:9123/api/v1/db_agent/"
         req = urllib2.Request(url, json.dumps(post_data))
         req.add_header("Content-Type", "application/json")
         resp = urllib2.urlopen(req)
