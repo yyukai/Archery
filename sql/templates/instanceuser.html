@@ -4,13 +4,19 @@
     <!-- 自定义操作按钮-->
     <div id="toolbar" class="form-inline">
         <div class="form-group ">
-            {% if perms.sql.instance_user_edit %}
+            <select id="instance" class="form-control selectpicker" name="instance_list"
+                    title="请选择实例"
+                    data-live-search="true">
+            </select>
+        </div>
+        {% if perms.sql.instance_user_edit %}
+            <div class="form-group ">
                 <button id="btn_add" type="button" class="btn btn-default">
                     <span class="glyphicon glyphicon-plus" aria-hidden="true"></span>
                     添加用户
                 </button>
-            {% endif %}
-        </div>
+            </div>
+        {% endif %}
     </div>
     <!-- 表格-->
     <div class="table-responsive">
@@ -26,7 +32,7 @@
                 <div class="modal-header">
                     <button type="button" class="close" data-dismiss="modal"><span
                             aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>
-                    <h4 class="modal-title">添加白名单</h4>
+                    <h4 class="modal-title">添加数据库用户</h4>
                 </div>
                 <div class="modal-body">
                     <p hidden id="uperrorMsg" class="text-danger" style="color:red"></p> <!-- for error msg-->
@@ -34,19 +40,85 @@
                         <div class="form-group">
                             <label for="zone" class="col-sm-2 control-label">User<span class="red-fonts">*</span></label>
                             <div class="col-sm-8">
-                                <input id="addUser" name="user" placeholder=""
+                                <input id="user" name="user" placeholder=""
                                        class="form-control" datatype="s2-16" errormsg="格式不正确">
                             </div>
-                        </div><!--域-->
+                        </div>
 
-                        <div class="hr-line-dashed"></div>
                         <div class="form-group">
                             <label for="host" class="col-sm-2 control-label">Host<span class="red-fonts">*</span></label>
                             <div class="col-sm-8">
-                                <input id="addHost" name="host" placeholder="" class="form-control">
+                                <input id="host" name="host" placeholder="172.20.5.1" class="form-control">
                             </div>
-                        </div><!--comment-->
-
+                        </div>
+                        <div class="form-group">
+                            <label for="password" class="col-sm-2 control-label">密码<span class="red-fonts">*</span></label>
+                            <div class="col-sm-8">
+                                <input id="password" name="password" placeholder="******" class="form-control">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="privType" class="col-sm-2 control-label">授权类型<span class="red-fonts">*</span></label>
+                            <div class="col-sm-8">
+                                <select id="privType" name="priv_type" data-live-search="true"
+                                    title="选择授权类型"
+                                    class="form-control selectpicker show-tick bs-select-hidden">
+                                    <option value="database">DATABASE</option>
+                                    <option value="table">TABLE</option>
+                            </select>
+                            </div>
+                        </div>
+                        <div id="db_name_div" class="form-group">
+                            <label for="db_name" class="col-sm-2 control-label">数据库<span class="red-fonts">*</span></label>
+                            <div class="col-sm-8">
+                                <select id="db_name" name="db_name" data-live-search="true"
+                                        title="请选择数据库:"
+                                        class="form-control selectpicker show-tick bs-select-hidden ">
+                                </select>
+                            </div>
+                        </div>
+                        <div id="db_name_multiple_div" class="form-group" style="display: none">
+                            <label for="db_name_multiple" class="col-sm-2 control-label">数据库<span class="red-fonts">*</span></label>
+                            <div class="col-sm-8">
+                                <select id="db_name_multiple" name="db_name_multiple" data-live-search="true" multiple="multiple"
+                                        title="请选择数据库:" required
+                                        class="form-control selectpicker show-tick bs-select-hidden ">
+                                </select>
+                            </div>
+                        </div>
+                        <div id="table_div" class="form-group">
+                            <label for="table_name" class="col-sm-2 control-label">表<span class="red-fonts">*</span></label>
+                            <div class="col-sm-8">
+                                <select id="table_name" name="table_name"
+                                        class="form-control selectpicker show-tick bs-select-hidden" data-live-search="true"
+                                        multiple='multiple' data-max-options="999"
+                                        title="请选择表:" required>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="priv" class="col-sm-2 control-label">权限<span class="red-fonts">*</span></label>
+                            <div class="col-sm-8">
+                                <input type="checkbox" id="priv_all" name="priv" value="all"> ALL Privileges
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="priv" class="col-sm-2 control-label"></label>
+                            <div class="col-sm-8">
+                                <input type="checkbox" id="priv_select" name="priv" value="select"> SELECT
+                                <input type="checkbox" id="priv_insert" name="priv" value="insert"> INSERT
+                                <input type="checkbox" id="priv_update" name="priv" value="update"> UPDATE
+                                <input type="checkbox" id="priv_delete" name="priv" value="delete"> DELETE
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="priv" class="col-sm-2 control-label"></label>
+                            <div class="col-sm-8">
+                                <input type="checkbox" id="priv_create" name="priv" value="create"> CREATE
+                                <input type="checkbox" id="priv_alter" name="priv" value="alter"> ALTER
+                                <input type="checkbox" id="priv_drop" name="priv" value="drop"> DROP
+                            </div>
+                        </div>
                         <div class="form-group">
                             <div class="modal-footer">
                                 <button type="button" class="btn btn-default" data-dismiss="modal">取消</button>
@@ -54,8 +126,13 @@
                             </div>
                         </div> <!--button-->
                     </form> <!--form-->
+                    <p>
+                        <p class="text-success" id="id_created"></p>
+                        <p id="id_created_detail"></p>
+                        <p class="text-danger" id="id_failed"></p>
+                        <p id="id_failed_detail"></p>
+                    </p>
                 </div> <!--modal-body-->
-
             </div><!-- /.modal-content -->
         </div><!-- /.modal-dialog -->
     </div><!-- /.modal -->
@@ -67,28 +144,92 @@
                 <div class="modal-header">
                     <button type="button" class="close" data-dismiss="modal"><span
                             aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>
-                    <h4 class="modal-title">更新白名单</h4>
+                    <h4 class="modal-title">更新数据库用户</h4>
                 </div>
                 <div class="modal-body">
                     <form id="upForm" class="form-horizontal  nice-validator n-yellow" novalidate="novalidate">
-                        <input type="hidden" id="oldUser" name="olduser" class="form-control">
-                        <input type="hidden" id="oldHost" name="oldhost" class="form-control">
                         <div class="form-group">
-                            <label for="zone" class="col-sm-2 control-label">User<span class="red-fonts">*</span></label>
+                            <label for="upUser" class="col-sm-2 control-label">User<span class="red-fonts">*</span></label>
                             <div class="col-sm-8">
-                                <input id="upUser" name="user" placeholder=""
+                                <input id="upUser" name="user" readonly
                                        class="form-control" datatype="s2-16" errormsg="格式不正确">
                             </div>
-                        </div><!--域-->
+                        </div>
 
-                        <div class="hr-line-dashed"></div>
                         <div class="form-group">
                             <label for="host" class="col-sm-2 control-label">Host<span class="red-fonts">*</span></label>
                             <div class="col-sm-8">
-                                <input id="upHost" name="host" placeholder="" class="form-control">
+                                <input id="upHost" name="host" readonly class="form-control">
                             </div>
-                        </div><!--comment-->
-
+                        </div>
+                        <div class="form-group">
+                            <label for="upPassword" class="col-sm-2 control-label">密码<span class="red-fonts">*</span></label>
+                            <div class="col-sm-8">
+                                <input id="upPassword" name="password" placeholder="留空表示不更改密码！" class="form-control">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="upPrivType" class="col-sm-2 control-label">授权类型<span class="red-fonts">*</span></label>
+                            <div class="col-sm-8">
+                                <select id="upPrivType" name="priv_type" data-live-search="true"
+                                    title="选择授权类型"
+                                    class="form-control selectpicker show-tick bs-select-hidden">
+                                    <option value="database">DATABASE</option>
+                                    <option value="table">TABLE</option>
+                            </select>
+                            </div>
+                        </div>
+                        <div id="up_db_name_div" class="form-group">
+                            <label for="up_db_name" class="col-sm-2 control-label">数据库<span class="red-fonts">*</span></label>
+                            <div class="col-sm-8">
+                                <select id="up_db_name" name="db_name" data-live-search="true"
+                                        title="请选择数据库:"
+                                        class="form-control selectpicker show-tick bs-select-hidden ">
+                                </select>
+                            </div>
+                        </div>
+                        <div id="up_db_name_multiple_div" class="form-group" style="display: none">
+                            <label for="up_db_name_multiple" class="col-sm-2 control-label">数据库<span class="red-fonts">*</span></label>
+                            <div class="col-sm-8">
+                                <select id="up_db_name_multiple" name="db_name_multiple" data-live-search="true" multiple="multiple"
+                                        title="请选择数据库:" required
+                                        class="form-control selectpicker show-tick bs-select-hidden ">
+                                </select>
+                            </div>
+                        </div>
+                        <div id="up_table_div" class="form-group">
+                            <label for="up_table_name" class="col-sm-2 control-label">表<span class="red-fonts">*</span></label>
+                            <div class="col-sm-8">
+                                <select id="up_table_name" name="table_name"
+                                        class="form-control selectpicker show-tick bs-select-hidden" data-live-search="true"
+                                        multiple='multiple' data-max-options="999"
+                                        title="请选择表:" required>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="priv" class="col-sm-2 control-label">权限<span class="red-fonts">*</span></label>
+                            <div class="col-sm-8">
+                                <input type="checkbox" name="priv" value="all"> ALL Privileges
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="priv" class="col-sm-2 control-label"></label>
+                            <div class="col-sm-8">
+                                <input type="checkbox" name="priv" value="select"> SELECT
+                                <input type="checkbox" name="priv" value="insert"> INSERT
+                                <input type="checkbox" name="priv" value="update"> UPDATE
+                                <input type="checkbox" name="priv" value="delete"> DELETE
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="priv" class="col-sm-2 control-label"></label>
+                            <div class="col-sm-8">
+                                <input type="checkbox" name="priv" value="create"> CREATE
+                                <input type="checkbox" name="priv" value="alter"> ALTER
+                                <input type="checkbox" name="priv" value="drop"> DROP
+                            </div>
+                        </div>
                         <div class="form-group">
                             <div class="modal-footer">
                                 <button type="button" class="btn btn-default" data-dismiss="modal">取消</button>
@@ -96,6 +237,12 @@
                             </div>
                         </div> <!--button-->
                     </form> <!--form-->
+                    <p>
+                        <p class="text-success" id="up_id_created"></p>
+                        <p id="up_id_created_detail"></p>
+                        <p class="text-danger" id="up_id_failed"></p>
+                        <p id="up_id_failed_detail"></p>
+                    </p>
                 </div> <!--modal-body-->
 
             </div><!-- /.modal-content -->
@@ -127,7 +274,7 @@
                 pageList: [20, 30, 50, 100],       //可供选择的每页的行数（*）
                 showExport: true,                   //是否显示导出按钮
                 exportOptions: {
-                    fileName: 'instance'  //文件名称设置
+                    fileName: 'instance_user'  //文件名称设置
                 },
                 search: true,                      //是否显示表格搜索
                 strictSearch: false,                //是否全匹配搜索
@@ -135,7 +282,7 @@
                 showRefresh: true,                  //是否显示刷新按钮
                 minimumCountColumns: 2,             //最少允许的列数
                 clickToSelect: true,                //是否启用点击选中行
-                uniqueId: "id",                     //每一行的唯一标识，一般为主键列
+                uniqueId: "id",                    //每一行的唯一标识，一般为主键列
                 showToggle: true,                   //是否显示详细视图和列表视图的切换按钮
                 cardView: false,                    //是否显示详细视图
                 detailView: false,                  //是否显示父子表
@@ -147,13 +294,13 @@
                     function (params) {
                         return {
                             search: params.search,
-                            instance_id: "{{ instance_id }}"
+                            instance_id: $("#instance").val()?$("#instance").val() : {{ instance_id }}
                         }
                     },
                 columns: [
                     {
                         title: 'User@Host',
-                        field: 'user'
+                        field: 'user_host'
                     }, {
                         title: 'privileges',
                         field: 'privileges',
@@ -166,15 +313,18 @@
                         }
                     }, {
                         title: '操作',
-                        field: '',
+                        field: 'id',
                         formatter: function (value, row, index) {
                             {% if perms.sql.instance_user_edit %}
-                                return "<button class=\"btn btn-warning btn-xs\" onclick=\"edit_user('"+row.user+"','"+row.host+"')\">修改</button>"
-                                + "<button class=\"btn btn-danger btn-xs\" onclick=\"del_user('" + row.user+"','"+row.host+"')\">删除</button>"
+                                return "<button class=\"btn btn-warning btn-xs\" onclick=\"edit_user("+value+")\">修改</button>"
+                                + "<button class=\"btn btn-danger btn-xs\" onclick=\"del_user('" +value+"')\">删除</button>"
                             {% endif %}
                         }
-                }],
-                onLoadSuccess: function () {
+                    }],
+                onLoadSuccess: function (data) {
+                    if (data.status !== 0) {
+                        alert("数据加载失败！" + data.msg);
+                    }
                 },
                 onLoadError: function () {
                     alert("数据加载失败！请检查接口返回信息和错误日志！");
@@ -187,57 +337,293 @@
 
         }
 
-        //初始化数据
-        $(document).ready(function () {
+        //实例变动
+        $("#instance").change(function () {
             userlist()
         });
+
+        //初始化数据
+        $(document).ready(function () {
+            //获取用户实例列表
+            $(function () {
+                $.ajax({
+                    type: "get",
+                    url: "/group/user_all_instances/",
+                    async: false,
+                    dataType: "json",
+                    data: {
+                        db_type: ['mysql']
+                    },
+                    complete: function () {
+                    },
+                    success: function (data) {
+                        if (data.status === 0) {
+                            let result = data['data'];
+                            $("#instance").empty();
+                            for (let i = 0; i < result.length; i++) {
+                                let instance = "<option value=\"" + result[i]['id'] + "\">" + result[i]['instance_name'] + "</option>";
+                                $("#instance").append(instance);
+                                $('#instance').selectpicker('render');
+                                $('#instance').selectpicker('refresh');
+                                $('#instance').val("{{ instance_id }}");
+                            }
+                        } else {
+                            alert(data.msg);
+                        }
+                    },
+                    error: function (XMLHttpRequest, textStatus, errorThrown) {
+                        alert(errorThrown);
+                    }
+                });
+            });
+            //
+            userlist()
+        });
+
+        $("#privType").change(function () {
+            //库权限
+            if ($("#privType").val() === 'database') {
+                $("#table_div").hide();
+                $("#db_name_div").hide();
+                $("#db_name_multiple_div").show();
+            }
+            //表权限
+            else if ($("#privType").val() === 'table') {
+                $("#table_div").show();
+                $("#db_name_div").show();
+                $("#db_name_multiple_div").hide();
+            }
+        });
+        $("#table_name").selectpicker({
+            actionsBox: true, //在下拉选项添加选中所有和取消选中的按钮
+            countSelectedText: "已选中{0}项",
+            selectedTextFormat: "count > 5"
+        });
+        $("#db_name_multiple").selectpicker({
+            actionsBox: true, //在下拉选项添加选中所有和取消选中的按钮
+            countSelectedText: "已选中{0}项",
+            selectedTextFormat: "count > 5"
+        });
+        $("#db_name").change(function () {
+            $.ajax({
+                type: "post",
+                url: "/instance/instance_resource/",
+                dataType: "json",
+                data: {
+                    instance_name: $("#instance option:selected").text(),
+                    db_name: $("#db_name").val(),
+                    resource_type: "table"
+                },
+                complete: function () {
+                },
+                success: function (data) {
+                    if (data.status === 0) {
+                        var result = data.data;
+                        $("#table_name").empty();
+                        for (var i = 0; i < result.length; i++) {
+                            var name = "<option>" + result[i] + "</option>";
+                            $("#table_name").append(name);
+                        }
+                        $('#table_name').selectpicker('render');
+                        $('#table_name').selectpicker('refresh');
+                    } else {
+                        alert(data.msg);
+                    }
+                },
+                error: function (XMLHttpRequest, textStatus, errorThrown) {
+                    alert(errorThrown);
+                }
+            });
+        });
         $("#btn_add").on('click',function(){
+            $.ajax({
+                type: "post",
+                url: "/instance/instance_resource/",
+                dataType: "json",
+                data: {
+                    instance_name: $("#instance option:selected").text(),
+                    resource_type: "database"
+                },
+                complete: function () {
+                },
+                success: function (data) {
+                    if (data.status === 0) {
+                        var result = data.data;
+                        $("#db_name").empty();
+                        $("#db_name_multiple").empty();
+                        for (var i = 0; i < result.length; i++) {
+                            var name = "<option value=\"" + result[i] + "\">" + result[i] + "</option>";
+                            $("#db_name").append(name);
+                            $("#db_name_multiple").append(name);
+                        }
+                        $('#db_name').selectpicker('render');
+                        $('#db_name').selectpicker('refresh');
+                        $('#db_name_multiple').selectpicker('render');
+                        $('#db_name_multiple').selectpicker('refresh');
+                    } else {
+                        alert(data.msg);
+                    }
+                },
+                error: function (XMLHttpRequest, textStatus, errorThrown) {
+                    alert(errorThrown);
+                }
+            });
             $('#addModal').modal({});
-            $("#modal_btn").unbind("click").click(function(){
-                var user = document.getElementById("addUser").value;
-                var host = document.getElementById("addHost").value;
+            $("#addUserBtn").unbind("click").click(function(){
+                // console.log($('#addForm').serialize());
+                $('#id_created').html('');
+                $('#id_created_detail').html('');
+                $('#id_failed').html('');
+                $('#id_failed_detail').html('');
                 $.ajax({
                     type: "POST",
                     url: "/ip_white/add/" + {{ instance_id }},
-                    data: {'user': user, 'host': host},
+                    data: $('#addForm').serialize(),
                     success: function (data) {
-                        alert(data);
-                        window.location.reload();
+                        if (data.code === 0) {
+                            $('#id_created').html(data.created_info);
+                            $('#id_created_detail').html(data.created.join('</br>'));
+                            $('#id_failed').html(data.failed_info);
+                            $('#id_failed_detail').html(data.failed.join('</br>'));
+                        }
+                        // $('#addModal').modal('hide');
                     }
                 });
             });
         });
-        function edit_user(user, host){
-            $('#oldUser').val(user);
-            $('#upUser').val(user);
-            $('#oldHost').val(host);
-            $('#upHost').val(host);
+
+        $("#upPrivType").change(function () {
+            //库权限
+            if ($("#upPrivType").val() === 'database') {
+                $("#up_table_div").hide();
+                $("#up_db_name_div").hide();
+                $("#up_db_name_multiple_div").show();
+            }
+            //表权限
+            else if ($("#upPrivType").val() === 'table') {
+                $("#up_table_div").show();
+                $("#up_db_name_div").show();
+                $("#up_db_name_multiple_div").hide();
+            }
+        });
+        $("#up_table_name").selectpicker({
+            actionsBox: true, //在下拉选项添加选中所有和取消选中的按钮
+            countSelectedText: "已选中{0}项",
+            selectedTextFormat: "count > 5"
+        });
+        $("#up_db_name_multiple").selectpicker({
+            actionsBox: true, //在下拉选项添加选中所有和取消选中的按钮
+            countSelectedText: "已选中{0}项",
+            selectedTextFormat: "count > 5"
+        });
+        $("#up_db_name").change(function () {
+            $.ajax({
+                type: "post",
+                url: "/instance/instance_resource/",
+                dataType: "json",
+                data: {
+                    instance_name: $("#instance option:selected").text(),
+                    db_name: $("#up_db_name").val(),
+                    resource_type: "table"
+                },
+                complete: function () {
+                },
+                success: function (data) {
+                    if (data.status === 0) {
+                        var result = data.data;
+                        $("#up_table_name").empty();
+                        for (var i = 0; i < result.length; i++) {
+                            var name = "<option>" + result[i] + "</option>";
+                            $("#up_table_name").append(name);
+                        }
+                        $('#up_table_name').selectpicker('render');
+                        $('#up_table_name').selectpicker('refresh');
+                    } else {
+                        alert(data.msg);
+                    }
+                },
+                error: function (XMLHttpRequest, textStatus, errorThrown) {
+                    alert(errorThrown);
+                }
+            });
+        });
+        function edit_user(id){
+            $.ajax({
+                type: "post",
+                url: "/instance/instance_resource/",
+                dataType: "json",
+                data: {
+                    instance_name: $("#instance option:selected").text(),
+                    resource_type: "database"
+                },
+                complete: function () {
+                },
+                success: function (data) {
+                    if (data.status === 0) {
+                        var result = data.data;
+                        $("#up_db_name").empty();
+                        $("#up_db_name_multiple").empty();
+                        for (var i = 0; i < result.length; i++) {
+                            var name = "<option value=\"" + result[i] + "\">" + result[i] + "</option>";
+                            $("#up_db_name").append(name);
+                            $("#up_db_name_multiple").append(name);
+                        }
+                        $('#up_db_name').selectpicker('render');
+                        $('#up_db_name').selectpicker('refresh');
+                        $('#up_db_name_multiple').selectpicker('render');
+                        $('#up_db_name_multiple').selectpicker('refresh');
+                    } else {
+                        alert(data.msg);
+                    }
+                },
+                error: function (XMLHttpRequest, textStatus, errorThrown) {
+                    alert(errorThrown);
+                }
+            });
+
+            var row_data = $('#user-list').bootstrapTable('getRowByUniqueId', id);
+            $('#upUser').val(row_data['user']);
+            $('#upHost').val(row_data['host']);
             $('#updateModal').modal({});
             $("#updateUserBtn").unbind("click").click(function(){
+                $('#up_id_created').html('');
+                $('#up_id_created_detail').html('');
+                $('#up_id_failed').html('');
+                $('#up_id_failed_detail').html('');
                 $.ajax({
                     type: "POST",
                     url: "/ip_white/edit/" + {{ instance_id }},
                     data: $('#upForm').serialize(),
                     success: function (data) {
-                        alert(data);
-                        window.location.reload();
+                        if (data.code == 0) {
+                            if (data.code === 0) {
+                                $('#up_id_created').html(data.created_info);
+                                $('#up_id_created_detail').html(data.created.join('</br>'));
+                                $('#up_id_failed').html(data.failed_info);
+                                $('#up_id_failed_detail').html(data.failed.join('</br>'));
+                            }
+                        } else {
+                            alert(data.errmsg);
+                        }
                     }
                 });
             });
         }
-        function del_user(user, host) {
-            if (confirm("确定删除")) {
+        function del_user(id) {
+            var row_data = $('#user-list').bootstrapTable('getRowByUniqueId', id);
+            // console.log(row_data);
+            if (confirm("请三思而行，确定删除该数据库用户？")) {
                 $.ajax({
-                    url: "/ip_white/delete/" + {{ instance_id }},
+                    url: "/ip_white/del/" + {{ instance_id }},
                     type: "POST",
-                    data: {'user': user, 'host': host},
+                    data: {'user_host': row_data['user_host']},
                     success: function (res) {
                         console.log(res);
                         if (res.code == 0) {
-                            alert(res);
+                            alert(res.msg);
                             window.location.reload();
                         } else {
-                            alert(res);
+                            alert(res.errmsg);
                         }
                     }
                 });

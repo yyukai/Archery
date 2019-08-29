@@ -43,7 +43,7 @@ def lists(request):
     instances = Instance.objects.filter(**filter_dict)
     # 过滤标签，返回同时包含全部标签的实例，TODO 循环会生成多表JOIN，如果数据量大会存在效率问题
     for tag in tags:
-        instances = instances.filter(tag__tag_code=tag)
+        instances = instances.filter(tag__tag_code=tag, tag__active=True)
 
     count = instances.count()
     rows = list()
@@ -93,26 +93,36 @@ def lists(request):
 def users(request):
     """获取实例用户列表"""
     instance_id = request.POST.get('instance_id')
+    if not instance_id:
+        return HttpResponse(json.dumps({'status': 0, 'msg': '', 'rows': []}), content_type='application/json')
     try:
         instance = Instance.objects.get(id=instance_id)
     except Instance.DoesNotExist:
         result = {'status': 1, 'msg': '实例不存在', 'data': []}
         return HttpResponse(json.dumps(result), content_type='application/json')
 
-    sql_get_user = '''select concat("\'", user, "\'", '@', "\'", host,"\'") as query from mysql.user;'''
+    sql_get_user = '''select user,host from mysql.user;'''
     query_engine = get_engine(instance=instance)
-    db_users = query_engine.query('mysql', sql_get_user).rows
-    # 获取用户权限信息
-    data = []
-    for db_user in db_users:
-        user_info = {}
-        user_priv = query_engine.query('mysql', 'show grants for {};'.format(db_user[0]), close_conn=False).rows
-        user_info['user'] = db_user[0]
-        user_info['privileges'] = user_priv
-        data.append(user_info)
+    query_result = query_engine.query('mysql', sql_get_user)
+    if not query_result.error:
+        db_users = query_result.rows
+        # 获取用户权限信息
+        data = []
+        for db_user in db_users:
+            user_host = "'{}'@'{}'".format(db_user[0], db_user[1])
+            user_priv = query_engine.query('mysql', 'show grants for {};'.format(user_host), close_conn=False).rows
+            data.append({
+                'id': db_users.index(db_user),
+                'user': db_user[0],
+                'host': db_user[1],
+                'user_host': user_host,
+                'privileges': user_priv
+            })
+        result = {'status': 0, 'msg': 'ok', 'rows': data}
+    else:
+        result = {'status': 1, 'msg': query_result.error}
     # 关闭连接
     query_engine.close()
-    result = {'status': 0, 'msg': 'ok', 'rows': data}
     return HttpResponse(json.dumps(result, cls=ExtendJSONEncoder, bigint_as_string=True),
                         content_type='application/json')
 
@@ -383,4 +393,7 @@ def describe(request):
     except Exception as msg:
         result['status'] = 1
         result['msg'] = str(msg)
+    if result['data']['error']:
+        result['status'] = 1
+        result['msg'] = result['data']['error']
     return HttpResponse(json.dumps(result), content_type='application/json')

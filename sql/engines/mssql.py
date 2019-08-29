@@ -7,9 +7,7 @@ import sqlparse
 from . import EngineBase
 import pyodbc
 from .models import ResultSet, ReviewSet, ReviewResult
-from common.config import SysConfig
 from sql.utils.data_masking import brute_mask
-from django.utils import timezone
 
 logger = logging.getLogger('default')
 
@@ -117,7 +115,7 @@ client charset = UTF-8;connect timeout=10;CHARSET={4};""".format(self.host, self
     def filter_sql(self, sql='', limit_num=0):
         sql_lower = sql.lower()
         # 对查询sql增加limit限制
-        if limit_num != 0 and re.match(r"^select", sql_lower):
+        if re.match(r"^select", sql_lower):
             if sql_lower.find(' top ') == -1:
                 return sql_lower.replace('select', 'select top {}'.format(limit_num))
         return sql.strip()

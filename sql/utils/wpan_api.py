@@ -12,11 +12,11 @@ import simplejson as json
 
 class WPan(object):
     def __init__(self, file=None, uuid=None):
-        # self.token = '387adb0d06dd4c3486d29683b99228a7'
-        # self.surl = 'http://wpan2.admin.weidai.com.cn:8080/api/'
-
-        self.token = 'ce92463b5cb54779a8c4c07ce15bb3ac'
-        self.surl = 'http://172.20.100.244:8080/api/'
+        self.token = '387adb0d06dd4c3486d29683b99228a7'
+        self.surl = 'http://wpan2.admin.weidai.com.cn:8080/api/'
+        #
+        # self.token = 'ce92463b5cb54779a8c4c07ce15bb3ac'
+        # self.surl = 'http://172.20.100.244:8080/api/'
 
         self.headers = {
             "Content-Type": "application/json",

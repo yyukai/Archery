@@ -40,6 +40,7 @@ def query(request):
     sql_content = request.POST.get('sql_content')
     db_name = request.POST.get('db_name')
     limit_num = int(request.POST.get('limit_num', 0))
+    schema_name = request.POST.get('schema_name', None)
     user = request.user
 
     result = {'status': 0, 'msg': 'ok', 'data': {}}
@@ -98,7 +99,12 @@ def query(request):
             run_date = (datetime.datetime.now() + datetime.timedelta(seconds=max_execution_time))
             add_kill_conn_schedule(schedule_name, run_date, instance.id, thread_id)
         with FuncTimer() as t:
-            query_result = query_engine.query(db_name, sql_content, limit_num)
+            # 获取主从延迟信息
+            seconds_behind_master = query_engine.seconds_behind_master
+            if instance.db_type == 'pgsql':  # TODO 此处判断待优化，请在 修改传参方式后去除
+                query_result = query_engine.query(db_name, sql_content, limit_num, schema_name=schema_name)
+            else:
+                query_result = query_engine.query(db_name, sql_content, limit_num)
         query_result.query_time = t.cost
         # 返回查询结果后删除schedule
         if thread_id:
@@ -125,12 +131,12 @@ def query(request):
                         query_result.error = None
                         priv_check = False
                         result['data'] = query_result.__dict__
-                    logger.error(f'1 数据脱敏异常，查询语句：{sql_content}\n，错误信息：{masking_result.error}')
+                    logger.error(f'数据脱敏异常，查询语句：{sql_content}\n，错误信息：{masking_result.error}')
                 # 正常脱敏
                 else:
                     result['data'] = masking_result.__dict__
             except Exception as msg:
-                logger.error(f'2 数据脱敏异常，查询语句：{sql_content}\n，错误信息：{msg}')
+                logger.error(f'数据脱敏异常，查询语句：{sql_content}\n，错误信息：{msg}')
                 # 抛出未定义异常，并且开启query_check，直接返回异常，禁止执行
                 if config.get('query_check'):
                     result['status'] = 1
@@ -146,8 +152,7 @@ def query(request):
 
         # 仅将成功的查询语句记录存入数据库
         if not query_result.error:
-            if hasattr(query_engine, 'seconds_behind_master'):
-                result['data']['seconds_behind_master'] = query_engine.seconds_behind_master
+            result['data']['seconds_behind_master'] = seconds_behind_master
             if int(limit_num) == 0:
                 limit_num = int(query_result.affected_rows)
             else:
@@ -195,32 +200,59 @@ def querylog(request):
     # 获取用户信息
     user = request.user
 
-    limit = int(request.POST.get('limit'))
-    offset = int(request.POST.get('offset'))
+    limit = int(request.GET.get('limit'))
+    offset = int(request.GET.get('offset'))
     limit = offset + limit
-    search = request.POST.get('search', '')
+    star = True if request.GET.get('star') == 'true' else False
+    query_log_id = request.GET.get('query_log_id')
+    search = request.GET.get('search', '')
 
-    sql_log = QueryLog.objects.all()
+    # 组合筛选项
+    filter_dict = dict()
+    # 是否收藏
+    if star:
+        filter_dict['favorite'] = star
+    # 语句别名
+    if query_log_id:
+        filter_dict['id'] = query_log_id
+    # 管理员查看全部数据,普通用户查看自己的数据
+    if not user.is_superuser:
+        filter_dict['username'] = user.username
+
+    # 过滤组合筛选项
+    sql_log = QueryLog.objects.filter(**filter_dict)
+
     # 过滤搜索信息
-    sql_log = sql_log.filter(Q(sqllog__icontains=search) | Q(user_display__icontains=search))
-    # 管理员查看全部数据
-    if user.is_superuser:
-        sql_log = sql_log
-    # 普通用户查看自己的数据
-    else:
-        sql_log = sql_log.filter(username=user.username)
+    sql_log = sql_log.filter(Q(sqllog__icontains=search) |
+                             Q(user_display__icontains=search) |
+                             Q(alias__icontains=search))
 
     sql_log_count = sql_log.count()
-    sql_log_list = sql_log.order_by('-id')[offset:limit]
+    sql_log_list = sql_log.order_by('-id')[offset:limit].values(
+        "id", "instance_name", "db_name", "sqllog",
+        "effect_row", "cost_time", "user_display", "favorite", "alias",
+        "create_time")
     # QuerySet 序列化
-    sql_log_list = serializers.serialize("json", sql_log_list)
-    sql_log_list = json.loads(sql_log_list)
-    sql_log = [log_info['fields'] for log_info in sql_log_list]
-
-    result = {"total": sql_log_count, "rows": sql_log}
+    rows = [row for row in sql_log_list]
+    result = {"total": sql_log_count, "rows": rows}
     # 返回查询结果
     return HttpResponse(json.dumps(result, cls=ExtendJSONEncoder, bigint_as_string=True),
                         content_type='application/json')
+
+
+@permission_required('sql.menu_sqlquery', raise_exception=True)
+def favorite(request):
+    """
+    收藏查询记录，并且设置别名
+    :param request:
+    :return:
+    """
+    query_log_id = request.POST.get('query_log_id')
+    star = True if request.POST.get('star') == 'true' else False
+    alias = request.POST.get('alias')
+    QueryLog(id=query_log_id, favorite=star, alias=alias).save(update_fields=['favorite', 'alias'])
+    # 返回查询结果
+    return HttpResponse(json.dumps({'status': 0, 'msg': 'ok'}), content_type='application/json')
 
 
 def kill_query_conn(instance_id, thread_id):
@@ -457,38 +489,46 @@ def query_export_log(request):
     # 获取用户信息
     user = request.user
 
-    limit = int(request.POST.get('limit'))
-    offset = int(request.POST.get('offset'))
+    limit = int(request.GET.get('limit'))
+    offset = int(request.GET.get('offset'))
     limit = offset + limit
+    star = True if request.GET.get('star') == 'true' else False
+    query_log_id = request.GET.get('query_log_id')
 
     # 获取搜索参数
-    search = request.POST.get('search', '')
+    search = request.GET.get('search', '')
 
-    # 查询个人记录，超管查看所有数据
-    if user.is_superuser or user.has_perm('sql.query_export_review'):
-        log_count = QueryExport.objects.filter(Q(query_log__sqllog__contains=search) |
-                                                   Q(query_log__username__contains=search) |
-                                                   Q(query_log__db_name__contains=search)).count()
-        qe_list = QueryExport.objects.filter(Q(query_log__sqllog__contains=search) |
-                                                  Q(query_log__username__contains=search) |
-                                                  Q(query_log__db_name__contains=search)).order_by('-id')[offset:limit]
-    else:
-        log_count = QueryExport.objects.filter(query_log__username=user.username).filter(
-                                                    Q(query_log__sqllog__contains=search) |
-                                                    Q(query_log__db_name__contains=search)).count()
-        qe_list = QueryExport.objects.filter(query_log__username=user.username).filter(
-                                                    Q(query_log__sqllog__contains=search) |
-                                                    Q(query_log__db_name__contains=search)).order_by('-id')[offset:limit]
+    # 组合筛选项
+    filter_dict = dict()
+    # 是否收藏
+    if star:
+        filter_dict['favorite'] = star
+    # 语句别名
+    if query_log_id:
+        filter_dict['id'] = query_log_id
+    # 管理员查看全部数据,普通用户查看自己的数据
+    if not user.is_superuser and not user.has_perm('sql.query_export_review'):
+        filter_dict['username'] = user.username
+
+    # 过滤组合筛选项
+    sql_log = QueryLog.objects.filter(**filter_dict)
+
+    # 过滤搜索信息
+    sql_log = sql_log.filter(Q(sqllog__icontains=search) |
+                             Q(user_display__icontains=search) |
+                             Q(alias__icontains=search))
+    qe_list = QueryExport.objects.filter(query_log__in=sql_log).order_by('-id')
 
     sql_log_list = list()
-    for qe in qe_list:
+    for qe in qe_list[offset:limit]:
         ql = qe.query_log
-        sql_log_list.append({"user_display": ql.user_display, "instance_name": ql.instance_name, "db_name": ql.db_name,
-                             "create_time": ql.create_time, "sqllog": ql.sqllog, "effect_row": ql.effect_row,
-                             "cost_time": ql.cost_time, "reason": qe.reason, "status": qe.status,
-                             "audit_msg": qe.audit_msg, "auditor": qe.auditor.display, "id": qe.id})
+        sql_log_list.append({"ql_id": ql.id, "user_display": ql.user_display, "instance_name": ql.instance_name,
+                             "db_name": ql.db_name, "create_time": ql.create_time, "sqllog": ql.sqllog,
+                             "favorite": ql.favorite,
+                             "effect_row": ql.effect_row, "cost_time": ql.cost_time, "reason": qe.reason,
+                             "status": qe.status, "audit_msg": qe.audit_msg, "auditor": qe.auditor.display, "id": qe.id})
 
-    result = {"total": log_count, "rows": sql_log_list}
+    result = {"total": qe_list.count(), "rows": sql_log_list}
     # 返回查询结果
     return HttpResponse(json.dumps(result, cls=ExtendJSONEncoder, bigint_as_string=True),
                         content_type='application/json')

@@ -43,7 +43,8 @@ def user_instances(user, type=None, db_type=None, tag_codes=list()):
 
     # 过滤tag
     for tag_code in tag_codes:
-        instances = instances.filter(tag__tag_code=tag_code)
+        instances = instances.filter(tag__tag_code=tag_code,
+                                     tag__active=True)
 
     return instances.distinct()
 

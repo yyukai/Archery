@@ -8,7 +8,7 @@ from common.utils.extend_json_encoder import ExtendJSONEncoder
 
 
 @csrf_exempt
-def api_host_edit(request):
+def host_edit(request):
     host = request.POST.get('host', '')
     os = request.POST.get('os', '')
     memory = request.POST.get('memory', '')
@@ -31,7 +31,7 @@ def api_host_edit(request):
 
 
 @csrf_exempt
-def api_instance_edit(request):
+def instance_edit(request):
     host = request.POST.get('host', '')
     port = request.POST.get('port', '')
     base_path = request.POST.get('base_path', '')

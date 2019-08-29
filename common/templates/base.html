@@ -47,7 +47,7 @@
                 <span class="icon-bar"></span>
                 <span class="icon-bar"></span>
             </button>
-            <a class="navbar-brand" href="/index/">SQL审核平台</a>
+            <a class="navbar-brand" href="/index/"><strong>SQL审核平台</strong></a>
         </div>
 
         <!-- /.navbar-header -->
@@ -191,6 +191,35 @@
                             <!-- /.nav-second-level -->
                         </li>
                     {% endif %}
+                    {% if perms.sql.menu_themis %}
+                        <li>
+                            <a href="#"><i class="fa fa-stethoscope fa-fw"></i> 数据库审核<span class="fa arrow"></span></a>
+                            <ul class="nav nav-second-level">
+                                <li>
+                                    <a target="_blank" href="/themis/">规则设置</a>
+                                </li>
+                                <li>
+                                    <a href="#">规则增加<span class="fa arrow"></span></a>
+                                    <ul class="nav nav-third-level collapse">
+                                        <li>
+                                            <a target="_blank" href="/themis/sqlreview/rule/simple/addition">简单规则</a>
+                                        </li>
+                                        <li>
+                                            <a target="_blank" href="/themis/sqlreview/rule/complex/addition">复杂规则</a>
+                                        </li>
+                                    </ul>
+                                    <!-- /.nav-third-level -->
+                                </li>
+                                <li>
+                                    <a target="_blank" href="/themis/new/version/sql/review/rule/info/index">任务发布</a>
+                                </li>
+                                <li>
+                                    <a target="_blank" href="/themis/new/version/sql/review/task/index">任务查询</a>
+                                </li>
+                            </ul>
+                            <!-- /.nav-second-level -->
+                        </li>
+                    {% endif %}
                     {% if perms.sql.menu_log %}
                         <li>
                             <a href="#"><i class="fa fa-file fa-fw"></i> 日志管理<span class="fa arrow"></span></a>
@@ -328,10 +357,14 @@
             {% block content %}
             {% endblock content %}
             <!--底部部分 -->
-            <hr>
+            <footer class="text-center">
+                <hr>
+                <p><strong>&copy; Archery</strong>&nbsp;(v{{ archery_version }})</p>
+            </footer>
         </div>
     </div>
     <!-- /#page-wrapper -->
+
 </div>
 
 <script src="{% static 'jquery/jquery.min.js' %}"></script>

@@ -7,7 +7,8 @@ import sql.query_privileges
 import sql.sql_optimize
 from common import auth, config, workflow, dashboard, check
 from sql import views, sql_workflow, sql_analyze, query, slowlog, instance, db_diagnostic, resource_group, binlog, \
-    data_dictionary, backup, data_safe, query_audit, api, host, database, wpan_upload, bg_table, tools
+    data_dictionary, backup, data_safe, query_audit, host, database, wpan_upload, bg_table, tools
+from sql.ip_white import ip_white_add, ip_white_edit, ip_white_del
 from sql.utils import tasks
 
 urlpatterns = [
@@ -47,6 +48,7 @@ urlpatterns = [
     path('grouprelations/<int:group_id>/', views.groupmgmt),
     path('instance/', views.instance),
     path('instance/host/<ip>/', views.instance),
+    path('instanceuser/', views.instanceuser),
     path('instanceuser/<int:instance_id>/', views.instanceuser),
     path('instanceparam/', views.instance_param),
     path('binlog2sql/', views.binlog2sql),
@@ -87,9 +89,9 @@ urlpatterns = [
     path('instance/instance_resource/', instance.instance_resource),
     path('instance/describetable/', instance.describe),
 
-    path('api/instance/edit/', api.api_instance_edit),
-    path('api/host/edit/', api.api_host_edit),
-    path('api/v1/db_agent/', api.db_agent),
+    path('ip_white/add/<int:instance_id>', ip_white_add),
+    path('ip_white/edit/<int:instance_id>', ip_white_edit),
+    path('ip_white/del/<int:instance_id>', ip_white_del),
 
     path('database/', views.database),
     path('database_list/', database.db_list),
@@ -112,6 +114,7 @@ urlpatterns = [
 
     path('query/', query.query),
     path('query/querylog/', query.querylog),
+    path('query/favorite/', query.favorite),
     path('add_async_query/', query.add_async_query),
     path('query_result_export/', query.query_result_export),
     path('query_export_audit/', query.query_export_audit),

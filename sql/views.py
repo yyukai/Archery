@@ -19,8 +19,8 @@ from sql.engines.models import ReviewResult, ReviewSet
 from sql.utils.tasks import task_info
 
 from .models import Users, SqlWorkflow, QueryPrivileges, ResourceGroup, \
-    QueryPrivilegesApply, Config, SQL_WORKFLOW_CHOICES, Tag, \
-    Instance, DataBase, Replication, QueryAudit, BGTable
+    QueryPrivilegesApply, Config, SQL_WORKFLOW_CHOICES, Tag, Instance, QueryLog, \
+    DataBase, Replication, QueryAudit, BGTable
 from sql.utils.workflow_audit import Audit
 from sql.utils.sql_review import can_execute, can_timingtask, can_cancel
 from common.utils.const import Const, WorkflowDict
@@ -152,12 +152,16 @@ def detail(request, workflow_id):
                 rows = review_result.json()
         except IndexError:
             review_result.rows += [ReviewResult(
+                id=1,
+                sql=workflow_detail.sqlworkflowcontent.sql_content,
                 errormessage="Json decode failed."
                              "执行结果Json解析失败, 请联系管理员"
             )]
             rows = review_result.json()
         except json.decoder.JSONDecodeError:
             review_result.rows += [ReviewResult(
+                id=1,
+                sql=workflow_detail.sqlworkflowcontent.sql_content,
                 # 迫于无法单元测试这里加上英文报错信息
                 errormessage="Json decode failed."
                              "执行结果Json解析失败, 请联系管理员"
@@ -208,18 +212,23 @@ def sqlquery(request):
     """SQL在线查询页面"""
     # 主动创建标签
     Tag.objects.get_or_create(tag_code='can_read', defaults={'tag_name': '支持查询', 'active': True})
-    return render(request, 'sqlquery.html')
+    # 收藏语句
+    user = request.user
+    favorites = QueryLog.objects.filter(username=user.username, favorite=True).values('id', 'alias')
+    return render(request, 'sqlquery.html', {'favorites': favorites})
 
 
 # SQL导出查询（大数据异步查询）
 @permission_required('sql.menu_query_export', raise_exception=True)
 def query_export(request):
+    user = request.user
+    favorites = QueryLog.objects.filter(username=user.username, favorite=True).values('id', 'alias')
     # 获取导出查询审核人
     auditors = list()
     for p in Permission.objects.filter(codename='query_export_review'):
         for g in p.group_set.all():
             auditors.extend(g.user_set.all())
-    return render(request, 'sqlquery_export.html', {'auditors': auditors})
+    return render(request, 'sqlquery_export.html', {'auditors': auditors, 'favorites': favorites})
 
 
 # SQL慢日志页面
@@ -307,7 +316,7 @@ def instance(request):
 
 
 @permission_required('sql.menu_instance', raise_exception=True)
-def instanceuser(request, instance_id):
+def instanceuser(request, instance_id=""):
     """实例用户管理页面"""
     return render(request, 'instanceuser.html', {'instance_id': instance_id})
 
@@ -466,7 +475,6 @@ def group(request):
     return render(request, 'group.html')
 
 
-# 资源组组关系管理页面
 @superuser_required
 def groupmgmt(request, group_id):
     """资源组组关系管理页面"""
@@ -501,7 +509,7 @@ def instance(request, ip=''):
 # 实例用户管理页面
 @permission_required('sql.menu_instance', raise_exception=True)
 def instanceuser(request, instance_id):
-    return render(request, 'instanceuser.html', {'instance_id': instance_id})
+    return render(request, 'instanceuser.html', {'instance_id': str(instance_id)})
 
 
 # 实例参数管理页面

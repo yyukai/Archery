@@ -73,11 +73,11 @@ def associated_objects(request):
     # 过滤对象类型
     if object_type == '0':
         rows_obj = rows_users
-        count = len(rows_obj)
+        count = rows_obj.count()
         rows = [row for row in rows_obj][offset:limit]
     elif object_type == '1':
         rows_obj = rows_instances
-        count = len(rows_obj)
+        count = rows_obj.count()
         rows = [row for row in rows_obj][offset:limit]
     else:
         rows = list(chain(rows_users, rows_instances))
@@ -94,7 +94,6 @@ def unassociated_objects(request):
     """
     group_id = int(request.POST.get('group_id'))
     object_type = int(request.POST.get('object_type'))
-
     if object_type == 0:
         associated_user_ids = [user.id for res_group in ResourceGroup.objects.filter(group_id=group_id)
                                for user in res_group.res_group_users.all()]

@@ -147,6 +147,8 @@ def get_mysql():
                 continue
             (var, value) = line2.split()
             gs[var] = value if not value.isdigit() else int(value)
+        if not gs:
+            continue
         # Query数
         ret[port]['com_select'] = gs['Com_select']
         # TPS，每秒的事务量（commit与rollback的之和）

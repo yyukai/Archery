@@ -30,6 +30,16 @@ class EngineBase:
         return 'Base engine'
 
     @property
+    def auto_backup(self):
+        """是否支持备份"""
+        return False
+
+    @property
+    def seconds_behind_master(self):
+        """实例同步延迟情况"""
+        return None
+
+    @property
     def server_version(self):
         """返回引擎服务器版本，返回对象为tuple (x,y,z)"""
         return tuple()
@@ -58,6 +68,7 @@ class EngineBase:
 
     def filter_sql(self, sql='', limit_num=0):
         """给查询语句增加结果级限制或者改写语句, 返回修改后的语句"""
+        return sql.strip()
 
     def query(self, db_name=None, sql='', limit_num=0, close_conn=True):
         """实际查询 返回一个ResultSet"""
@@ -105,6 +116,9 @@ def get_engine(instance=None):
     elif instance.db_type == 'oracle':
         from .oracle import OracleEngine
         return OracleEngine(instance=instance)
+    elif instance.db_type == 'mongo':
+        from .mongo import MongoEngine
+        return MongoEngine(instance=instance)
     elif instance.db_type == 'inception':
         from .inception import InceptionEngine
         return InceptionEngine(instance=instance)

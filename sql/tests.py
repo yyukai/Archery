@@ -17,7 +17,7 @@ from sql.notify import notify_for_audit, notify_for_execute, notify_for_binlog2s
 from sql.utils.execute_sql import execute_callback
 from sql.query import kill_query_conn
 from sql.models import Instance, QueryPrivilegesApply, QueryPrivileges, SqlWorkflow, SqlWorkflowContent, \
-    ResourceGroup, ResourceGroup2User, ParamTemplate, WorkflowAudit
+    ResourceGroup, ResourceGroup2User, ParamTemplate, WorkflowAudit, QueryLog
 
 User = get_user_model()
 
