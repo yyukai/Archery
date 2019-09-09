@@ -612,7 +612,7 @@
         function del_user(id) {
             var row_data = $('#user-list').bootstrapTable('getRowByUniqueId', id);
             // console.log(row_data);
-            if (confirm("请三思而行，确定删除该数据库用户？")) {
+            if (confirm("请三思而行，确定删除该 " + row_data['user_host'] + "数据库用户？")) {
                 $.ajax({
                     url: "/ip_white/del/" + {{ instance_id }},
                     type: "POST",

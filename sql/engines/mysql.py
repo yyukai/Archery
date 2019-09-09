@@ -163,8 +163,10 @@ class MysqlEngine(EngineBase):
                 sql_limit = limit_offset.search(sql).group(3)
                 limit_num = min(int(limit_num), int(sql_limit))
                 sql = limit_offset.sub(f'limit {limit_num};', sql)
-            else:
+            elif limit_num > 0:
                 sql = f'{sql} limit {limit_num};'
+            else:
+                sql = f'{sql};'
         else:
             sql = f'{sql};'
         return sql
