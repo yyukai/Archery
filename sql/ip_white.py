@@ -75,7 +75,7 @@ def ip_white_add(request, instance_id):
                 failed.append("{} {} {}".format(db_name, tb_name, res.error))
     else:
         for db_name in db_name_list:
-            sql = """GRANT {} ON `{}`.`*` TO '{}'@'{}' IDENTIFIED BY '{}';""".format(priv, db_name, user, host, password)
+            sql = """GRANT {} ON `{}`.* TO '{}'@'{}' IDENTIFIED BY '{}';""".format(priv, db_name, user, host, password)
             print(sql)
             res = query_engine.execute(sql=sql)
             if not res.error:
@@ -118,7 +118,7 @@ def ip_white_edit(request, instance_id):
             )
             print(sql)
             res = query_engine.execute(sql=sql)
-            if not res.error or '1147' in res.error:
+            if not res.error or '1147' in res.error or '1141' in res.error:
                 if priv:
                     if password:
                         sql = """GRANT {} ON `{}`.`{}` TO '{}'@'{}' IDENTIFIED BY '{}';""".format(
@@ -139,17 +139,17 @@ def ip_white_edit(request, instance_id):
                 failed.append("{}@{} {}.* {}".format(user, host, db_name, res.error))
     else:
         for db_name in db_name_list:
-            sql = """REVOKE ALL PRIVILEGES ON `{}`.`*` from '{}'@'{}';""".format(db_name, user, host)
+            sql = """REVOKE ALL PRIVILEGES ON `{}`.* from '{}'@'{}';""".format(db_name, user, host)
             print(sql)
             res = query_engine.execute(sql=sql)
-            if not res.error or '1147' in res.error:
+            if not res.error or '1147' in res.error or '1141' in res.error:
                 if priv:
                     if password:
-                        sql = """GRANT {} ON `{}`.`*` TO '{}'@'{}' IDENTIFIED BY '{}';""".format(
+                        sql = """GRANT {} ON `{}`.* TO '{}'@'{}' IDENTIFIED BY '{}';""".format(
                             priv, db_name, user, host, password
                         )
                     else:
-                        sql = """GRANT {} ON `{}`.`*` TO '{}'@'{}';""".format(priv, db_name, user, host)
+                        sql = """GRANT {} ON `{}`.* TO '{}'@'{}';""".format(priv, db_name, user, host)
                     print(sql)
                     res = query_engine.execute(sql=sql)
                     if not res.error:

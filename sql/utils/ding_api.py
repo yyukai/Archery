@@ -26,9 +26,9 @@ def get_access_token():
         return token
     else:
         # token 已过期
-        corp_id = sys_conf.get('ding_corp_id')
-        corp_secret = sys_conf.get('ding_corp_secret')
-        url = "https://oapi.dingtalk.com/gettoken?corpid={0}&corpsecret={1}".format(corp_id, corp_secret)
+        app_key = sys_conf.get('ding_app_key')
+        app_secret = sys_conf.get('ding_app_secret')
+        url = "https://oapi.dingtalk.com/gettoken?appkey={0}&appsecret={1}".format(app_key, app_secret)
         status, ret = http_request.get(url)
         if status is True:
             # 钉钉推荐加锁更新token，这里暂时未实现

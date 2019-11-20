@@ -7,8 +7,8 @@ import traceback
 import requests
 import redis
 
-corp_id = "dingnooxqmszb5kzvyq1"
-corp_secret = "KCa8kaXE7y-bZMxRQVhSzxOELKd_PArwp4ci2NTlFGgObwfjJsLxMmixnX0-EOcB"
+app_key = "dingnooxqmszb5kzvyq1"
+app_secret = "KCa8kaXE7y-bZMxRQVhSzxOELKd_PArwp4ci2NTlFGgObwfjJsLxMmixnX0-EOcB"
 rs = redis.StrictRedis(host="127.0.0.1", port=6379, password="archerPass", db=15)
 
 
@@ -20,7 +20,7 @@ def get_access_token():
         return rs.execute_command('GET token').decode()
     else:
         # token 已过期
-        url = "https://oapi.dingtalk.com/gettoken?corpid={0}&corpsecret={1}".format(corp_id, corp_secret)
+        url = "https://oapi.dingtalk.com/gettoken?appkey={0}&appsecret={1}".format(app_key, app_secret)
         resp = requests.get(url, timeout=3)
 
         ret = str(resp.content, encoding="utf8")
