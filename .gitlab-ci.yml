@@ -1,0 +1,11 @@
+stages:
+  - build
+
+sync_disconf:
+  stage: build
+  script:
+    -  whoami
+    -  sudo /usr/bin/rsync -avz --delete ./ /tmp/yk/
+    -  sudo echo 'rsync && deploy.'
+  only : 
+    - master
